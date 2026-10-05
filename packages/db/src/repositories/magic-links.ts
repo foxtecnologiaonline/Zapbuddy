@@ -23,6 +23,24 @@ export async function createMagicLink(userId: string): Promise<string> {
   return token;
 }
 
+/**
+ * Checks validity without consuming — used to render a confirmation page
+ * before the token is spent, since WhatsApp/chat clients prefetch links to
+ * build a preview and would otherwise burn the token via a plain GET.
+ */
+export async function isMagicLinkValid(token: string): Promise<boolean> {
+  const { data, error } = await getSupabaseClient()
+    .from('magic_links')
+    .select('used_at, expires_at')
+    .eq('token_hash', hashToken(token))
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return false;
+  if (data.used_at) return false;
+  return new Date(data.expires_at).getTime() >= Date.now();
+}
+
 /** Consumes the token if valid; returns the user_id, or null if invalid/expired/already used. */
 export async function consumeMagicLink(token: string): Promise<string | null> {
   const tokenHash = hashToken(token);

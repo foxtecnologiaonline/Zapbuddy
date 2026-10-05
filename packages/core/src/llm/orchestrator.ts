@@ -56,6 +56,10 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
   const system = buildSystemPrompt(user);
 
   let finalText = '';
+  // true whenever the last thing added to `messages` was a tool_result that
+  // Claude hasn't had a chance to turn into text yet (including when we run
+  // out of iterations mid tool-use) — in that case we owe one more call.
+  let pendingToolResult = false;
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     const response = await anthropic.messages.create({
@@ -75,6 +79,7 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     finalText = textBlocks.map((block) => block.text).join('\n').trim();
 
     if (toolUseBlocks.length === 0) {
+      pendingToolResult = false;
       break;
     }
 
@@ -85,10 +90,28 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
       toolResults.push(await runTool(block, toolContext));
     }
     messages.push({ role: 'user', content: toolResults });
+    pendingToolResult = true;
 
     if (response.stop_reason !== 'tool_use') {
       break;
     }
+  }
+
+  if (pendingToolResult) {
+    // Tool-use loop was cut off (max iterations) right after executing a
+    // tool — the action already happened, so get Claude to summarize it in
+    // text rather than telling the user we failed. No `tools` here: we want
+    // a final answer, not another tool call.
+    const wrapUp = await anthropic.messages.create({
+      model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,
+      max_tokens: 1024,
+      system,
+      messages,
+    });
+    const textBlocks = wrapUp.content.filter(
+      (block): block is Anthropic.TextBlock => block.type === 'text',
+    );
+    finalText = textBlocks.map((block) => block.text).join('\n').trim();
   }
 
   await appendTurn(user.whatsapp_number, { role: 'user', content: messageText, at: new Date().toISOString() });
