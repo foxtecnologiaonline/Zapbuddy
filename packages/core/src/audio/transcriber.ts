@@ -1,27 +1,12 @@
 /**
- * Interface de transcrição de áudio para gasto/receita/tarefa por voz (item 2 e 3 do MVP).
+ * Interface de transcrição de áudio para gasto/receita/tarefa por voz.
  *
- * O CLAUDE.md não trava um provedor de speech-to-text (só fixa Claude como LLM
- * de orquestração). Para não introduzir uma dependência de stack não decidida,
- * esta é uma interface plugável — a implementação concreta deve ser escolhida
- * e configurada via AUDIO_TRANSCRIBER_PROVIDER antes de habilitar mensagens de
- * áudio em produção. Sem configuração, falha de forma explícita (nunca inventa
- * uma transcrição).
+ * Só o tipo vive aqui — a implementação concreta (Whisper via Groq/OpenAI,
+ * ver ZapScript apps/worker/src/services/whisper.ts) fica em apps/worker,
+ * porque depende de ffmpeg/openai (deps pesadas que não devem ir para o
+ * dashboard web). Core fica livre de peso para continuar importável tanto
+ * pelo worker quanto pela app Next.js.
  */
 export interface AudioTranscriber {
   transcribe(audioBuffer: Buffer, mimeType: string): Promise<string>;
-}
-
-class UnconfiguredTranscriber implements AudioTranscriber {
-  async transcribe(): Promise<string> {
-    throw new Error(
-      'Nenhum provedor de transcrição de áudio configurado (AUDIO_TRANSCRIBER_PROVIDER). ' +
-        'Decisão de stack pendente — ver CLAUDE.md antes de escolher um provedor.',
-    );
-  }
-}
-
-export function getAudioTranscriber(): AudioTranscriber {
-  // Seam para plugar um provedor real (ex.: Whisper) quando a decisão for tomada.
-  return new UnconfiguredTranscriber();
 }

@@ -4,9 +4,9 @@ import {
   orchestrateTurn,
   sendWhatsappTextMessage,
   downloadWhatsappAudio,
-  getAudioTranscriber,
   type AudioTranscriptionJob,
 } from '@zapbuddy/core';
+import { getAudioTranscriber } from '../audio/get-transcriber.js';
 
 export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>): Promise<void> {
   const { userId, audioRef } = job.data;
