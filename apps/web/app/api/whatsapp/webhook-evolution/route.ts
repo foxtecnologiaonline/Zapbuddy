@@ -38,6 +38,13 @@ interface EvolutionWebhookBody {
  * query param (?secret=...), configurado na criação/registro da instância.
  * Sem secret configurado no ambiente, a requisição é sempre rejeitada (nunca
  * aceita webhook não-autenticado, mesmo nesse canal de contingência).
+ *
+ * Limitação inerente (vs. o HMAC por requisição do webhook oficial): é um
+ * segredo estático na URL, não uma assinatura do corpo — se aparecer num log
+ * de acesso/proxy, qualquer requisição com ele é aceita indefinidamente. Não
+ * tem correção de código para isso (a Evolution não assina payload); mitigar
+ * operacionalmente: EVOLUTION_WEBHOOK_SECRET longo/aleatório e nunca logar a
+ * URL completa do webhook. instanceMatches() abaixo é defesa adicional.
  */
 function isValidSecret(request: NextRequest): boolean {
   const expected = process.env.EVOLUTION_WEBHOOK_SECRET;
@@ -49,6 +56,16 @@ function isValidSecret(request: NextRequest): boolean {
   const expectedBuf = Buffer.from(expected);
   const providedBuf = Buffer.from(provided);
   return expectedBuf.length === providedBuf.length && timingSafeEqual(expectedBuf, providedBuf);
+}
+
+/** Defesa em profundidade: rejeita evento de qualquer instância que não a configurada. */
+function instanceMatches(instance: string | undefined): boolean {
+  const expected = process.env.EVOLUTION_INSTANCE_NAME;
+  return !!expected && instance === expected;
+}
+
+function isGroupJid(remoteJid: string): boolean {
+  return remoteJid.endsWith('@g.us');
 }
 
 function extractPhone(remoteJid: string): string {
@@ -66,8 +83,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const body = (await request.json()) as EvolutionWebhookBody;
 
-  // Só processa mensagens recebidas (messages.upsert, não-eco do próprio número).
+  if (!instanceMatches(body.instance)) {
+    return new NextResponse('Forbidden', { status: 403 });
+  }
+
+  // Só processa mensagens individuais recebidas (messages.upsert, não-eco do
+  // próprio número, não grupo — diferente da Cloud API oficial (sempre 1:1),
+  // um número Baileys pode estar em grupos, e sem este filtro o JID de grupo
+  // seria tratado como um número de telefone (dado financeiro mal atribuído).
   if (body.event !== 'messages.upsert' || !body.data?.key || body.data.key.fromMe) {
+    return NextResponse.json({ received: true });
+  }
+  if (isGroupJid(body.data.key.remoteJid)) {
     return NextResponse.json({ received: true });
   }
 
