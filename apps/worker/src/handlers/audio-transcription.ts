@@ -3,13 +3,13 @@ import { findUserById } from '@zapbuddy/db';
 import {
   orchestrateTurn,
   sendWhatsappTextMessage,
-  downloadWhatsappMedia,
+  downloadWhatsappAudio,
   getAudioTranscriber,
   type AudioTranscriptionJob,
 } from '@zapbuddy/core';
 
 export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>): Promise<void> {
-  const { userId, mediaId } = job.data;
+  const { userId, audioRef } = job.data;
 
   const user = await findUserById(userId);
   if (!user) {
@@ -19,7 +19,7 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
   }
 
   try {
-    const { buffer, mimeType } = await downloadWhatsappMedia(mediaId);
+    const { buffer, mimeType } = await downloadWhatsappAudio(audioRef);
     const transcript = await getAudioTranscriber().transcribe(buffer, mimeType);
 
     const { replyText } = await orchestrateTurn({

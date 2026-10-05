@@ -10,7 +10,8 @@ Referência de mercado estudada: meuassessor.com (6 "assessores" especializados,
 - **Banco/Auth/Storage:** Supabase (Postgres + Storage + Auth) — MCP já disponível neste ambiente
 - **Deploy (API + dashboard web):** Vercel — MCP já disponível neste ambiente
 - **Fila assíncrona:** BullMQ + Redis (transcrição de áudio, ações demoradas)
-- **Canal:** WhatsApp Cloud API oficial (Meta) — não usar gateways não-oficiais (risco de ban, inviável para dados financeiros)
+- **Canal:** WhatsApp Cloud API oficial (Meta) é o canal **padrão e obrigatório** para qualquer usuário real/dados financeiros.
+  - **Amendamento 2026-10 (motivo documentado):** suporte opcional à Evolution API (gateway Baileys self-hosted, mesma usada pelo ZapScript em `deploy/evolution-oci`) como canal alternativo via `WHATSAPP_CHANNEL_PROVIDER=evolution`, só para ambientes de teste/staging ou contingência operacional (ex.: aprovação do número oficial atrasada). Risco de ban e fragilidade para dado financeiro continuam valendo para esse caminho — por isso ele nunca é o default (`WHATSAPP_CHANNEL_PROVIDER` default é `cloud-api`) e qualquer deploy de produção com usuários reais deve permanecer em `cloud-api`. Não é dual-send automático: é uma troca manual de canal via env var.
 - **LLM:** Claude (Anthropic), via tool use/function calling — cada "assessor" é um conjunto de tools, não um serviço separado
 - **Dashboard web:** Next.js (App Router), somente leitura no MVP, login via magic link disparado pelo WhatsApp
 

@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { getRedisConnection } from '../redis.js';
+import type { AudioRef } from '../whatsapp/types.js';
 
 export const QUEUE_NAMES = {
   audioTranscription: 'audio-transcription',
@@ -10,7 +11,8 @@ export const QUEUE_NAMES = {
 export interface AudioTranscriptionJob {
   userId: string;
   whatsappNumber: string;
-  mediaId: string;
+  /** Opaco por provider — só o canal que emitiu a mensagem sabe interpretar. */
+  audioRef: AudioRef;
   waMessageId: string;
 }
 

@@ -87,7 +87,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         {
           userId: user.id,
           whatsappNumber: user.whatsapp_number,
-          mediaId: message.audio.id,
+          audioRef: { provider: 'cloud-api', mediaId: message.audio.id },
           waMessageId: message.id,
         },
         { jobId: message.id },
