@@ -6,7 +6,7 @@ import { getToolByName, toAnthropicToolSpecs } from './tool-registry.js';
 import type { ToolContext } from './tool-types.js';
 import { appendTurn, getRecentTurns } from '../context/conversation-context.js';
 
-const DEFAULT_MODEL = 'claude-sonnet-5-5';
+const DEFAULT_MODEL = 'claude-haiku-5-5';
 const MAX_TOOL_ITERATIONS = 6;
 
 let client: Anthropic | null = null;
