@@ -1,0 +1,77 @@
+# Evolution API — stack para VPS (Docker). Canal OPCIONAL/fallback do ZapBuddy
+# (ver CLAUDE.md — nunca o canal default). Segredos vêm do .env ao lado
+# (copie de .env.example). NÃO comite o .env.
+# Subir: docker compose up -d   ·   Logs: docker compose logs -f
+services:
+  evolution-api:
+    image: evoapicloud/evolution-api:${EVO_VERSION}
+    restart: always
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - SERVER_URL=https://${DOMAIN}
+      - AUTHENTICATION_API_KEY=${AUTHENTICATION_API_KEY}
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${POSTGRES_PASSWORD}@postgres:5432/evolution?schema=public
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/0
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_LOCAL_ENABLED=false
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - evo-net
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=evolution
+    volumes:
+      - evolution_pg:/var/lib/postgresql/data
+    networks:
+      - evo-net
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - evolution_redis:/data
+    networks:
+      - evo-net
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - evolution-api
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - evo-net
+
+volumes:
+  evolution_instances:
+  evolution_pg:
+  evolution_redis:
+  caddy_data:
+  caddy_config:
+
+networks:
+  evo-net:

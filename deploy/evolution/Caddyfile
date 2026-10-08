@@ -1,0 +1,3 @@
+{$DOMAIN} {
+	reverse_proxy evolution-api:8080
+}
