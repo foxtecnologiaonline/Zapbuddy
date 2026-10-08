@@ -7,6 +7,12 @@ para staging ou contingência operacional.
 Mesma stack que o ZapScript já roda em produção (`evoapicloud/evolution-api` —
 Baileys self-hosted), adaptada para o ZapBuddy.
 
+**Já tem uma Evolution API rodando (ex. a do ZapScript no Vultr)?** Não suba
+uma nova — veja `REUSE-ZAPSCRIPT-INSTANCE.md` nesta pasta pra reaproveitar a
+existente (só expõe a porta publicamente num subdomínio dedicado e cria uma
+instância nova dentro dela). O passo a passo abaixo (`setup.sh`) é só pra quem
+vai subir uma stack do zero.
+
 ## Pré-requisitos
 
 - Uma VPS com IP público (Ubuntu 22.04+), portas 80/443 liberadas na rede
