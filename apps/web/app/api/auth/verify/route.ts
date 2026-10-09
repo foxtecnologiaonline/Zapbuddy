@@ -24,10 +24,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const html = `<!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8" /><title>ZapBuddy — Confirmar acesso</title></head>
+<head><meta charset="utf-8" /><title>Tom — Confirmar acesso</title></head>
 <body style="font-family: system-ui, sans-serif; background: #0b0f14; color: #e6edf3; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
   <form method="POST" action="/api/auth/verify" style="text-align: center; max-width: 320px;">
-    <h1 style="margin-bottom: 8px;">ZapBuddy</h1>
+    <h1 style="margin-bottom: 8px;">Tom</h1>
     <p style="opacity: 0.7;">Confirme para acessar seu painel.</p>
     <input type="hidden" name="token" value="${token.replace(/"/g, '&quot;')}" />
     <button type="submit" style="padding: 12px 24px; border-radius: 8px; border: none; background: #4ade80; color: #0b0f14; font-weight: 600; cursor: pointer;">

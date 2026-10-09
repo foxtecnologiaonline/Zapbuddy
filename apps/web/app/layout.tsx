@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 
 export const metadata = {
-  title: 'ZapBuddy',
-  description: 'Painel read-only do ZapBuddy',
+  title: 'Tom',
+  description: 'Painel read-only do Tom',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

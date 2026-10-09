@@ -13,8 +13,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main style={{ maxWidth: 480, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-      <h1>ZapBuddy</h1>
-      <p>Para acessar seu painel, peça o link de acesso no seu WhatsApp conectado ao ZapBuddy.</p>
+      <h1>Tom</h1>
+      <p>Para acessar seu painel, peça o link de acesso no seu WhatsApp conectado ao Tom.</p>
       <p style={{ opacity: 0.7 }}>Basta mandar uma mensagem como &quot;quero ver o painel&quot;.</p>
       {errorMessage ? <p style={{ color: '#ff6b6b' }}>{errorMessage}</p> : null}
     </main>
