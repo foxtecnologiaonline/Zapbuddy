@@ -1,18 +1,24 @@
 import { z } from 'zod';
 import { recordTransaction, summarizeTransactions } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../categories.js';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, normalizeCategory } from '../categories.js';
 
 export const recordTransactionTool = defineTool({
   name: 'record_transaction',
   description:
     'Registra uma transação financeira (gasto ou receita) do usuário. ' +
     'OBRIGATÓRIO chamar esta tool antes de confirmar qualquer gasto/receita — ' +
-    'nunca confirme um valor financeiro sem ter chamado esta tool primeiro.',
+    'nunca confirme um valor financeiro sem ter chamado esta tool primeiro. ' +
+    `Categorias de gasto preferidas: ${EXPENSE_CATEGORIES.join(', ')}. ` +
+    `Categorias de receita preferidas: ${INCOME_CATEGORIES.join(', ')}. ` +
+    "Se nenhuma encaixar bem, use 'outros' — qualquer outro valor também é aceito e cai em 'outros'.",
   schema: z.object({
     type: z.enum(['expense', 'income']),
     amount_cents: z.number().int().positive(),
-    category: z.enum([...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES]),
+    // String livre em vez de enum: uma categoria fora da lista nunca pode
+    // derrubar a chamada com erro de validação — normalizeCategory() lida
+    // com isso abaixo, caindo em 'outros' em vez de falhar a conversa.
+    category: z.string().min(1),
     description: z.string().optional(),
     occurred_at: z.string().datetime().optional(),
   }),
@@ -21,7 +27,7 @@ export const recordTransactionTool = defineTool({
       userId: ctx.userId,
       type: params.type,
       amountCents: params.amount_cents,
-      category: params.category,
+      category: normalizeCategory(params.category),
       description: params.description,
       source: ctx.messageSource,
       occurredAt: params.occurred_at,

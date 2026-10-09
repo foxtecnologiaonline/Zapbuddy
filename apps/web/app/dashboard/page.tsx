@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { findUserById, listTransactions, listTasks } from '@zapbuddy/db';
 import { getCurrentUserId } from '@/lib/auth';
+import { getCurrentMonthRange } from '@/lib/timezone';
 
 function formatCents(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -13,12 +14,10 @@ export default async function DashboardPage() {
   const user = await findUserById(userId);
   if (!user) redirect('/login');
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+  const { startIso, endIso } = getCurrentMonthRange(user.timezone);
 
   const [transactions, pendingTasks] = await Promise.all([
-    listTransactions(userId, startOfMonth, endOfMonth),
+    listTransactions(userId, startIso, endIso),
     listTasks(userId, 'pending'),
   ]);
 
@@ -27,8 +26,28 @@ export default async function DashboardPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-      <h1>Olá, {user.name ?? 'usuário'}</h1>
-      <p style={{ opacity: 0.7 }}>Painel somente leitura — mês atual.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1 style={{ marginBottom: 4 }}>Olá, {user.name ?? 'usuário'}</h1>
+          <p style={{ opacity: 0.7, margin: 0 }}>Painel somente leitura — mês atual.</p>
+        </div>
+        <form action="/api/auth/logout" method="POST">
+          <button
+            type="submit"
+            style={{
+              background: 'transparent',
+              border: '1px solid #2a3340',
+              color: '#e6edf3',
+              borderRadius: 6,
+              padding: '6px 12px',
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            Sair
+          </button>
+        </form>
+      </div>
 
       <section style={{ display: 'flex', gap: 16, margin: '24px 0' }}>
         <div style={{ flex: 1, background: '#121821', borderRadius: 8, padding: 16 }}>
@@ -63,7 +82,9 @@ export default async function DashboardPage() {
             <tbody>
               {transactions.slice(0, 20).map((t) => (
                 <tr key={t.id} style={{ borderBottom: '1px solid #1f2733' }}>
-                  <td style={{ padding: '6px 0' }}>{new Date(t.occurred_at).toLocaleDateString('pt-BR')}</td>
+                  <td style={{ padding: '6px 0' }}>
+                    {new Date(t.occurred_at).toLocaleDateString('pt-BR', { timeZone: user.timezone })}
+                  </td>
                   <td>{t.category}</td>
                   <td style={{ textAlign: 'right', color: t.type === 'income' ? '#4ade80' : '#f87171' }}>
                     {t.type === 'income' ? '+' : '-'}

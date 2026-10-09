@@ -12,11 +12,23 @@ export async function createTask(userId: string, title: string, dueAt?: string):
   return data as Task;
 }
 
-export async function listTasks(userId: string, status?: TaskStatus): Promise<Task[]> {
+const DEFAULT_TASKS_LIMIT = 50;
+
+/**
+ * `limit` existe pra não deixar a lista crescer sem teto: isto alimenta o
+ * contexto da IA (tool list_tasks), então sem cap o histórico de tarefas de
+ * um usuário antigo vira custo de token crescente a cada conversa, sem
+ * benefício — a pessoa quase nunca precisa ver tarefa concluída há meses.
+ */
+export async function listTasks(
+  userId: string,
+  status?: TaskStatus,
+  limit: number = DEFAULT_TASKS_LIMIT,
+): Promise<Task[]> {
   let query = getSupabaseClient().from('tasks').select('*').eq('user_id', userId);
   if (status) query = query.eq('status', status);
 
-  const { data, error } = await query.order('created_at', { ascending: false });
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
   return (data ?? []) as Task[];
 }

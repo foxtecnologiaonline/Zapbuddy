@@ -12,11 +12,12 @@
     "dev:worker": "npm run dev --workspace=apps/worker",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "vitest run"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
-    "@types/node": "^20.14.0"
+    "@types/node": "^22.0.0",
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=20"

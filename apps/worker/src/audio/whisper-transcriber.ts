@@ -39,7 +39,7 @@ const PT_BR_PROMPT = 'Tá bom, então. Deixa eu te falar uma coisa.';
  * repetir/digitar a arriscar persistir um valor financeiro alucinado (ver
  * regra não-negociável no CLAUDE.md).
  */
-function isWhisperHallucination(text: string, durationSec: number): boolean {
+export function isWhisperHallucination(text: string, durationSec: number): boolean {
   if (!text || text.length < 3) return true;
 
   const HALLUCINATION_PATTERNS = [
@@ -160,11 +160,30 @@ const AUDIO_FORMAT_BY_MIME: Record<string, string> = {
   'audio/amr': 'amr',
 };
 
+// 10 min é generoso pra qualquer nota de voz de WhatsApp sobre gasto/tarefa —
+// isto é um teto de custo (cada minuto extra é tempo de API Whisper pago),
+// não um limite que se espera bater no uso normal.
+const MAX_AUDIO_DURATION_SEC = parseInt(process.env.MAX_AUDIO_DURATION_SEC ?? '600', 10);
+
+/** Erro permanente (não-transitório) — o handler não deve deixar o BullMQ tentar de novo pra isto. */
+export class AudioTooLongError extends Error {
+  constructor(durationSec: number) {
+    super(`Áudio de ${Math.round(durationSec / 60)}min excede o limite de ${MAX_AUDIO_DURATION_SEC / 60}min`);
+    this.name = 'AudioTooLongError';
+  }
+}
+
 /** Implementação real do canal de transcrição — ver packages/core/src/audio/transcriber.ts para a interface. */
 export class WhisperTranscriber implements AudioTranscriber {
   async transcribe(audioBuffer: Buffer, mimeType: string): Promise<string> {
     const format = AUDIO_FORMAT_BY_MIME[mimeType.split(';')[0]?.trim() ?? ''];
     const mp3Buffer = await convertToMp3(audioBuffer, format);
+
+    const durationSec = estimateMp3DurationSec(mp3Buffer);
+    if (durationSec > MAX_AUDIO_DURATION_SEC) {
+      throw new AudioTooLongError(durationSec);
+    }
+
     return transcribeAudioMp3(mp3Buffer);
   }
 }

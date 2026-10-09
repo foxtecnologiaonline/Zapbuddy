@@ -127,6 +127,8 @@ async function runTool(
   const tool = getToolByName(block.name);
 
   if (!tool) {
+    // eslint-disable-next-line no-console
+    console.error('[tool_call_failed]', { toolName: block.name, userId: ctx.userId, error: 'unknown tool' });
     await logToolCall({
       userId: ctx.userId,
       toolName: block.name,
@@ -160,6 +162,12 @@ async function runTool(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // tool_call_logs registra isso no banco, mas ninguém olha lá ativamente
+    // — este log estruturado é o que torna a falha visível (buscável/com
+    // alerta configurável) nos logs padrão do Vercel/host do worker, sem
+    // depender de um serviço de alerta novo.
+    // eslint-disable-next-line no-console
+    console.error('[tool_call_failed]', { toolName: tool.name, userId: ctx.userId, error: message });
     await logToolCall({
       userId: ctx.userId,
       toolName: tool.name,

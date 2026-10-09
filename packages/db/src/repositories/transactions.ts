@@ -37,6 +37,13 @@ export async function recordTransaction(input: RecordTransactionInput): Promise<
   return data as Transaction;
 }
 
+// Teto de segurança, não um limite esperado na prática (MVP é resumo
+// diário/semanal/mensal) — evita que um range muito largo vire uma consulta
+// sem fim. Se algum dia for atingido, soma/resumo ficam parciais e
+// silenciosamente incompletos para esse range — aceitável como salvaguarda,
+// não como comportamento normal.
+const MAX_TRANSACTIONS_PER_QUERY = 2000;
+
 export async function listTransactions(
   userId: string,
   fromIso: string,
@@ -48,7 +55,8 @@ export async function listTransactions(
     .eq('user_id', userId)
     .gte('occurred_at', fromIso)
     .lte('occurred_at', toIso)
-    .order('occurred_at', { ascending: false });
+    .order('occurred_at', { ascending: false })
+    .limit(MAX_TRANSACTIONS_PER_QUERY);
 
   if (error) throw error;
   return (data ?? []) as Transaction[];

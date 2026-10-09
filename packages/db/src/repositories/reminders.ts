@@ -49,3 +49,20 @@ export async function markReminderSent(reminderId: string): Promise<void> {
 
   if (error) throw error;
 }
+
+/**
+ * Chamado quando TODAS as tentativas de envio (BullMQ) se esgotaram — ver
+ * worker.ts. Sem isto, um lembrete que falhasse permanentemente (ex.: fora
+ * da janela de 24h da WhatsApp Cloud API, que exige template aprovado pra
+ * mensagem livre nesse caso) ficava preso em 'pending' pra sempre,
+ * indistinguível de um que ainda vai disparar.
+ */
+export async function markReminderFailed(reminderId: string, reason: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('reminders')
+    .update({ status: 'failed', failed_reason: reason.slice(0, 500) })
+    .eq('id', reminderId)
+    .eq('status', 'pending');
+
+  if (error) throw error;
+}

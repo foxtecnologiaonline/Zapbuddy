@@ -1,6 +1,19 @@
-import { Queue } from 'bullmq';
+import { Queue, type DefaultJobOptions } from 'bullmq';
 import { getRedisConnection } from '../redis.js';
 import type { AudioRef } from '../whatsapp/types.js';
+
+/**
+ * Sem isso, uma falha transitória (rate limit da Claude, timeout de rede no
+ * WhatsApp/Whisper) derrubava o job pra 'failed' sem nenhuma nova tentativa
+ * — o usuário simplesmente nunca recebia resposta, silenciosamente. 3
+ * tentativas com backoff exponencial (5s, 10s, 20s) cobre a maioria dos
+ * blips sem virar um martelo que reenvia a mesma falha permanente várias
+ * vezes seguidas.
+ */
+const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 5_000 },
+};
 
 export const QUEUE_NAMES = {
   audioTranscription: 'audio-transcription',
@@ -32,16 +45,25 @@ let messageQueue: Queue<IncomingMessageJob> | null = null;
 let reminderQueue: Queue<ReminderDispatchJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
-  audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, { connection: getRedisConnection() });
+  audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
   return audioQueue;
 }
 
 export function getIncomingMessageQueue(): Queue<IncomingMessageJob> {
-  messageQueue ??= new Queue(QUEUE_NAMES.incomingMessage, { connection: getRedisConnection() });
+  messageQueue ??= new Queue(QUEUE_NAMES.incomingMessage, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
   return messageQueue;
 }
 
 export function getReminderDispatchQueue(): Queue<ReminderDispatchJob> {
-  reminderQueue ??= new Queue(QUEUE_NAMES.reminderDispatch, { connection: getRedisConnection() });
+  reminderQueue ??= new Queue(QUEUE_NAMES.reminderDispatch, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
   return reminderQueue;
 }

@@ -35,7 +35,7 @@ export interface Task {
   created_at: string;
 }
 
-export type ReminderStatus = 'pending' | 'sent' | 'cancelled';
+export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
 
 export interface Reminder {
   id: string;
@@ -44,6 +44,7 @@ export interface Reminder {
   message: string;
   remind_at: string;
   status: ReminderStatus;
+  failed_reason: string | null;
   created_at: string;
 }
 

@@ -1,5 +1,6 @@
 export * from './redis.js';
 export * from './context/conversation-context.js';
+export * from './context/reply-cache.js';
 export * from './queues/definitions.js';
 export * from './llm/orchestrator.js';
 export * from './llm/tool-registry.js';
