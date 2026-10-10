@@ -32,6 +32,6 @@ export function normalizeCategory(raw: string): string {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
+    .replace(/[\u0300-\u036f]/g, '');
   return ALL_CATEGORIES.has(normalized) ? normalized : 'outros';
 }
