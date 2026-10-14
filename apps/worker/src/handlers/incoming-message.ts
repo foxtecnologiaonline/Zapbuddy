@@ -13,7 +13,6 @@ export async function handleIncomingMessage(job: Job<IncomingMessageJob>): Promi
 
   const user = await findUserById(userId);
   if (!user) {
-    // eslint-disable-next-line no-console
     console.error('incoming-message: user not found', { userId });
     return;
   }

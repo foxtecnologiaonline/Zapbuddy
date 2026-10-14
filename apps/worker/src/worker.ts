@@ -1,11 +1,10 @@
-import { Worker } from 'bullmq';
+import { Worker, type Job } from 'bullmq';
 import {
   getRedisConnection,
   QUEUE_NAMES,
   sendWhatsappTextMessage,
-  type AudioTranscriptionJob,
   type IncomingMessageJob,
-  type ReminderDispatchJob,
+  type AudioTranscriptionJob,
 } from '@zapbuddy/core';
 import { markReminderFailed } from '@zapbuddy/db';
 import { handleIncomingMessage } from './handlers/incoming-message.js';
@@ -14,20 +13,9 @@ import { handleReminderDispatch } from './handlers/reminder-dispatch.js';
 
 const connection = getRedisConnection();
 
-const incomingMessageWorker = new Worker(QUEUE_NAMES.incomingMessage, handleIncomingMessage, {
-  connection,
-  concurrency: 5,
-});
-const audioTranscriptionWorker = new Worker(QUEUE_NAMES.audioTranscription, handleAudioTranscription, {
-  connection,
-  concurrency: 3,
-});
-const reminderDispatchWorker = new Worker(QUEUE_NAMES.reminderDispatch, handleReminderDispatch, {
-  connection,
-  concurrency: 5,
-});
-
-const workers = [incomingMessageWorker, audioTranscriptionWorker, reminderDispatchWorker];
+function isExhausted(job: Job): boolean {
+  return job.attemptsMade >= (job.opts.attempts ?? 1);
+}
 
 /**
  * Avisa o usuário SÓ quando o job esgotou todas as tentativas (ver
@@ -35,44 +23,49 @@ const workers = [incomingMessageWorker, audioTranscriptionWorker, reminderDispat
  * intermediário, senão a pessoa recebe "não consegui processar" várias
  * vezes seguidas enquanto o BullMQ ainda está tentando de novo por trás.
  */
-async function notifyUserOfExhaustedJob(
-  whatsappNumber: string,
-  attemptsMade: number,
-  maxAttempts: number | undefined,
-): Promise<void> {
-  if (attemptsMade < (maxAttempts ?? 1)) return;
+async function notifyUserOfExhaustedJob(whatsappNumber: string): Promise<void> {
   try {
     await sendWhatsappTextMessage(
       whatsappNumber,
       'Desculpa, tive um problema técnico pra processar sua última mensagem. Pode mandar de novo?',
     );
   } catch (notifyError) {
-    // eslint-disable-next-line no-console
     console.error('Failed to notify user of exhausted job', { whatsappNumber, notifyError });
   }
 }
 
+function logJobFailed(queueName: string, job: Job | undefined, error: Error): void {
+  console.error(`Job failed [${queueName}]`, { jobId: job?.id, error, attemptsMade: job?.attemptsMade });
+}
+
+const incomingMessageWorker = new Worker(QUEUE_NAMES.incomingMessage, handleIncomingMessage, {
+  connection,
+  concurrency: 5,
+});
 incomingMessageWorker.on('failed', (job, error) => {
-  // eslint-disable-next-line no-console
-  console.error('Job failed [incoming-message]', { jobId: job?.id, error, attemptsMade: job?.attemptsMade });
-  if (job) {
-    const data = job.data as IncomingMessageJob;
-    void notifyUserOfExhaustedJob(data.whatsappNumber, job.attemptsMade, job.opts.attempts);
+  logJobFailed('incoming-message', job, error);
+  if (job && isExhausted(job)) {
+    void notifyUserOfExhaustedJob((job.data as IncomingMessageJob).whatsappNumber);
   }
 });
 
+const audioTranscriptionWorker = new Worker(QUEUE_NAMES.audioTranscription, handleAudioTranscription, {
+  connection,
+  concurrency: 3,
+});
 audioTranscriptionWorker.on('failed', (job, error) => {
-  // eslint-disable-next-line no-console
-  console.error('Job failed [audio-transcription]', { jobId: job?.id, error, attemptsMade: job?.attemptsMade });
-  if (job) {
-    const data = job.data as AudioTranscriptionJob;
-    void notifyUserOfExhaustedJob(data.whatsappNumber, job.attemptsMade, job.opts.attempts);
+  logJobFailed('audio-transcription', job, error);
+  if (job && isExhausted(job)) {
+    void notifyUserOfExhaustedJob((job.data as AudioTranscriptionJob).whatsappNumber);
   }
 });
 
+const reminderDispatchWorker = new Worker(QUEUE_NAMES.reminderDispatch, handleReminderDispatch, {
+  connection,
+  concurrency: 5,
+});
 reminderDispatchWorker.on('failed', (job, error) => {
-  // eslint-disable-next-line no-console
-  console.error('Job failed [reminder-dispatch]', { jobId: job?.id, error, attemptsMade: job?.attemptsMade });
+  logJobFailed('reminder-dispatch', job, error);
   // Sem notificação de fallback ao usuário aqui: se o próprio envio ao
   // WhatsApp é o que está falhando (ex.: fora da janela de 24h da Cloud
   // API, que exige template aprovado pra mensagem livre nesse caso —
@@ -80,16 +73,16 @@ reminderDispatchWorker.on('failed', (job, error) => {
   // o mesmo problema. Só marca 'failed' no banco quando esgota as
   // tentativas, pra não ficar preso em 'pending' pra sempre e indistinguível
   // de um lembrete que ainda vai disparar.
-  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
-    const data = job.data as ReminderDispatchJob;
-    void markReminderFailed(data.reminderId, error.message).catch((dbError) => {
-      // eslint-disable-next-line no-console
-      console.error('Failed to mark reminder as failed', { reminderId: data.reminderId, dbError });
+  if (job && isExhausted(job)) {
+    const reminderId = job.data.reminderId as string;
+    void markReminderFailed(reminderId, error.message).catch((dbError) => {
+      console.error('Failed to mark reminder as failed', { reminderId, dbError });
     });
   }
 });
 
-// eslint-disable-next-line no-console
+const workers = [incomingMessageWorker, audioTranscriptionWorker, reminderDispatchWorker];
+
 console.log('ZapBuddy worker started', { queues: workers.map((w) => w.name) });
 
 async function shutdown(): Promise<void> {

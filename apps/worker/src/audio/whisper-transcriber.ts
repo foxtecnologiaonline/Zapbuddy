@@ -83,7 +83,6 @@ async function runWhisper(
     response_format: 'verbose_json',
     temperature,
     ...(prompt ? { prompt } : {}),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any)) as any;
   const text = result.text?.trim();
   if (!text) throw new Error('Whisper retornou texto vazio');

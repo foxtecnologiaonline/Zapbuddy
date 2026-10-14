@@ -7,7 +7,6 @@ import { createReminderTool } from './tools/reminders.js';
 import { completeOnboardingTool } from './tools/onboarding.js';
 import { sendDashboardLoginLinkTool } from './tools/dashboard-access.js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ALL_TOOLS: ToolDefinition<any>[] = [
   recordTransactionTool,
   getSummaryTool,

@@ -26,7 +26,6 @@ export async function logToolCall(input: LogToolCallInput): Promise<void> {
   });
 
   if (error) {
-    // eslint-disable-next-line no-console
     console.error('Failed to write tool_call_log', { toolName: input.toolName, error });
   }
 }

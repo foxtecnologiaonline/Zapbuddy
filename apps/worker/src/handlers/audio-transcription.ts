@@ -23,7 +23,6 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
 
   const user = await findUserById(userId);
   if (!user) {
-    // eslint-disable-next-line no-console
     console.error('audio-transcription: user not found', { userId });
     return;
   }
