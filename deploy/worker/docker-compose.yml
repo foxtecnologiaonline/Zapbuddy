@@ -1,0 +1,26 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: always
+    # Sem "ports:" de propósito — só o container do worker, na mesma rede
+    # docker interna, precisa falar com o Redis. Nada escuta na porta 6379
+    # pra fora da VPS.
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/worker/Dockerfile
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # Nome do serviço "redis" resolve pela rede interna do compose.
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
+
+volumes:
+  redis-data:
