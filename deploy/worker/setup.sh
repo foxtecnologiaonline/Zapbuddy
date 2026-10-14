@@ -47,7 +47,7 @@ if [ ! -f .env ]; then
   exit 0
 fi
 
-if grep -qE '^(SUPABASE_URL|ANTHROPIC_API_KEY)=\s*$' .env; then
+if grep -qE '^(REDIS_URL|SUPABASE_URL|ANTHROPIC_API_KEY)=\s*$' .env; then
   echo ">>> deploy/worker/.env existe mas tem campos obrigatórios vazios."
   echo ">>> Edite (nano .env) e rode este script de novo."
   exit 1
@@ -60,7 +60,7 @@ echo "== PASSO 5: status =="
 sleep 3
 docker compose ps
 echo ""
-echo "Uso de recursos dos containers do ZapBuddy (compare com o PASSO 0):"
-docker stats --no-stream zapbuddy-redis zapbuddy-worker
+echo "Uso de recursos do container do ZapBuddy (compare com o PASSO 0):"
+docker stats --no-stream zapbuddy-worker
 echo ""
 echo "Logs em tempo real:  cd $APP_DIR/deploy/worker && docker compose logs -f worker"

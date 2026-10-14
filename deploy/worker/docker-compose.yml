@@ -1,27 +1,18 @@
-# Projeto Compose isolado (nome explícito + nomes de container/rede/volume
-# próprios) pra coexistir na MESMA VPS do stack do ZapScript sem colidir
-# com os containers dele (evolution-api, postgres, redis, nginx/caddy) —
+# Projeto Compose isolado (nome explícito + container próprio) pra coexistir
+# na MESMA VPS do stack do ZapScript sem colidir com os containers dele —
 # ver deploy/worker/README.md, seção "Coexistindo com o ZapScript".
+#
+# SEM Redis aqui de propósito: o webhook do WhatsApp roda na Vercel e
+# enfileira jobs direto no Redis via BullMQ (packages/core/src/queues/
+# definitions.ts) — ele nunca fala com este worker por HTTP. Um Redis
+# self-hosted nesta VPS, sem porta pública, seria inalcançável pela Vercel;
+# com porta pública, seria um Redis na internet só com senha (sem TLS) pra
+# proteger mensagens com dado financeiro em trânsito. Por isso REDIS_URL
+# aqui aponta pro mesmo Redis gerenciado (Upstash, TLS nativo) que a Vercel
+# usa — ver deploy/worker/README.md.
 name: zapbuddy-worker
 
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: zapbuddy-redis
-    restart: always
-    # Sem "ports:" de propósito — só o container do worker, na rede
-    # "zapbuddy-net" abaixo, precisa falar com este Redis. Nada escuta na
-    # porta 6379 pra fora da VPS, e esta rede é separada da que o
-    # ZapScript usa (evo-net/a dele) — containers de um não enxergam os do
-    # outro a não ser pelo host (nenhuma chamada daqui depende disso: o
-    # worker fala com a Evolution API via https://evo.zapscript.me público,
-    # igual a Vercel faria).
-    command: redis-server --appendonly yes
-    volumes:
-      - zapbuddy-redis-data:/data
-    networks:
-      - zapbuddy-net
-
   worker:
     build:
       context: ../..
@@ -30,16 +21,3 @@ services:
     restart: always
     env_file:
       - .env
-    environment:
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - zapbuddy-net
-
-networks:
-  zapbuddy-net:
-    name: zapbuddy-net
-
-volumes:
-  zapbuddy-redis-data:
