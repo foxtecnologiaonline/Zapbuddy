@@ -27,6 +27,10 @@ pode se encaixar em mais de uma categoria com peso parecido, ou não dá pista n
 dado vindo de áudio transcrito (caso 2.3): confiança baixa na transcrição ou na categoria segue
 o mesmo fluxo de pergunta, nunca grava um valor/categoria "chutado".
 
+**Nota de sintaxe:** as respostas abaixo usam `**negrito**` por ser a convenção markdown deste
+documento. Na implementação real, a sintaxe de negrito do WhatsApp é `*negrito*` (um asterisco
+de cada lado) — a mensagem enviada pela API nunca deve conter `**` literal.
+
 ---
 
 ## 1. Onboarding (primeiro contato)
@@ -85,7 +89,8 @@ Log da tool call (nome, params, resultado) desde este primeiro turno.
 **Usuário:** "gastei 45 reais no almoço"
 
 **Consequência:** `createTransaction` — persiste **antes** de responder:
-`{type: "expense", amount: 45.00, category: "alimentação", description: "almoço", source: "text", raw_text: "gastei 45 reais no almoço"}`.
+`{type: "expense", amount: 45.00, category: "alimentacao", description: "almoço", source: "text", raw_text: "gastei 45 reais no almoço"}`
+(categoria canônica em `docs/categorias-financeiras.md`; Tom exibe o rótulo em português na resposta).
 Categoria vem de classificação automática via IA.
 
 **Resposta:**
@@ -96,7 +101,7 @@ Categoria vem de classificação automática via IA.
 
 **Usuário:** "recebi 1200 de um projeto"
 
-**Consequência:** `createTransaction` — `{type: "income", amount: 1200.00, category: "serviços prestados", description: "projeto"}`.
+**Consequência:** `createTransaction` — `{type: "income", amount: 1200.00, category: "servicos_prestados", description: "projeto"}`.
 
 **Resposta:**
 > Boa! Entrada de R$ 1.200,00 em Serviços prestados registrada. 💰
@@ -113,10 +118,21 @@ Categoria vem de classificação automática via IA.
 > Recebi seu áudio, só um instante que já te confirmo. 🎧
 
 **Consequência (após job processar):** transcrição → `createTransaction`
-`{type: "expense", amount: 230.00, category: "utilidades/telecom", description: "internet e telefone"}`.
+`{type: "expense", amount: 230.00, category: "utilidades_telecom", description: "internet e telefone"}`.
 
 **Resposta (segunda mensagem, assíncrona):**
 > Entendi: R$ 230,00 em Internet/Telefone. Já registrei. ✅
+
+### 2.3b Áudio demorando além do SLA
+
+**Gatilho:** job de transcrição não concluiu dentro do limite definido em
+`docs/arquitetura-sla.md` (15s, p95) após a resposta imediata do caso 2.3.
+
+**Consequência:** nenhuma escrita ainda — o job continua rodando, Tom só evita deixar o
+usuário sem retorno.
+
+**Resposta (mensagem intermediária):**
+> Ainda processando seu áudio, só mais um instante. 🎧
 
 ### 2.4 Valor não informado — Tom pergunta antes de gravar
 
@@ -149,7 +165,7 @@ pagamento a funcionário, presente, etc.).
 
 **Usuário:** "pagamento de freelancer que me ajudou"
 
-**Consequência:** `createTransaction` `{type: "expense", amount: 300.00, category: "serviços de terceiros", description: "pagamento freelancer - Maria"}`.
+**Consequência:** `createTransaction` `{type: "expense", amount: 300.00, category: "servicos_terceiros", description: "pagamento freelancer - Maria"}`.
 
 **Resposta:**
 > Certo, R$ 300,00 em Serviços de terceiros (Maria). Registrado.
@@ -166,7 +182,7 @@ lançamento corrigir (nunca edita no escuro).
 > Corrigido: almoço agora está R$ 54,00.
 
 **Resposta (ambíguo — 2+ lançamentos de almoço hoje):**
-> Tenho dois lançamentos de almoço hoje: R$ 45,00 (12:10) e R$ 32,00 (19:40). Qual eu corrijo?
+> Tenho dois lançamentos de almoço hoje: R$ 45,00 (12:10) e R$ 32,00 (13:35). Qual eu corrijo?
 
 ### 2.7 Resumo diário (proativo)
 
@@ -373,4 +389,12 @@ Regra transversal 1: sem persistência confirmada, nenhuma resposta de confirma�
    inicia conversa sem um desses gatilhos.
 6. **Categorização automática tem limiar de confiança.** Tom só categoriza sozinho quando a
    descrição for clara (seção 2); abaixo do limiar, pergunta — vale igual para dado vindo de
-   áudio transcrito.
+   áudio transcrito. Categoria é sempre um valor da lista fechada em
+   `docs/categorias-financeiras.md`, nunca string livre.
+7. **SLA de latência é explícito, com fallback.** Cada tipo de interação tem um alvo definido
+   em `docs/arquitetura-sla.md`; se o processamento de áudio estourar o p95, Tom avisa que
+   ainda está processando (caso 2.3b) em vez de deixar o usuário sem retorno.
+8. **Mensagens do mesmo usuário são serializadas.** Nenhuma tool de escrita roda em paralelo
+   para o mesmo `user_id` — fila/lock por usuário (`docs/arquitetura-sla.md`), evitando corrida
+   entre, por exemplo, dois áudios seguidos ou uma correção (caso 2.6) chegando antes do
+   lançamento anterior terminar de persistir.

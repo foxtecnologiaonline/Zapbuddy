@@ -1,5 +1,8 @@
 # Escopo de implementação — melhorias identificadas na revisão
 
+**Status: todas as 10 sugestões implementadas** (ver arquivos e commits referenciados em cada
+item abaixo).
+
 Este documento detalha o escopo de implementação das 10 sugestões levantadas na revisão do
 roteiro do Tom (`docs/conversas-tom.md`) e do `CLAUDE.md`. Como o repositório ainda não tem
 código de aplicação, todo entregável aqui é **documentação/decisão de arquitetura** — vira
@@ -10,7 +13,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 
 ---
 
-## 1. Corrigir horários inconsistentes no exemplo 2.6
+## 1. Corrigir horários inconsistentes no exemplo 2.6 ✅
 
 - **Problema:** cenário de lançamento duplicado mostra almoço às 19:40 (hora incompatível).
 - **Entregável:** correção pontual no texto do exemplo.
@@ -20,7 +23,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** XS.
 - **Depende de:** nada.
 
-## 2. Fixar taxonomia de categorias financeiras
+## 2. Fixar taxonomia de categorias financeiras ✅
 
 - **Problema:** categorias hoje são string livre por exemplo, sem lista fechada — quebra
   agregação em resumo/dashboard assim que a IA variar grafia.
@@ -34,7 +37,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** S.
 - **Depende de:** nada — mas é pré-requisito dos itens 7 e 8.
 
-## 3. Definir SLA de latência por tipo de interação
+## 3. Definir SLA de latência por tipo de interação ✅
 
 - **Problema:** fila BullMQ existe na arquitetura, mas nenhum número de latência aceitável
   está documentado — impossível dimensionar workers ou alertar regressão.
@@ -47,7 +50,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** S.
 - **Depende de:** nada.
 
-## 4. Regra de fallback "ainda processando" para áudio
+## 4. Regra de fallback "ainda processando" para áudio ✅
 
 - **Problema:** cenário 2.3 só tem duas mensagens (recebido → confirmado); sem fallback se a
   fila atrasar, o usuário não sabe se o sistema travou.
@@ -58,7 +61,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** XS.
 - **Depende de:** item 3 (usa o número de SLA definido lá).
 
-## 5. Nota de sintaxe WhatsApp vs. markdown do documento
+## 5. Nota de sintaxe WhatsApp vs. markdown do documento ✅
 
 - **Problema:** respostas de exemplo usam `**negrito**` (markdown), mas o WhatsApp usa
   `*negrito*` — risco de implementação copiar a sintaxe errada.
@@ -70,7 +73,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** XS.
 - **Depende de:** nada.
 
-## 6. Documentar validação de schema antes de toda tool call de escrita
+## 6. Documentar validação de schema antes de toda tool call de escrita ✅
 
 - **Problema:** a regra "nunca inventar valor/categoria" depende do comportamento do LLM, sem
   uma camada de validação declarada que barre a execução se faltar campo obrigatório.
@@ -85,7 +88,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** M.
 - **Depende de:** item 2 (categoria é um dos campos validados).
 
-## 7. Extrair few-shots de categorização para arquivo consumível pelo prompt
+## 7. Extrair few-shots de categorização para arquivo consumível pelo prompt ✅
 
 - **Problema:** os pares "mensagem → categoria" do roteiro só existem como prosa; não dá pra
   reusar como few-shot no system prompt sem recopiar manualmente.
@@ -97,7 +100,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** S.
 - **Depende de:** item 2.
 
-## 8. Decidir estratégia de agregação para o dashboard
+## 8. Decidir estratégia de agregação para o dashboard ✅
 
 - **Problema:** seção 5 do roteiro (dashboard) não define se resumo diário/semanal é
   calculado on-the-fly ou pré-agregado — risco de gargalo com histórico longo de transações.
@@ -109,7 +112,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** S.
 - **Depende de:** item 2 (agregação é por categoria).
 
-## 9. Regra de concorrência por usuário (fila/lock)
+## 9. Regra de concorrência por usuário (fila/lock) ✅
 
 - **Problema:** nenhuma regra cobre dois áudios em sequência ou uma correção (2.6) chegando
   antes do lançamento anterior terminar de persistir — risco de corrida.
@@ -122,7 +125,7 @@ Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), *
 - **Esforço:** XS.
 - **Depende de:** item 3 (mesmo documento de arquitetura).
 
-## 10. Especificar esquema da tabela de log de tool calls
+## 10. Especificar esquema da tabela de log de tool calls ✅
 
 - **Problema:** regra 4 do roteiro ("logar toda tool call") não define onde nem com que
   estrutura — sem isso não vira insumo real de debug de interpretação de linguagem natural.
