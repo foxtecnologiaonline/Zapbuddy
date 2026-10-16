@@ -1,0 +1,55 @@
+import { supabase } from '../lib/supabase';
+import type { Client } from '../types/client';
+
+interface ClientRow {
+  id: string;
+  whatsapp_id: string;
+  name: string | null;
+  status: Client['status'];
+  onboarding_completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapRow(row: ClientRow): Client {
+  return {
+    id: row.id,
+    whatsappId: row.whatsapp_id,
+    name: row.name,
+    status: row.status,
+    onboardingCompletedAt: row.onboarding_completed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function findClientByWhatsAppId(whatsappId: string): Promise<Client | null> {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('whatsapp_id', whatsappId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as ClientRow) : null;
+}
+
+export async function createClient(whatsappId: string): Promise<Client> {
+  const { data, error } = await supabase
+    .from('clients')
+    .insert({ whatsapp_id: whatsappId, status: 'onboarding' })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return mapRow(data as ClientRow);
+}
+
+export async function markOnboardingComplete(clientId: string, name: string): Promise<void> {
+  const { error } = await supabase
+    .from('clients')
+    .update({ status: 'active', name, onboarding_completed_at: new Date().toISOString() })
+    .eq('id', clientId);
+
+  if (error) throw error;
+}
