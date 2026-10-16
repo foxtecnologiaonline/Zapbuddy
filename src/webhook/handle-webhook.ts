@@ -2,8 +2,8 @@ import { resolveClientForInboundMessage, InvalidPhoneNumberError } from './inbou
 import { parseInboundMessage } from '../whatsapp/parse-webhook-payload';
 import { verifyWhatsAppSignature } from '../whatsapp/verify-signature';
 import { markMessageProcessedOnce } from '../repositories/processed-messages';
-import { handleOnboardingMessage } from '../onboarding/handle-onboarding-message';
-import { handleOrchestratorMessage } from '../orchestrator/handle-orchestrator-message';
+import { isRateLimited } from '../lib/rate-limit';
+import { enqueueMessageProcessing } from '../queue/queue';
 import { logger } from '../lib/logger';
 
 export interface WebhookRequest {
@@ -15,9 +15,11 @@ export class InvalidWebhookSignatureError extends Error {}
 
 /**
  * Ponto de entrada de toda mensagem recebida via WhatsApp Cloud API.
- * Verifica a assinatura da Meta, dedup por messageId, extrai a mensagem e
- * decide, via resolveClientForInboundMessage, se o remetente vai pro
- * fluxo de onboarding ou pro orquestrador de IA.
+ * Verifica assinatura, dedup por messageId, rate limit por número, garante
+ * o cliente (cria/valida) e enfileira o processamento — quem manda a
+ * resposta de volta pro WhatsApp é o worker, fora do ciclo de resposta
+ * deste webhook (responde rápido pra Meta, sem depender da latência da
+ * Graph API).
  */
 export async function handleWebhookRequest({ rawBody, signatureHeader }: WebhookRequest): Promise<void> {
   const appSecret = process.env.WHATSAPP_APP_SECRET;
@@ -38,9 +40,14 @@ export async function handleWebhookRequest({ rawBody, signatureHeader }: Webhook
     return;
   }
 
-  let route;
+  if (await isRateLimited(inboundMessage.from)) {
+    logger.warn('webhook.rate_limited', { whatsappId: inboundMessage.from, messageId: inboundMessage.messageId });
+    return;
+  }
+
+  let client;
   try {
-    route = await resolveClientForInboundMessage(inboundMessage.from);
+    ({ client } = await resolveClientForInboundMessage(inboundMessage.from));
   } catch (error) {
     if (error instanceof InvalidPhoneNumberError) {
       logger.warn('webhook.invalid_phone_number', {
@@ -52,9 +59,5 @@ export async function handleWebhookRequest({ rawBody, signatureHeader }: Webhook
     throw error;
   }
 
-  if (route.kind === 'onboarding') {
-    await handleOnboardingMessage(route.client, inboundMessage);
-  } else {
-    await handleOrchestratorMessage(route.client, inboundMessage);
-  }
+  await enqueueMessageProcessing({ clientId: client.id, message: inboundMessage });
 }

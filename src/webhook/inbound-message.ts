@@ -16,14 +16,21 @@ export function normalizeWhatsAppId(rawFrom: string): string {
   return digits;
 }
 
-export type InboundRoute =
-  | { kind: 'onboarding'; client: Client }
-  | { kind: 'orchestrator'; client: Client };
+export type RouteKind = 'onboarding' | 'orchestrator';
+
+export type InboundRoute = { kind: RouteKind; client: Client };
+
+// Centraliza a regra "quem é onboarding, quem é orquestrador" — usada tanto
+// aqui (resolução síncrona no webhook) quanto no worker da fila, que
+// re-deriva a rota a partir do estado atual do cliente a cada job.
+export function routeKindForClient(client: Client): RouteKind {
+  return client.status === 'onboarding' ? 'onboarding' : 'orchestrator';
+}
 
 /**
- * Primeiro passo de todo webhook recebido: decide se o número é um cliente
- * já cadastrado (vai pro orquestrador da IA) ou precisa de onboarding
- * (cliente novo ou que começou e não terminou o cadastro).
+ * Primeiro passo de todo webhook recebido: garante que o número existe como
+ * cliente (cria se for o primeiro contato) e decide se vai pro fluxo de
+ * onboarding ou pro orquestrador de IA.
  */
 export async function resolveClientForInboundMessage(rawFrom: string): Promise<InboundRoute> {
   const whatsappId = normalizeWhatsAppId(rawFrom);
@@ -34,9 +41,5 @@ export async function resolveClientForInboundMessage(rawFrom: string): Promise<I
     client = await createClient(whatsappId);
   }
 
-  if (client.status === 'onboarding') {
-    return { kind: 'onboarding', client };
-  }
-
-  return { kind: 'orchestrator', client };
+  return { kind: routeKindForClient(client), client };
 }

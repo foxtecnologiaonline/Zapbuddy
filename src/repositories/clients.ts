@@ -36,6 +36,13 @@ export async function findClientByWhatsAppId(whatsappId: string): Promise<Client
   return data ? mapRow(data as ClientRow) : null;
 }
 
+export async function findClientById(id: string): Promise<Client | null> {
+  const { data, error } = await supabase.from('clients').select('*').eq('id', id).maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as ClientRow) : null;
+}
+
 const UNIQUE_VIOLATION = '23505';
 
 export async function createClient(whatsappId: string): Promise<Client> {
