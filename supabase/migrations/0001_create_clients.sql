@@ -8,6 +8,19 @@ create table if not exists clients (
   updated_at timestamptz not null default now()
 );
 
+create or replace function set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger clients_set_updated_at
+  before update on clients
+  for each row
+  execute function set_updated_at();
+
 alter table clients enable row level security;
 
 -- Escrita/leitura via service role apenas (backend do webhook).

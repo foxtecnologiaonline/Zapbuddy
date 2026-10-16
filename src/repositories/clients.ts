@@ -34,6 +34,8 @@ export async function findClientByWhatsAppId(whatsappId: string): Promise<Client
   return data ? mapRow(data as ClientRow) : null;
 }
 
+const UNIQUE_VIOLATION = '23505';
+
 export async function createClient(whatsappId: string): Promise<Client> {
   const { data, error } = await supabase
     .from('clients')
@@ -41,7 +43,16 @@ export async function createClient(whatsappId: string): Promise<Client> {
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) {
+      // Outra requisição concorrente (ex: reenvio de webhook da Meta) já criou
+      // o registro entre o find e este insert.
+      const existing = await findClientByWhatsAppId(whatsappId);
+      if (existing) return existing;
+    }
+    throw error;
+  }
+
   return mapRow(data as ClientRow);
 }
 
