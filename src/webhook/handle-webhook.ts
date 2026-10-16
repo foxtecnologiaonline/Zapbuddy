@@ -1,5 +1,5 @@
 import { resolveClientForInboundMessage } from './inbound-message';
-import { parseInboundTextMessage } from '../whatsapp/parse-webhook-payload';
+import { parseInboundMessage } from '../whatsapp/parse-webhook-payload';
 import { verifyWhatsAppSignature } from '../whatsapp/verify-signature';
 import { handleOnboardingMessage } from '../onboarding/handle-onboarding-message';
 import { handleOrchestratorMessage } from '../orchestrator/handle-orchestrator-message';
@@ -26,7 +26,7 @@ export async function handleWebhookRequest({ rawBody, signatureHeader }: Webhook
   }
 
   const body = JSON.parse(rawBody);
-  const inboundMessage = parseInboundTextMessage(body);
+  const inboundMessage = parseInboundMessage(body);
 
   if (!inboundMessage) return;
 

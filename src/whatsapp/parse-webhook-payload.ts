@@ -1,23 +1,27 @@
-export interface InboundTextMessage {
+export interface InboundMessage {
   from: string;
-  text: string;
   messageId: string;
+  type: string;
+  text: string | null;
 }
 
 /**
- * Extrai a primeira mensagem de texto do payload do webhook da WhatsApp
- * Cloud API. Retorna null para payloads sem mensagem de texto (status de
- * entrega/leitura, ou tipos não-texto como áudio/imagem, que vão pra fila
- * de transcrição/processamento mais pra frente).
+ * Extrai a mensagem recebida no payload do webhook da WhatsApp Cloud API.
+ * Retorna null só quando não há mensagem nenhuma (ex: status de
+ * entrega/leitura). Qualquer tipo de mensagem (texto, áudio, imagem...)
+ * é retornado — quem decide se cadastra/responde é o chamador; isso
+ * garante que resolveClientForInboundMessage rode pra todo primeiro
+ * contato, não só quando a pessoa manda texto.
  */
-export function parseInboundTextMessage(body: unknown): InboundTextMessage | null {
+export function parseInboundMessage(body: unknown): InboundMessage | null {
   const message = (body as any)?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
-  if (!message || message.type !== 'text') return null;
+  if (!message) return null;
 
   return {
     from: message.from,
-    text: message.text.body,
     messageId: message.id,
+    type: message.type,
+    text: message.type === 'text' ? message.text.body : null,
   };
 }
