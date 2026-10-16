@@ -77,13 +77,13 @@ async function runWhisper(
   prompt: string | undefined,
   temperature: number,
 ): Promise<{ text: string; durationSec: number }> {
-  const result = (await client.audio.transcriptions.create({
+  const result = await client.audio.transcriptions.create({
     file: audioFile,
     model,
     response_format: 'verbose_json',
     temperature,
     ...(prompt ? { prompt } : {}),
-  } as any)) as any;
+  });
   const text = result.text?.trim();
   if (!text) throw new Error('Whisper retornou texto vazio');
   return { text, durationSec: Math.max(1, Math.round(result.duration ?? 0)) };
