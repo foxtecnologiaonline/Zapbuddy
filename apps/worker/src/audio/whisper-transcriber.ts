@@ -93,9 +93,11 @@ const AUDIO_CHUNK_SEC = parseInt(process.env.AUDIO_CHUNK_SEC ?? '1800', 10);
 
 /**
  * Converte um bloco (≤ limite da API) com cadeia de recuperação em vez de
- * falha imediata: Groq+prompt → Groq sem prompt (recupera alucinação por
- * priming/silêncio) → OpenAI+prompt → OpenAI sem prompt. Primeira tentativa
- * que passa no detector de alucinação vence.
+ * falha imediata: Groq turbo+prompt → Groq turbo sem prompt (recupera
+ * alucinação por priming/silêncio) → Groq full (whisper-large-v3, mais
+ * lento/caro que o turbo, mas historicamente mais preciso em áudio ruidoso —
+ * última chance dentro do mesmo provedor) → OpenAI+prompt → OpenAI sem
+ * prompt. Primeira tentativa que passa no detector de alucinação vence.
  */
 async function transcribeBuffer(mp3Buffer: Buffer): Promise<{ text: string; durationSec: number }> {
   const audioFile = new File([mp3Buffer], 'audio.mp3', { type: 'audio/mpeg' });
@@ -107,6 +109,7 @@ async function transcribeBuffer(mp3Buffer: Buffer): Promise<{ text: string; dura
   if (groq) {
     attempts.push({ label: 'Groq', client: groq, model: 'whisper-large-v3-turbo', prompt: PT_BR_PROMPT, temperature: 0 });
     attempts.push({ label: 'Groq+recovery', client: groq, model: 'whisper-large-v3-turbo', temperature: 0.2 });
+    attempts.push({ label: 'Groq-full+recovery', client: groq, model: 'whisper-large-v3', temperature: 0.2 });
   }
   if (openai) {
     attempts.push({ label: 'OpenAI', client: openai, model: 'whisper-1', prompt: PT_BR_PROMPT, temperature: 0 });
