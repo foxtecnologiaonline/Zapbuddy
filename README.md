@@ -31,7 +31,8 @@ antes de qualquer confirmação ser enviada ao usuário.
 ```
 apps/
   web/      Next.js — webhooks do WhatsApp, auth por magic link,
-            dashboard read-only (deploy: Vercel)
+            dashboard read-only, admin operacional em `/admin`
+            (deploy: Vercel)
   worker/   Processa as filas BullMQ: transcrição de áudio,
             orquestração da IA, envio de lembretes (deploy: VPS Docker)
 packages/
@@ -65,7 +66,32 @@ deploy/
 ### `packages/db/migrations`
 `0001_init.sql` (schema base) → `0002_enable_rls.sql` (RLS como defesa
 em profundidade) → `0003_reminder_failed_status.sql` (status `failed`
-em lembretes). Rodar em ordem, manualmente, no SQL Editor do Supabase.
+em lembretes) → `0004_admin.sql` (`webhook_events`, `error_logs`,
+`users.plan_status` — suporte ao admin em `/admin`). Rodar em ordem,
+manualmente, no SQL Editor do Supabase.
+
+### Admin (`/admin`)
+
+Painel operacional interno — não é feature de produto do MVP, é
+observabilidade pra operar o Tom. Login por senha única
+(`ADMIN_PASSWORD`, sem usuário), cookie de sessão separado do
+dashboard de clientes (`apps/web/lib/admin-session.ts`).
+
+- **Visão geral** (`/admin`): visitas (hits nos webhooks, aceitos vs.
+  rejeitados), chamadas (tool calls da IA, hoje/7 dias, taxa de
+  falha), contatos (total, novos), assinaturas (contagem por
+  `plan_status` — manual, sem billing real ainda), erros (unifica
+  `error_logs` + tool calls falhas + lembretes travados), fila
+  (contagem de jobs por status direto do BullMQ/Redis),
+  infraestrutura (conectividade do Redis, contagem de linhas por
+  tabela).
+- **Contatos** (`/admin/contacts`): lista paginada e buscável, com
+  troca manual de `plan_status` por contato.
+- **Chamadas** (`/admin/calls`): log paginado de `tool_call_logs`,
+  filtrável por sucesso/falha — principal insumo de debug de
+  interpretação de linguagem natural (CLAUDE.md).
+- **Erros** (`/admin/errors`): lista unificada das últimas falhas de
+  cada fonte (webhook, worker, orchestrator, tool call, lembrete).
 
 ## Stack
 
@@ -106,6 +132,7 @@ obrigatório:
 | `WHATSAPP_*` ou `EVOLUTION_*` | Credenciais do canal escolhido |
 | `GROQ_API_KEY` e/ou `OPENAI_API_KEY` | Transcrição de áudio (pelo menos uma) |
 | `WEB_APP_URL`, `SESSION_SECRET` | Dashboard e magic link |
+| `ADMIN_PASSWORD` | Login do painel admin (`/admin`) |
 
 ## Deploy
 

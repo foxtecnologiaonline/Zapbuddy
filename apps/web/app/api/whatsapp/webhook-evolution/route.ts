@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser } from '@zapbuddy/db';
+import { getOrCreateUser, logError, logWebhookEvent } from '@zapbuddy/db';
 import { getAudioTranscriptionQueue, getIncomingMessageQueue } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
@@ -78,12 +78,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return new NextResponse('Evolution channel not enabled', { status: 404 });
   }
   if (!isValidSecret(request)) {
+    await logWebhookEvent({ channel: 'evolution', eventType: 'rejected', status: 'rejected', rejectionReason: 'invalid secret' });
     return new NextResponse('Forbidden', { status: 403 });
   }
 
   const body = (await request.json()) as EvolutionWebhookBody;
 
   if (!instanceMatches(body.instance)) {
+    await logWebhookEvent({ channel: 'evolution', eventType: 'rejected', status: 'rejected', rejectionReason: 'instance mismatch' });
     return new NextResponse('Forbidden', { status: 403 });
   }
 
@@ -102,37 +104,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const whatsappNumber = extractPhone(key.remoteJid);
   if (!whatsappNumber) return NextResponse.json({ received: true });
 
-  const user = await getOrCreateUser(whatsappNumber);
+  try {
+    const user = await getOrCreateUser(whatsappNumber);
 
-  const text =
-    messageType === 'conversation'
-      ? message?.conversation
-      : messageType === 'extendedTextMessage'
-        ? message?.extendedTextMessage?.text
-        : undefined;
-  const audio = message?.audioMessage ?? message?.pttMessage;
+    const text =
+      messageType === 'conversation'
+        ? message?.conversation
+        : messageType === 'extendedTextMessage'
+          ? message?.extendedTextMessage?.text
+          : undefined;
+    const audio = message?.audioMessage ?? message?.pttMessage;
 
-  // jobId = id da mensagem: mesma proteção contra reentrega/duplicação do
-  // webhook oficial (ver apps/web/app/api/whatsapp/webhook/route.ts).
-  if (text) {
-    await getIncomingMessageQueue().add(
-      'process',
-      { userId: user.id, whatsappNumber: user.whatsapp_number, text, waMessageId: key.id },
-      { jobId: key.id },
-    );
-  } else if (audio) {
-    await getAudioTranscriptionQueue().add(
-      'transcribe',
-      {
-        userId: user.id,
-        whatsappNumber: user.whatsapp_number,
-        audioRef: { provider: 'evolution', raw: body.data },
-        waMessageId: key.id,
-      },
-      { jobId: key.id },
-    );
+    // jobId = id da mensagem: mesma proteção contra reentrega/duplicação do
+    // webhook oficial (ver apps/web/app/api/whatsapp/webhook/route.ts).
+    if (text) {
+      await getIncomingMessageQueue().add(
+        'process',
+        { userId: user.id, whatsappNumber: user.whatsapp_number, text, waMessageId: key.id },
+        { jobId: key.id },
+      );
+      await logWebhookEvent({ channel: 'evolution', whatsappNumber: user.whatsapp_number, eventType: 'text', status: 'accepted' });
+    } else if (audio) {
+      await getAudioTranscriptionQueue().add(
+        'transcribe',
+        {
+          userId: user.id,
+          whatsappNumber: user.whatsapp_number,
+          audioRef: { provider: 'evolution', raw: body.data },
+          waMessageId: key.id,
+        },
+        { jobId: key.id },
+      );
+      await logWebhookEvent({ channel: 'evolution', whatsappNumber: user.whatsapp_number, eventType: 'audio', status: 'accepted' });
+    } else {
+      // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
+      await logWebhookEvent({ channel: 'evolution', whatsappNumber: user.whatsapp_number, eventType: 'other', status: 'accepted' });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[webhook_message_failed]', { waMessageId: key.id, error: errorMessage });
+    await logError({ source: 'webhook', message: errorMessage, detail: { waMessageId: key.id, whatsappNumber } });
   }
-  // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
 
   return NextResponse.json({ received: true });
 }

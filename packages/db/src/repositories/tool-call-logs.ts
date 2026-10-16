@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../client.js';
+import type { ToolCallLog } from '../types.js';
 
 export interface LogToolCallInput {
   userId: string | null;
@@ -28,4 +29,52 @@ export async function logToolCall(input: LogToolCallInput): Promise<void> {
   if (error) {
     console.error('Failed to write tool_call_log', { toolName: input.toolName, error });
   }
+}
+
+export async function countToolCallLogsSince(sinceIso: string, success?: boolean): Promise<number> {
+  let query = getSupabaseClient()
+    .from('tool_call_logs')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', sinceIso);
+  if (success !== undefined) query = query.eq('success', success);
+
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export const TOOL_CALL_LOGS_PAGE_SIZE = 50;
+
+export interface ListToolCallLogsResult {
+  logs: ToolCallLog[];
+  total: number;
+}
+
+/** Lista paginada de "chamadas" (tool calls da IA) pro admin, com filtro opcional por sucesso. */
+export async function listToolCallLogs(page: number, success?: boolean): Promise<ListToolCallLogsResult> {
+  const from = page * TOOL_CALL_LOGS_PAGE_SIZE;
+  const to = from + TOOL_CALL_LOGS_PAGE_SIZE - 1;
+
+  let query = getSupabaseClient()
+    .from('tool_call_logs')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+  if (success !== undefined) query = query.eq('success', success);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return { logs: (data ?? []) as ToolCallLog[], total: count ?? 0 };
+}
+
+export async function listRecentFailedToolCallLogs(limit: number): Promise<ToolCallLog[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tool_call_logs')
+    .select('*')
+    .eq('success', false)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as ToolCallLog[];
 }

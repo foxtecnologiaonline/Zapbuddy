@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser } from '@zapbuddy/db';
+import { getOrCreateUser, logError, logWebhookEvent } from '@zapbuddy/db';
 import { getAudioTranscriptionQueue, getIncomingMessageQueue } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const rawBody = await request.text();
 
   if (!isValidSignature(rawBody, request.headers.get('x-hub-signature-256'))) {
+    await logWebhookEvent({ channel: 'cloud-api', eventType: 'rejected', status: 'rejected', rejectionReason: 'invalid signature' });
     return new NextResponse('Forbidden', { status: 403 });
   }
 
@@ -65,35 +66,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const messages = payload.entry?.flatMap((entry) => entry.changes ?? []).flatMap((change) => change.value?.messages ?? []) ?? [];
 
   for (const message of messages) {
-    const user = await getOrCreateUser(message.from);
+    // Cada mensagem é tratada isoladamente: uma falha numa não deve impedir o
+    // processamento das demais nem a resposta 200 rápida que a Meta exige.
+    try {
+      const user = await getOrCreateUser(message.from);
 
-    // jobId = id da mensagem do WhatsApp: a Meta reentrega webhooks em caso de
-    // timeout/erro, e sem dedupe isso duplicaria o processamento (e, pior,
-    // transações financeiras) para a mesma mensagem.
-    if (message.type === 'text' && message.text) {
-      await getIncomingMessageQueue().add(
-        'process',
-        {
-          userId: user.id,
-          whatsappNumber: user.whatsapp_number,
-          text: message.text.body,
-          waMessageId: message.id,
-        },
-        { jobId: message.id },
-      );
-    } else if (message.type === 'audio' && message.audio) {
-      await getAudioTranscriptionQueue().add(
-        'transcribe',
-        {
-          userId: user.id,
-          whatsappNumber: user.whatsapp_number,
-          audioRef: { provider: 'cloud-api', mediaId: message.audio.id },
-          waMessageId: message.id,
-        },
-        { jobId: message.id },
-      );
+      // jobId = id da mensagem do WhatsApp: a Meta reentrega webhooks em caso de
+      // timeout/erro, e sem dedupe isso duplicaria o processamento (e, pior,
+      // transações financeiras) para a mesma mensagem.
+      if (message.type === 'text' && message.text) {
+        await getIncomingMessageQueue().add(
+          'process',
+          {
+            userId: user.id,
+            whatsappNumber: user.whatsapp_number,
+            text: message.text.body,
+            waMessageId: message.id,
+          },
+          { jobId: message.id },
+        );
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'text', status: 'accepted' });
+      } else if (message.type === 'audio' && message.audio) {
+        await getAudioTranscriptionQueue().add(
+          'transcribe',
+          {
+            userId: user.id,
+            whatsappNumber: user.whatsapp_number,
+            audioRef: { provider: 'cloud-api', mediaId: message.audio.id },
+            waMessageId: message.id,
+          },
+          { jobId: message.id },
+        );
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'audio', status: 'accepted' });
+      } else {
+        // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'other', status: 'accepted' });
+      }
+    } catch (error) {
+      const message_ = error instanceof Error ? error.message : String(error);
+      console.error('[webhook_message_failed]', { waMessageId: message.id, error: message_ });
+      await logError({ source: 'webhook', message: message_, detail: { waMessageId: message.id, from: message.from } });
     }
-    // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
   }
 
   // Meta exige resposta 200 rápida; o processamento real acontece no worker via fila.

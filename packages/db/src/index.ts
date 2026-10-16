@@ -6,3 +6,6 @@ export * from './repositories/tasks.js';
 export * from './repositories/reminders.js';
 export * from './repositories/tool-call-logs.js';
 export * from './repositories/magic-links.js';
+export * from './repositories/webhook-events.js';
+export * from './repositories/error-logs.js';
+export * from './repositories/admin-stats.js';
