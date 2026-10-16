@@ -1,8 +1,19 @@
 import { findClientByWhatsAppId, createClient } from '../repositories/clients';
 import type { Client } from '../types/client';
 
+export class InvalidPhoneNumberError extends Error {}
+
+const MIN_DIGITS = 10; // DDI + DDD + número, ex: 5511999999999 tem 13
+const MAX_DIGITS = 15; // limite do padrão E.164
+
 export function normalizeWhatsAppId(rawFrom: string): string {
-  return rawFrom.replace(/\D/g, '');
+  const digits = rawFrom.replace(/\D/g, '');
+
+  if (digits.length < MIN_DIGITS || digits.length > MAX_DIGITS) {
+    throw new InvalidPhoneNumberError(`Número de telefone com formato inválido: "${rawFrom}"`);
+  }
+
+  return digits;
 }
 
 export type InboundRoute =
