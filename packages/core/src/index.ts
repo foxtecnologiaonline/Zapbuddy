@@ -1,4 +1,5 @@
 export * from './redis.js';
+export * from './security/rate-limit.js';
 export * from './context/conversation-context.js';
 export * from './context/reply-cache.js';
 export * from './queues/definitions.js';

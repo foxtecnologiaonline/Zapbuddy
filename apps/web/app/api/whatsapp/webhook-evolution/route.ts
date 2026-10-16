@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateUser } from '@zapbuddy/db';
-import { getAudioTranscriptionQueue, getIncomingMessageQueue } from '@zapbuddy/core';
+import { getAudioTranscriptionQueue, getIncomingMessageQueue, isRateLimited } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +103,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!whatsappNumber) return NextResponse.json({ received: true });
 
   const user = await getOrCreateUser(whatsappNumber);
+
+  if (await isRateLimited(user.whatsapp_number)) {
+    console.warn('[rate_limited]', { whatsappNumber: user.whatsapp_number, waMessageId: key.id });
+    return NextResponse.json({ received: true });
+  }
 
   const text =
     messageType === 'conversation'

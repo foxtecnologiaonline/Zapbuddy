@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateUser } from '@zapbuddy/db';
-import { getAudioTranscriptionQueue, getIncomingMessageQueue } from '@zapbuddy/core';
+import { getAudioTranscriptionQueue, getIncomingMessageQueue, isRateLimited } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,6 +66,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   for (const message of messages) {
     const user = await getOrCreateUser(message.from);
+
+    // Checado por número já resolvido (não message.from direto) pra cobrir
+    // igual os dois canais (cloud-api/evolution) com a mesma chave — ver
+    // packages/core/src/security/rate-limit.ts.
+    if (await isRateLimited(user.whatsapp_number)) {
+      console.warn('[rate_limited]', { whatsappNumber: user.whatsapp_number, waMessageId: message.id });
+      continue;
+    }
 
     // jobId = id da mensagem do WhatsApp: a Meta reentrega webhooks em caso de
     // timeout/erro, e sem dedupe isso duplicaria o processamento (e, pior,

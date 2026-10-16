@@ -30,6 +30,7 @@ export class CloudApiChannel implements WhatsappChannel {
           type: 'text',
           text: { body },
         }),
+        signal: AbortSignal.timeout(15_000),
       },
     );
 
@@ -47,12 +48,14 @@ export class CloudApiChannel implements WhatsappChannel {
 
     const metaResponse = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${ref.mediaId}`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
     });
     if (!metaResponse.ok) throw new Error(`Failed to fetch media metadata (${metaResponse.status})`);
     const meta = (await metaResponse.json()) as { url: string; mime_type: string };
 
     const mediaResponse = await fetch(meta.url, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30_000),
     });
     if (!mediaResponse.ok) throw new Error(`Failed to download media (${mediaResponse.status})`);
 

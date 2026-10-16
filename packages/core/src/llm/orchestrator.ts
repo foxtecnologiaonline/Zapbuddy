@@ -85,10 +85,13 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
 
     messages.push({ role: 'assistant', content: response.content });
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const block of toolUseBlocks) {
-      toolResults.push(await runTool(block, toolContext));
-    }
+    // Em paralelo: são chamadas independentes (ex.: gasto + tarefa na mesma
+    // mensagem, que o system prompt explicitamente pede pra resolver junto) e
+    // tool_use_id já religa cada resultado ao bloco certo, então a ordem de
+    // término não importa.
+    const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+      toolUseBlocks.map((block) => runTool(block, toolContext)),
+    );
     messages.push({ role: 'user', content: toolResults });
     pendingToolResult = true;
 

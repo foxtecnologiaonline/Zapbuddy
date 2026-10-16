@@ -8,9 +8,20 @@ export interface ConversationTurn {
 
 const MAX_TURNS = 20;
 const TTL_SECONDS = 60 * 60 * 6; // 6h de inatividade encerra o contexto curto prazo
+// Uma nota de voz longa transcrita ocuparia o contexto inteiro sozinha e seria
+// reenviada por completo em todo turno seguinte, inflando tokens/custo sem
+// ganho real de memória conversacional — trunca o que sobra do que o modelo
+// já respondeu/leu na hora.
+const MAX_TURN_CONTENT_CHARS = 4000;
 
 function key(whatsappNumber: string): string {
   return `conversation:${whatsappNumber}`;
+}
+
+function truncate(content: string): string {
+  return content.length > MAX_TURN_CONTENT_CHARS
+    ? `${content.slice(0, MAX_TURN_CONTENT_CHARS)}… [truncado]`
+    : content;
 }
 
 /**
@@ -21,9 +32,11 @@ function key(whatsappNumber: string): string {
 export async function appendTurn(whatsappNumber: string, turn: ConversationTurn): Promise<void> {
   const redis = getRedisConnection();
   const k = key(whatsappNumber);
-  await redis.rpush(k, JSON.stringify(turn));
-  await redis.ltrim(k, -MAX_TURNS, -1);
-  await redis.expire(k, TTL_SECONDS);
+  const toStore: ConversationTurn = { ...turn, content: truncate(turn.content) };
+  // multi() faz as 3 operações num round-trip atômico — separadas, um crash
+  // entre elas podia deixar a chave sem TTL (vazamento no Redis) ou perder um
+  // ltrim em appendTurn concorrente para o mesmo número.
+  await redis.multi().rpush(k, JSON.stringify(toStore)).ltrim(k, -MAX_TURNS, -1).expire(k, TTL_SECONDS).exec();
 }
 
 export async function getRecentTurns(whatsappNumber: string): Promise<ConversationTurn[]> {

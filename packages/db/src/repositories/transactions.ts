@@ -44,22 +44,34 @@ export async function recordTransaction(input: RecordTransactionInput): Promise<
 // não como comportamento normal.
 const MAX_TRANSACTIONS_PER_QUERY = 2000;
 
+export interface ListTransactionsOptions {
+  /** Cap de linhas; default é o teto de segurança (uso: resumo/agregação). */
+  limit?: number;
+  /** Colunas a selecionar; default '*' (uso: resumo não precisa de description/raw_input). */
+  columns?: string;
+}
+
 export async function listTransactions(
   userId: string,
   fromIso: string,
   toIso: string,
+  options: ListTransactionsOptions = {},
 ): Promise<Transaction[]> {
+  const { limit = MAX_TRANSACTIONS_PER_QUERY, columns = '*' } = options;
   const { data, error } = await getSupabaseClient()
     .from('transactions')
-    .select('*')
+    .select(columns)
     .eq('user_id', userId)
     .gte('occurred_at', fromIso)
     .lte('occurred_at', toIso)
     .order('occurred_at', { ascending: false })
-    .limit(MAX_TRANSACTIONS_PER_QUERY);
+    .limit(limit);
 
   if (error) throw error;
-  return (data ?? []) as Transaction[];
+  // `columns` dinâmico (não um literal) faz o client perder o tipo exato da
+  // linha retornada — cast explícito via `unknown`, igual já se faz em
+  // recordTransaction acima pro mesmo client.
+  return (data ?? []) as unknown as Transaction[];
 }
 
 export interface TransactionSummary {
@@ -74,7 +86,9 @@ export async function summarizeTransactions(
   fromIso: string,
   toIso: string,
 ): Promise<TransactionSummary> {
-  const rows = await listTransactions(userId, fromIso, toIso);
+  // Só soma/agrupa — não precisa de description/raw_input/source, então pede
+  // só as colunas usadas abaixo em vez do '*' default.
+  const rows = await listTransactions(userId, fromIso, toIso, { columns: 'type, amount_cents, category' });
 
   const summary: TransactionSummary = {
     totalIncomeCents: 0,
