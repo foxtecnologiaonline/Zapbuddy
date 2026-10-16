@@ -5,6 +5,8 @@ export const WELCOME_MESSAGES = [
   'Vamos começar! 😊\nComo posso te chamar?',
 ];
 
+export const ASK_NAME_AGAIN_MESSAGE = 'Não entendi 🤔\nPode me dizer seu nome em texto?';
+
 export function buildOnboardingCompleteMessage(name: string): string {
   return `Prazer, ${name}! 🙌\nJá pode me mandar seus gastos, tarefas e lembretes por aqui que eu organizo tudo pra você.`;
 }

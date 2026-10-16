@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
-    "@types/node": "^20.14.10"
+    "@types/node": "^22.9.0",
+    "vitest": "^5.0.5"
   }
 }
