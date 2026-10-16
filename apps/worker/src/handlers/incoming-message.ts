@@ -1,5 +1,5 @@
 import type { Job } from 'bullmq';
-import { findUserById } from '@zapbuddy/db';
+import { findUserById, logger } from '@zapbuddy/db';
 import {
   orchestrateTurn,
   sendWhatsappTextMessage,
@@ -13,7 +13,7 @@ export async function handleIncomingMessage(job: Job<IncomingMessageJob>): Promi
 
   const user = await findUserById(userId);
   if (!user) {
-    console.error('incoming-message: user not found', { userId });
+    logger.error('incoming_message_user_not_found', { userId, waMessageId });
     return;
   }
 

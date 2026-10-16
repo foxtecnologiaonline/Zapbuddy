@@ -1,6 +1,6 @@
 import { Worker, type Job } from 'bullmq';
-import { getRedisConnection, QUEUE_NAMES, sendWhatsappTextMessage } from '@zapbuddy/core';
-import { markReminderFailed } from '@zapbuddy/db';
+import { getRedisConnection, QUEUE_NAMES, sendWhatsappTextMessage, MESSAGES } from '@zapbuddy/core';
+import { markReminderFailed, logger } from '@zapbuddy/db';
 import { handleIncomingMessage } from './handlers/incoming-message.js';
 import { handleAudioTranscription } from './handlers/audio-transcription.js';
 import { handleReminderDispatch } from './handlers/reminder-dispatch.js';
@@ -19,12 +19,9 @@ function isExhausted(job: Job): boolean {
  */
 async function notifyUserOfExhaustedJob(whatsappNumber: string): Promise<void> {
   try {
-    await sendWhatsappTextMessage(
-      whatsappNumber,
-      'Desculpa, tive um problema técnico pra processar sua última mensagem. Pode mandar de novo?',
-    );
+    await sendWhatsappTextMessage(whatsappNumber, MESSAGES.genericProcessingError);
   } catch (notifyError) {
-    console.error('Failed to notify user of exhausted job', { whatsappNumber, notifyError });
+    logger.error('exhausted_job_notify_failed', { whatsappNumber, notifyError });
   }
 }
 
@@ -68,7 +65,7 @@ const QUEUE_CONFIGS: {
     onExhausted: async (job, error) => {
       const reminderId = job.data.reminderId as string;
       await markReminderFailed(reminderId, error.message).catch((dbError) => {
-        console.error('Failed to mark reminder as failed', { reminderId, dbError });
+        logger.error('mark_reminder_failed_error', { reminderId, dbError });
       });
     },
   },
@@ -77,13 +74,13 @@ const QUEUE_CONFIGS: {
 const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, onExhausted }) => {
   const worker = new Worker(name, handler, { connection, concurrency });
   worker.on('failed', (job, error) => {
-    console.error(`Job failed [${name}]`, { jobId: job?.id, error, attemptsMade: job?.attemptsMade });
+    logger.error('job_failed', { queue: name, jobId: job?.id, error: error.message, attemptsMade: job?.attemptsMade });
     if (job && isExhausted(job) && onExhausted) void onExhausted(job, error);
   });
   return worker;
 });
 
-console.log('ZapBuddy worker started', { queues: workers.map((w) => w.name) });
+logger.info('worker_started', { queues: workers.map((w) => w.name) });
 
 async function shutdown(): Promise<void> {
   await Promise.all(workers.map((worker) => worker.close()));

@@ -1,4 +1,5 @@
 export * from './client.js';
+export * from './logger.js';
 export * from './types.js';
 export * from './repositories/users.js';
 export * from './repositories/transactions.js';

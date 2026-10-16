@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser } from '@zapbuddy/db';
+import { getOrCreateUser, InvalidWhatsappNumberError, logger } from '@zapbuddy/db';
 import { getAudioTranscriptionQueue, getIncomingMessageQueue, isRateLimited } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
@@ -102,10 +102,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const whatsappNumber = extractPhone(key.remoteJid);
   if (!whatsappNumber) return NextResponse.json({ received: true });
 
-  const user = await getOrCreateUser(whatsappNumber);
+  let user;
+  try {
+    user = await getOrCreateUser(whatsappNumber);
+  } catch (error) {
+    if (error instanceof InvalidWhatsappNumberError) {
+      logger.warn('invalid_whatsapp_number', { whatsappNumber, waMessageId: key.id });
+      return NextResponse.json({ received: true });
+    }
+    throw error;
+  }
 
   if (await isRateLimited(user.whatsapp_number)) {
-    console.warn('[rate_limited]', { whatsappNumber: user.whatsapp_number, waMessageId: key.id });
+    logger.warn('rate_limited', { whatsappNumber: user.whatsapp_number, waMessageId: key.id });
     return NextResponse.json({ received: true });
   }
 

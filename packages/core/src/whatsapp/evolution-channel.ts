@@ -1,3 +1,4 @@
+import { fetchWithRetry } from './http-retry.js';
 import type { AudioRef, WhatsappChannel } from './types.js';
 
 function requireEnv(name: string): string {
@@ -28,12 +29,15 @@ export class EvolutionChannel implements WhatsappChannel {
 
   async sendText(to: string, body: string): Promise<void> {
     const phone = to.replace(/\D/g, '');
-    const response = await fetch(`${baseUrl()}/message/sendText/${instanceName()}`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ number: phone, text: body }),
-      signal: AbortSignal.timeout(15_000),
-    });
+    const response = await fetchWithRetry(
+      `${baseUrl()}/message/sendText/${instanceName()}`,
+      {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ number: phone, text: body }),
+      },
+      15_000,
+    );
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => response.statusText);
@@ -46,12 +50,15 @@ export class EvolutionChannel implements WhatsappChannel {
       throw new Error(`EvolutionChannel recebeu audioRef de provider errado: ${ref.provider}`);
     }
 
-    const response = await fetch(`${baseUrl()}/chat/getBase64FromMediaMessage/${instanceName()}`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ message: ref.raw }),
-      signal: AbortSignal.timeout(30_000),
-    });
+    const response = await fetchWithRetry(
+      `${baseUrl()}/chat/getBase64FromMediaMessage/${instanceName()}`,
+      {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ message: ref.raw }),
+      },
+      30_000,
+    );
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => response.statusText);

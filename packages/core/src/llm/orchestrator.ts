@@ -1,10 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { User } from '@zapbuddy/db';
-import { logToolCall } from '@zapbuddy/db';
+import { logToolCall, logger } from '@zapbuddy/db';
 import { buildSystemPrompt } from './system-prompt.js';
 import { getToolByName, toAnthropicToolSpecs } from './tool-registry.js';
 import type { ToolContext } from './tool-types.js';
 import { appendTurn, getRecentTurns } from '../context/conversation-context.js';
+import { MESSAGES } from '../messages.js';
 
 const DEFAULT_MODEL = 'claude-haiku-5-5';
 const MAX_TOOL_ITERATIONS = 6;
@@ -120,7 +121,7 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
   await appendTurn(user.whatsapp_number, { role: 'user', content: messageText, at: new Date().toISOString() });
   await appendTurn(user.whatsapp_number, { role: 'assistant', content: finalText, at: new Date().toISOString() });
 
-  return { replyText: finalText || 'Desculpe, não consegui processar sua mensagem agora.' };
+  return { replyText: finalText || MESSAGES.noReplyGenerated };
 }
 
 async function runTool(
@@ -130,7 +131,7 @@ async function runTool(
   const tool = getToolByName(block.name);
 
   if (!tool) {
-    console.error('[tool_call_failed]', { toolName: block.name, userId: ctx.userId, error: 'unknown tool' });
+    logger.error('tool_call_failed', { toolName: block.name, userId: ctx.userId, error: 'unknown tool' });
     await logToolCall({
       userId: ctx.userId,
       toolName: block.name,
@@ -168,7 +169,7 @@ async function runTool(
     // — este log estruturado é o que torna a falha visível (buscável/com
     // alerta configurável) nos logs padrão do Vercel/host do worker, sem
     // depender de um serviço de alerta novo.
-    console.error('[tool_call_failed]', { toolName: tool.name, userId: ctx.userId, error: message });
+    logger.error('tool_call_failed', { toolName: tool.name, userId: ctx.userId, error: message });
     await logToolCall({
       userId: ctx.userId,
       toolName: tool.name,

@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../client.js';
+import { logger } from '../logger.js';
 
 export interface LogToolCallInput {
   userId: string | null;
@@ -26,6 +27,6 @@ export async function logToolCall(input: LogToolCallInput): Promise<void> {
   });
 
   if (error) {
-    console.error('Failed to write tool_call_log', { toolName: input.toolName, error });
+    logger.error('tool_call_log_write_failed', { toolName: input.toolName, error });
   }
 }

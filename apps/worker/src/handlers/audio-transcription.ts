@@ -1,11 +1,12 @@
 import type { Job } from 'bullmq';
-import { findUserById } from '@zapbuddy/db';
+import { findUserById, logger } from '@zapbuddy/db';
 import {
   orchestrateTurn,
   sendWhatsappTextMessage,
   downloadWhatsappAudio,
   getCachedReply,
   setCachedReply,
+  MESSAGES,
   type AudioTranscriptionJob,
 } from '@zapbuddy/core';
 import { getAudioTranscriber } from '../audio/get-transcriber.js';
@@ -23,7 +24,7 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
 
   const user = await findUserById(userId);
   if (!user) {
-    console.error('audio-transcription: user not found', { userId });
+    logger.error('audio_transcription_user_not_found', { userId, waMessageId });
     return;
   }
 
@@ -44,10 +45,7 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
         // Erro permanente — repetir não muda o resultado. Avisa direto e
         // não deixa propagar, pra não gastar as 3 tentativas do BullMQ
         // numa falha que nunca vai ter sucesso.
-        await sendWhatsappTextMessage(
-          user.whatsapp_number,
-          'Esse áudio é muito longo pra eu processar. Pode mandar um mais curto ou escrever em texto?',
-        );
+        await sendWhatsappTextMessage(user.whatsapp_number, MESSAGES.audioTooLong);
         return;
       }
       throw error;

@@ -1,3 +1,4 @@
+import { fetchWithRetry } from './http-retry.js';
 import type { AudioRef, WhatsappChannel } from './types.js';
 
 const GRAPH_API_VERSION = 'v20.0';
@@ -16,7 +17,7 @@ export class CloudApiChannel implements WhatsappChannel {
     const phoneNumberId = requireEnv('WHATSAPP_PHONE_NUMBER_ID');
     const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
 
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`,
       {
         method: 'POST',
@@ -30,8 +31,8 @@ export class CloudApiChannel implements WhatsappChannel {
           type: 'text',
           text: { body },
         }),
-        signal: AbortSignal.timeout(15_000),
       },
+      15_000,
     );
 
     if (!response.ok) {
@@ -46,17 +47,19 @@ export class CloudApiChannel implements WhatsappChannel {
     }
     const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
 
-    const metaResponse = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${ref.mediaId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10_000),
-    });
+    const metaResponse = await fetchWithRetry(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${ref.mediaId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      10_000,
+    );
     if (!metaResponse.ok) throw new Error(`Failed to fetch media metadata (${metaResponse.status})`);
     const meta = (await metaResponse.json()) as { url: string; mime_type: string };
 
-    const mediaResponse = await fetch(meta.url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(30_000),
-    });
+    const mediaResponse = await fetchWithRetry(
+      meta.url,
+      { headers: { Authorization: `Bearer ${token}` } },
+      30_000,
+    );
     if (!mediaResponse.ok) throw new Error(`Failed to download media (${mediaResponse.status})`);
 
     const buffer = Buffer.from(await mediaResponse.arrayBuffer());

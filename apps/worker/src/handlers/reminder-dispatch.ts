@@ -4,6 +4,7 @@ import {
   sendWhatsappTextMessage,
   hasReminderBeenDispatched,
   markReminderDispatched,
+  MESSAGES,
   type ReminderDispatchJob,
 } from '@zapbuddy/core';
 
@@ -31,7 +32,7 @@ export async function handleReminderDispatch(job: Job<ReminderDispatchJob>): Pro
   // markReminderSent() seguinte falhou, não manda a notificação de novo —
   // só tenta marcar como enviado de novo (idempotente, seguro de repetir).
   if (!(await hasReminderBeenDispatched(reminder.id))) {
-    await sendWhatsappTextMessage(user.whatsapp_number, `⏰ Lembrete: ${reminder.message}`);
+    await sendWhatsappTextMessage(user.whatsapp_number, MESSAGES.reminder(reminder.message));
     await markReminderDispatched(reminder.id);
   }
   await markReminderSent(reminder.id);

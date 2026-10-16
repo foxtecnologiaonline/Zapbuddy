@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser } from '@zapbuddy/db';
+import { getOrCreateUser, InvalidWhatsappNumberError, logger } from '@zapbuddy/db';
 import { getAudioTranscriptionQueue, getIncomingMessageQueue, isRateLimited } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
@@ -65,13 +65,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const messages = payload.entry?.flatMap((entry) => entry.changes ?? []).flatMap((change) => change.value?.messages ?? []) ?? [];
 
   for (const message of messages) {
-    const user = await getOrCreateUser(message.from);
+    let user;
+    try {
+      user = await getOrCreateUser(message.from);
+    } catch (error) {
+      if (error instanceof InvalidWhatsappNumberError) {
+        // Payload malformado (ex.: JID de grupo mal filtrado por um provider,
+        // campo vazio) não deve virar registro no banco nem derrubar o
+        // webhook inteiro — pula só esta mensagem, as outras do mesmo batch
+        // continuam normalmente.
+        logger.warn('invalid_whatsapp_number', { from: message.from, waMessageId: message.id });
+        continue;
+      }
+      throw error;
+    }
 
     // Checado por número já resolvido (não message.from direto) pra cobrir
     // igual os dois canais (cloud-api/evolution) com a mesma chave — ver
     // packages/core/src/security/rate-limit.ts.
     if (await isRateLimited(user.whatsapp_number)) {
-      console.warn('[rate_limited]', { whatsappNumber: user.whatsapp_number, waMessageId: message.id });
+      logger.warn('rate_limited', { whatsappNumber: user.whatsapp_number, waMessageId: message.id });
       continue;
     }
 
