@@ -6,6 +6,7 @@ interface ClientRow {
   whatsapp_id: string;
   name: string | null;
   status: Client['status'];
+  onboarding_step: Client['onboardingStep'];
   onboarding_completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -17,6 +18,7 @@ function mapRow(row: ClientRow): Client {
     whatsappId: row.whatsapp_id,
     name: row.name,
     status: row.status,
+    onboardingStep: row.onboarding_step,
     onboardingCompletedAt: row.onboarding_completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -56,10 +58,24 @@ export async function createClient(whatsappId: string): Promise<Client> {
   return mapRow(data as ClientRow);
 }
 
+export async function setOnboardingStep(
+  clientId: string,
+  step: NonNullable<Client['onboardingStep']>,
+): Promise<void> {
+  const { error } = await supabase.from('clients').update({ onboarding_step: step }).eq('id', clientId);
+
+  if (error) throw error;
+}
+
 export async function markOnboardingComplete(clientId: string, name: string): Promise<void> {
   const { error } = await supabase
     .from('clients')
-    .update({ status: 'active', name, onboarding_completed_at: new Date().toISOString() })
+    .update({
+      status: 'active',
+      name,
+      onboarding_step: null,
+      onboarding_completed_at: new Date().toISOString(),
+    })
     .eq('id', clientId);
 
   if (error) throw error;

@@ -3,6 +3,7 @@ create table if not exists clients (
   whatsapp_id text not null unique,
   name text,
   status text not null default 'onboarding' check (status in ('onboarding', 'active')),
+  onboarding_step text default 'new' check (onboarding_step in ('new', 'awaiting_name')),
   onboarding_completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
