@@ -1,7 +1,11 @@
 # Build context é a raiz do monorepo (ver docker-compose.yml: context: ../..)
 # porque o worker depende de @zapbuddy/core e @zapbuddy/db via npm workspaces —
 # nenhum deles é publicado, então o build precisa dos 3 diretórios juntos.
-FROM node:20-slim
+# Node 22+ é necessário: @supabase/supabase-js tenta inicializar um
+# WebSocket nativo ao criar o client (mesmo sem usar Supabase Realtime) —
+# em Node 20 isso falha com "Node.js detected but native WebSocket not
+# found", derrubando toda query (findUserById, etc.) nos 3 handlers.
+FROM node:22-slim
 
 WORKDIR /app
 
