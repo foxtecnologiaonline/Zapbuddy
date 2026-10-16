@@ -1,0 +1,24 @@
+{
+  "name": "zapbuddy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Assistente pessoal via WhatsApp com IA para organização financeira, agenda, tarefas e documentos.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "worker": "node -r dotenv/config dist/queue/worker.js",
+    "scheduler": "node dist/jobs/start.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@supabase/supabase-js": "^2.45.4",
+    "bullmq": "^5.12.12",
+    "ioredis": "^5.4.1",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "@vercel/node": "^3.2.24",
+    "typescript": "^5.6.2"
+  }
+}
