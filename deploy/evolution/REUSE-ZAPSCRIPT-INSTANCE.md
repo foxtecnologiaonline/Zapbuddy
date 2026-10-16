@@ -139,6 +139,61 @@ EVOLUTION_INSTANCE_NAME=zapbuddy
 EVOLUTION_WEBHOOK_SECRET=<o mesmo secret do passo 4>
 ```
 
+## Reconectar / gerar novo QR (se a instância cair)
+
+O WhatsApp derruba a sessão de tempos em tempos (trocou de aparelho, ficou
+muito tempo offline, etc.). Quando isso acontece, `state` deixa de ser
+`"open"`:
+
+```bash
+curl -s "https://evo.zapscript.me/instance/connectionState/zapbuddy" \
+  -H "apikey: <EVOLUTION_API_KEY>"
+```
+
+Pra reconectar, pegue um QR novo — **lições aprendidas** na primeira
+conexão, pra não repetir os mesmos becos sem saída:
+
+- **Não use o painel `/manager`** pra isso: nessa instância compartilhada
+  com o ZapScript ele mostrou "No instances found" mesmo com dezenas de
+  instâncias reais existindo (bug/limitação não investigada — a API
+  REST funciona normal, só o painel visual que não lista nada aqui).
+- **`pairingCode`** (código numérico em vez de QR) retornou sempre `null`
+  nessa configuração — não dá pra contar com ele, só QR mesmo.
+- **Não renderize o QR como ASCII/ANSI no terminal** (`qrencode -t
+  ANSIUTF8`) pra fotografar com a câmera de outro celular — na prática
+  não escaneia de forma confiável (perde a margem/zona de silêncio e os
+  módulos distorcem na foto de tela-pra-tela). O jeito que funcionou:
+  pegar o campo `base64` da resposta (é a imagem PNG do QR já pronta,
+  não o texto bruto) e decodificar pra um arquivo de imagem de verdade:
+
+  ```bash
+  curl -s "https://evo.zapscript.me/instance/connect/zapbuddy" \
+    -H "apikey: <EVOLUTION_API_KEY>" -o qr-response.json
+  python3 -c "
+  import json, base64
+  d = json.load(open('qr-response.json'))
+  b64 = d['base64'].split(',', 1)[-1]
+  open('qr.png', 'wb').write(base64.b64decode(b64))
+  "
+  ```
+
+  Depois abra `qr.png` como imagem de verdade (tela cheia num navegador,
+  app de imagens, etc.) — nunca como texto de terminal — antes de
+  escanear. O QR expira rápido (segundos), então só gere quando já
+  estiver com o outro celular pronto em **Dispositivos conectados →
+  Conectar um dispositivo**.
+
+- **Confirme o webhook depois de reconectar** (criar/reconectar instância
+  às vezes exige recriar o webhook também, se a instância foi apagada e
+  recriada do zero — não é o caso de uma simples reconexão de sessão):
+
+  ```bash
+  curl -s "https://evo.zapscript.me/webhook/find/zapbuddy" \
+    -H "apikey: <EVOLUTION_API_KEY>"
+  ```
+  Confira que `url` aponta pro `EVOLUTION_WEBHOOK_SECRET` atual da Vercel
+  e que `enabled` é `true`.
+
 ## Risco de misturar com o ZapScript
 
 Essa Evolution API é **compartilhada** — mesmo banco/arquivo de instâncias que
