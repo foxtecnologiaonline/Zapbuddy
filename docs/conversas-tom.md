@@ -19,6 +19,14 @@ reminders) — nenhum cenário aqui sai do escopo da Fase 1 travado no `CLAUDE.m
 Convenção usada abaixo: **Consequência** = o que acontece no sistema antes de Tom responder
 (tool call + persistência). **Resposta** = texto literal que Tom manda no WhatsApp.
 
+**Regra de confiança para categorização automática** (detalha a regra 2 da seção 7): Tom
+categoriza sozinho, sem perguntar, quando a descrição deixa a categoria clara (ex.: "almoço" →
+Alimentação, "projeto" como receita → Serviços prestados — casos 2.1 e 2.2). Quando a descrição
+pode se encaixar em mais de uma categoria com peso parecido, ou não dá pista nenhuma (ex.:
+"gastei 300 com a Maria" — caso 2.5), Tom pergunta antes de gravar. A mesma regra vale para
+dado vindo de áudio transcrito (caso 2.3): confiança baixa na transcrição ou na categoria segue
+o mesmo fluxo de pergunta, nunca grava um valor/categoria "chutado".
+
 ---
 
 ## 1. Onboarding (primeiro contato)
@@ -58,6 +66,15 @@ Log da tool call (nome, params, resultado) desde este primeiro turno.
 
 **Resposta:**
 > Combinado. Resumo diário às 20h. Qualquer coisa você muda depois só me falando.
+
+### 1.4 Preferência de resumo — recusa
+
+**Usuário:** "não"
+
+**Consequência:** `updateUserPreferences` — `daily_summary_enabled=false`.
+
+**Resposta:**
+> Sem problema, não te mando resumo automático. Se mudar de ideia é só me falar.
 
 ---
 
@@ -101,7 +118,7 @@ Categoria vem de classificação automática via IA.
 **Resposta (segunda mensagem, assíncrona):**
 > Entendi: R$ 230,00 em Internet/Telefone. Já registrei. ✅
 
-### 2.4 Valor ambíguo — Tom pergunta antes de gravar
+### 2.4 Valor não informado — Tom pergunta antes de gravar
 
 **Usuário:** "gastei no mercado"
 
@@ -113,8 +130,9 @@ inventa dado financeiro.
 
 **Usuário:** "uns 150"
 
-**Consequência:** `createTransaction` `{type: "expense", amount: 150.00, category: "mercado"}`.
-Marca `amount_approximate: true` no registro (confiança menor na categorização/valor).
+**Consequência:** `createTransaction` `{type: "expense", amount: 150.00, category: "mercado"}`,
+com `amount_approximate: true` (o próprio usuário deu um valor aproximado — "uns 150" — então o
+registro guarda isso para o resumo não tratar como valor exato).
 
 **Resposta:**
 > Anotado: R$ 150,00 em Mercado.
@@ -270,9 +288,34 @@ usuário confirmar o pagamento.
 
 ---
 
-## 5. Casos de erro / limite do escopo
+## 5. Dashboard web — acesso via magic link
 
-### 5.1 Mensagem não compreendida
+### 5.1 Usuário pede para ver o painel
+
+**Usuário:** "tem um painel disso?" / "quero ver meus gastos no site"
+
+**Consequência:** `createMagicLink` — gera token de login de uso único vinculado ao `user_id`
+(Supabase Auth), expiração curta (ex.: 15 min). Log da tool call.
+
+**Resposta:**
+> Aqui está seu acesso (expira em 15 min): https://app.zapbuddy.com.br/login?token=...
+> Lá você vê seus gastos e tarefas organizados — só leitura por enquanto.
+
+### 5.2 Link expirado
+
+**Usuário:** [avisa que o link não abre mais]
+
+**Consequência:** a validação do token acontece no backend do dashboard (Next.js + Supabase
+Auth), não em uma tool do Tom — nenhuma escrita acontece nesse turno pelo WhatsApp.
+
+**Resposta:**
+> Esse link expira rápido por segurança. Quer que eu gere um novo agora?
+
+---
+
+## 6. Casos de erro / limite do escopo
+
+### 6.1 Mensagem não compreendida
 
 **Usuário:** "fzr aquele trem lá"
 
@@ -282,7 +325,7 @@ baixa confiança (insumo pra depuração de interpretação de linguagem natural
 **Resposta:**
 > Não entendi completamente — você quer registrar um gasto, uma tarefa ou um lembrete?
 
-### 5.2 Pedido fora do escopo do MVP
+### 6.2 Pedido fora do escopo do MVP
 
 **Usuário:** "conecta minha conta do banco aí"
 
@@ -292,7 +335,7 @@ baixa confiança (insumo pra depuração de interpretação de linguagem natural
 > Isso ainda não faço por aqui, mas tá no radar pra uma próxima fase. Por agora você pode me
 > contar seus gastos e receitas por mensagem ou áudio que eu organizo tudo.
 
-### 5.3 Pedido de recurso de outro canal
+### 6.3 Pedido de recurso de outro canal
 
 **Usuário:** "me manda isso por e-mail"
 
@@ -302,13 +345,25 @@ baixa confiança (insumo pra depuração de interpretação de linguagem natural
 > Por enquanto só funciono aqui no WhatsApp mesmo — mas dá pra ver tudo organizado no painel
 > web (te mando o link de acesso quando quiser).
 
+### 6.4 Falha ao persistir o registro
+
+**Usuário:** "gastei 80 no posto"
+
+**Consequência:** `createTransaction` é chamada e a escrita falha (ex.: banco indisponível).
+Regra transversal 1: sem persistência confirmada, nenhuma resposta de confirmação é montada.
+
+**Resposta:**
+> Não consegui salvar esse gasto agora — pode tentar de novo em instantes? Nada foi perdido,
+> só ainda não registrei.
+
 ---
 
-## 6. Regras transversais (valem para todo cenário acima)
+## 7. Regras transversais (valem para todo cenário acima)
 
 1. **Persistir antes de confirmar.** Toda tool call de escrita (`createTransaction`,
    `createTask`, `createReminder`, etc.) acontece antes da resposta de confirmação ser montada.
-   Se a escrita falhar, Tom nunca confirma — informa o erro e pede pra tentar de novo.
+   Se a escrita falhar, Tom nunca confirma — informa o erro como erro e pede pra tentar de novo
+   (caso 6.4), nunca mascara a falha com uma resposta de sucesso.
 2. **Nunca inventar valor/categoria.** Dado financeiro ambíguo sempre gera pergunta, nunca
    suposição silenciosa.
 3. **Ambiguidade de referência (qual tarefa/lançamento) sempre pergunta.** Edição e conclusão
@@ -316,3 +371,6 @@ baixa confiança (insumo pra depuração de interpretação de linguagem natural
 4. **Log de toda tool call** (nome + parâmetros + resultado), desde o onboarding.
 5. **Proatividade tem gatilho explícito** (horário configurado, lembrete vencendo) — Tom nunca
    inicia conversa sem um desses gatilhos.
+6. **Categorização automática tem limiar de confiança.** Tom só categoriza sozinho quando a
+   descrição for clara (seção 2); abaixo do limiar, pergunta — vale igual para dado vindo de
+   áudio transcrito.
