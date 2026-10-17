@@ -57,11 +57,17 @@ deploy/
   em retry)
 - `audio/` — interface de transcrição (implementação real fica em
   `apps/worker/src/audio`)
+- `llm/web-search/`, `llm/embeddings/` — pesquisa autônoma do Tom e
+  base de conhecimento (cache/RAG); ver amendamento "Pesquisa autônoma
+  e aprendizado contínuo" no `CLAUDE.md`
 
 ### `apps/worker/src`
-- `worker.ts` — os 3 workers BullMQ (mensagem recebida, transcrição de
-  áudio, disparo de lembrete)
+- `worker.ts` — os 5 workers BullMQ (mensagem recebida, transcrição de
+  áudio, disparo de lembrete, pesquisa proativa semanal, loop de
+  feedback de interpretação semanal)
 - `handlers/` — lógica de cada fila
+- `scheduled-jobs.ts` — registra os jobs recorrentes (pesquisa proativa,
+  feedback de interpretação) via `repeat` do BullMQ no boot do worker
 - `audio/` — pipeline Whisper (Groq → Groq full → OpenAI, com detector
   de alucinação) e conversão de áudio via ffmpeg
 
@@ -69,7 +75,9 @@ deploy/
 `0001_init.sql` (schema base) → `0002_enable_rls.sql` (RLS como defesa
 em profundidade) → `0003_reminder_failed_status.sql` (status `failed`
 em lembretes) → `0004_admin.sql` (`webhook_events`, `error_logs`,
-`users.plan_status` — suporte ao admin em `/admin`). Rodar em ordem,
+`users.plan_status` — suporte ao admin em `/admin`) → `0005_knowledge_base.sql`
+(`pgvector`, `knowledge_entries`, `interpretation_insights` — pesquisa
+autônoma e loop de feedback, ver `CLAUDE.md`). Rodar em ordem,
 manualmente, no SQL Editor do Supabase.
 
 ### Admin (`/admin`)
