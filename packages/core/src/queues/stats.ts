@@ -3,6 +3,9 @@ import {
   getIncomingMessageQueue,
   getReminderDispatchQueue,
   getDocumentUploadQueue,
+  getInsightsSweepQueue,
+  getInsightsGenerateQueue,
+  getWebhookDispatchQueue,
   QUEUE_NAMES,
 } from './definitions.js';
 
@@ -23,6 +26,9 @@ export async function getAllQueueCounts(): Promise<QueueCounts[]> {
     { name: QUEUE_NAMES.audioTranscription, queue: getAudioTranscriptionQueue() },
     { name: QUEUE_NAMES.reminderDispatch, queue: getReminderDispatchQueue() },
     { name: QUEUE_NAMES.documentUpload, queue: getDocumentUploadQueue() },
+    { name: QUEUE_NAMES.insightsSweep, queue: getInsightsSweepQueue() },
+    { name: QUEUE_NAMES.insightsGenerate, queue: getInsightsGenerateQueue() },
+    { name: QUEUE_NAMES.webhookDispatch, queue: getWebhookDispatchQueue() },
   ];
 
   return Promise.all(

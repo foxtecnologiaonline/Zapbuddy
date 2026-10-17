@@ -16,6 +16,7 @@ export type AccountRole = 'owner' | 'member';
 export interface Account {
   id: string;
   name: string | null;
+  referral_code: string;
   created_at: string;
 }
 
@@ -144,6 +145,55 @@ export interface CalendarConnection {
   google_calendar_id: string;
   connected_by_user_id: string | null;
   connected_at: string;
+}
+
+export type ProactiveInsightSignalType = 'category_spike' | 'monthly_pace';
+
+export interface ProactiveInsightLog {
+  id: string;
+  account_id: string;
+  signal_type: ProactiveInsightSignalType;
+  summary: string;
+  sent_at: string;
+}
+
+export interface Referral {
+  id: string;
+  referrer_account_id: string;
+  referred_account_id: string;
+  created_at: string;
+}
+
+export interface ApiKey {
+  id: string;
+  account_id: string;
+  name: string;
+  key_hash: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export type WebhookEventTypePublic = 'transaction.created' | 'task.completed';
+
+export interface WebhookSubscription {
+  id: string;
+  account_id: string;
+  url: string;
+  secret: string;
+  event_types: WebhookEventTypePublic[];
+  created_at: string;
+  disabled_at: string | null;
+}
+
+export interface WebhookDeliveryLog {
+  id: string;
+  subscription_id: string;
+  event_type: string;
+  success: boolean;
+  status_code: number | null;
+  error: string | null;
+  created_at: string;
 }
 
 export type KnowledgeEntryOrigin = 'user_query' | 'proactive_research' | 'categorization';

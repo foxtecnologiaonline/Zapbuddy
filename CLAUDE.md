@@ -58,6 +58,15 @@ deste repo — autorizada a entrada em código de Fase 2. Implementadas nesta ro
 documentos com storage + busca, Google Agenda. **Open Finance explicitamente fora desta rodada**
 — decisão do usuário, continua não implementado. Não revisitar esse recorte sem pedido explícito.
 
+**Amendamento 2026-10 (motivo documentado, Fase 3):** implementadas nesta rodada: insights
+proativos de IA (sinal determinístico + template, sem nova chamada ao LLM — ver
+`docs/adr/0003-*.md`), programa de indicação, API pública (só leitura) + webhooks. **Cobranças a
+terceiros e nota fiscal explicitamente fora desta rodada** — nenhum provedor de
+pagamento/emissão fiscal foi decidido pelo usuário, e os dois exigem credenciais reais de um
+provedor pra não virar uma simulação enganosa (cobrança que não move dinheiro de verdade; nota
+fiscal é documento regulado, não algo pra simular). Continuam não implementados até haver
+provedor + decisão explícita — não revisitar esse recorte sem pedido explícito.
+
 ## Pesquisa autônoma e aprendizado contínuo (2026-10, motivo documentado)
 
 **Exceção explícita ao gating de fases abaixo** ("nenhuma feature de Fase

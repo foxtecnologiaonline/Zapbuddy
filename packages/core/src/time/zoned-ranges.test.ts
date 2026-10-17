@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { getCurrentMonthRange, getLast7DaysRange, getTodayRange } from './zoned-ranges.js';
+import {
+  getCurrentMonthRange,
+  getLast7DaysRange,
+  getTodayRange,
+  getMonthToDateRange,
+  getPreviousMonthRange,
+  getPriorFourWeeksRange,
+  getLocalHour,
+} from './zoned-ranges.js';
 
 describe('getTodayRange', () => {
   it('calcula o dia certo quando já é o dia seguinte em UTC (America/Sao_Paulo, UTC-3)', () => {
@@ -38,5 +46,50 @@ describe('getCurrentMonthRange', () => {
 
     expect(startIso).toBe('2026-02-01T03:00:00.000Z');
     expect(endIso).toBe('2026-03-01T02:59:59.000Z');
+  });
+});
+
+describe('getMonthToDateRange (Fase 3 — ritmo de gasto)', () => {
+  it('vai do início do mês até o instante exato de referência (não até o fim do mês)', () => {
+    const reference = new Date('2026-03-15T14:30:00.000Z');
+    const { startIso, endIso } = getMonthToDateRange('America/Sao_Paulo', reference);
+
+    expect(startIso).toBe('2026-03-01T03:00:00.000Z');
+    expect(endIso).toBe(reference.toISOString());
+  });
+});
+
+describe('getPreviousMonthRange (Fase 3 — baseline do ritmo de gasto)', () => {
+  it('calcula o mês de calendário anterior completo', () => {
+    const reference = new Date('2026-06-15T12:00:00.000Z');
+    const { startIso, endIso } = getPreviousMonthRange('America/Sao_Paulo', reference);
+
+    expect(startIso).toBe('2026-05-01T03:00:00.000Z');
+    expect(endIso).toBe('2026-06-01T02:59:59.000Z');
+  });
+
+  it('atravessa virada de ano (mês atual = janeiro -> anterior = dezembro do ano anterior)', () => {
+    const reference = new Date('2026-01-15T12:00:00.000Z');
+    const { startIso, endIso } = getPreviousMonthRange('America/Sao_Paulo', reference);
+
+    expect(startIso).toBe('2025-12-01T03:00:00.000Z');
+    expect(endIso).toBe('2026-01-01T02:59:59.000Z');
+  });
+});
+
+describe('getPriorFourWeeksRange (Fase 3 — baseline de categoria)', () => {
+  it('cobre os dias -34 a -7 relativos à referência, sem incluir a semana atual', () => {
+    const reference = new Date('2026-05-10T01:00:00.000Z'); // 2026-05-09 22:00 em São Paulo
+    const { startIso, endIso } = getPriorFourWeeksRange('America/Sao_Paulo', reference);
+
+    expect(startIso).toBe('2026-04-05T03:00:00.000Z');
+    expect(endIso).toBe('2026-05-03T02:59:59.000Z');
+  });
+});
+
+describe('getLocalHour (Fase 3 — sweep de insights proativos)', () => {
+  it('converte a hora UTC pra hora local no fuso informado', () => {
+    expect(getLocalHour('America/Sao_Paulo', new Date('2026-05-10T01:00:00.000Z'))).toBe(22);
+    expect(getLocalHour('America/Sao_Paulo', new Date('2026-05-10T22:00:00.000Z'))).toBe(19);
   });
 });

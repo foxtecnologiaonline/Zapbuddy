@@ -3,6 +3,7 @@ import { recordTransaction, summarizeTransactions, updateLastTransaction } from 
 import { defineTool } from '../tool-types.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, isRecognizedCategory, normalizeCategory } from '../categories.js';
 import { getLast7DaysRange, getTodayRange } from '../../time/zoned-ranges.js';
+import { enqueueWebhookEvent } from '../../webhooks/dispatch.js';
 
 export const recordTransactionTool = defineTool({
   name: 'record_transaction',
@@ -35,6 +36,15 @@ export const recordTransactionTool = defineTool({
       source: ctx.messageSource,
       occurredAt: params.occurred_at,
     });
+
+    enqueueWebhookEvent(ctx.accountId, 'transaction.created', {
+      transaction_id: transaction.id,
+      type: transaction.type,
+      amount_cents: transaction.amount_cents,
+      category: transaction.category,
+      occurred_at: transaction.occurred_at,
+    });
+
     return {
       transaction_id: transaction.id,
       recorded: true,

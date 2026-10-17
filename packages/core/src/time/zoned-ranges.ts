@@ -33,6 +33,14 @@ export interface DateRange {
   endIso: string;
 }
 
+/** Hora local (0-23) no fuso informado — usado pelo sweep horário de insights proativos (Fase 3) pra decidir se "é a hora" de cada conta. */
+export function getLocalHour(timeZone: string, referenceDate: Date = new Date()): number {
+  const hourPart = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false }).formatToParts(referenceDate).find((p) => p.type === 'hour')?.value;
+  // '24' representa meia-noite em algumas locales do Intl com hour12 false — normaliza pro 0-23 esperado.
+  const hour = Number(hourPart);
+  return hour === 24 ? 0 : hour;
+}
+
 function datePartsInZone(timeZone: string, referenceDate: Date): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -83,5 +91,40 @@ export function getCurrentMonthRange(timeZone: string, referenceDate: Date = new
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const end = zonedWallTimeToUtc(year, month, lastDay, 23, 59, 59, timeZone);
 
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/**
+ * Início do mês corrente até AGORA (não até o fim do mês) — usado pra
+ * projetar ritmo de gasto (Fase 3: insights proativos) comparando "quanto já
+ * foi gasto nos N dias decorridos" com o total do mês anterior.
+ */
+export function getMonthToDateRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, 1, 0, 0, 0, timeZone);
+  return { startIso: start.toISOString(), endIso: referenceDate.toISOString() };
+}
+
+/** Mês de calendário anterior completo NO FUSO DO USUÁRIO — baseline de comparação pro ritmo de gasto. */
+export function getPreviousMonthRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month } = datePartsInZone(timeZone, referenceDate);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const start = zonedWallTimeToUtc(prevYear, prevMonth, 1, 0, 0, 0, timeZone);
+  const lastDay = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+  const end = zonedWallTimeToUtc(prevYear, prevMonth, lastDay, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/**
+ * Os 28 dias imediatamente ANTES dos últimos 7 (dias -8 a -35) NO FUSO DO
+ * USUÁRIO — baseline de 4 semanas pra detectar categoria de gasto fora do
+ * padrão (Fase 3: insights proativos), sem incluir a própria semana atual
+ * na média que a compara.
+ */
+export function getPriorFourWeeksRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, day - 34, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(year, month, day - 7, 23, 59, 59, timeZone);
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }

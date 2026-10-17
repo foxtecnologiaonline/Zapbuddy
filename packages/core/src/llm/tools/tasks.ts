@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { completeTask, createTask, listTasks } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
+import { enqueueWebhookEvent } from '../../webhooks/dispatch.js';
 
 export const createTaskTool = defineTool({
   name: 'create_task',
@@ -35,6 +36,7 @@ export const completeTaskTool = defineTool({
   }),
   execute: async (params, ctx) => {
     const task = await completeTask(ctx.accountId, params.task_id);
+    enqueueWebhookEvent(ctx.accountId, 'task.completed', { task_id: task.id, title: task.title });
     return { task_id: task.id, completed: true };
   },
 });

@@ -8,9 +8,11 @@
 
 Toda tool é definida via `defineTool()` (`tool-types.ts`), que fixa `name`, `description`,
 `schema` (Zod) e `execute(params, ctx)`. `ctx: ToolContext` traz `userId`, `whatsappNumber`,
-`messageSource` ('text'|'audio') e `timezone`. Toda chamada é logada em `tool_call_logs`
-(ver `docs/schema-logs.md`), sucesso ou falha, pelo `tool-runner.ts` — não é responsabilidade de
-cada tool individual logar.
+`messageSource` ('text'|'audio'), `timezone`, e desde a Fase 2 (`docs/adr/0002-*.md`) também
+`accountId` (escopo de dado — pode ser compartilhado entre mais de um usuário) e `role`
+('owner'|'member', usado só por `invite_member` pra checar permissão). Toda chamada é logada em
+`tool_call_logs` (ver `docs/schema-logs.md`), sucesso ou falha, pelo `tool-runner.ts` — não é
+responsabilidade de cada tool individual logar.
 
 ## `complete_onboarding` (`tools/onboarding.ts`)
 
@@ -136,6 +138,41 @@ em `record_transaction`/`create_task`/`create_reminder`, nunca mais pra filtrar)
 
 - **Schema:** `{ period: 'today' | 'last_7_days' }`
 - **Retorno:** `{ connected: true, events: [{ id, summary, startIso }] }` ou `{ connected: false }`.
+
+---
+
+# Fase 3 (docs/adr/0003) — insights proativos, indicação, API/webhooks públicos
+
+## `get_referral_info` (`tools/account.ts`)
+
+- **Schema:** `{}` (sem parâmetros)
+- **Retorno:** `{ referral_code, total_referred }`
+- **Atribuir uma indicação não é uma tool** — igual ao convite de membro, é interceptado
+  deterministicamente em `orchestrator.ts` (regex `indicad[oa] <código>`), mas **não bloqueante**:
+  código inválido/não reconhecido só não gera o registro em `referrals`, não impede nem atrasa o
+  cadastro normal (diferente do convite — ver decisão 3 do ADR 0003).
+
+## Insights proativos — não são tools
+
+`detectProactiveSignal()` (`packages/core/src/insights/signals.ts`) e
+`formatProactiveInsightMessage()` (`insights/message.ts`) rodam fora do loop do LLM, disparados
+pelo sweep horário (fila `insights-sweep` → `insights-generate`, ver `apps/worker/src/handlers/`).
+Números vêm de agregação SQL determinística (`summarizeTransactions`), mensagem vem de template
+fixo (não uma chamada nova ao LLM) — ver decisão 1 do ADR 0003 pro motivo. No máximo 1 mensagem
+por conta por dia, só pro dono (`proactive_insight_logs` registra o envio pra idempotência).
+
+## API pública e webhooks — não são tools
+
+`GET /api/v1/transactions` e `GET /api/v1/tasks` (`apps/web/app/api/v1/`), autenticados por
+`Authorization: Bearer <chave>` — chave criada pelo dashboard (`/api/dashboard/api-keys`), nunca
+por uma tool do WhatsApp (configuração técnica não faz sentido numa conversa). Só leitura, de
+propósito — ver decisão 5 do ADR 0003 pro motivo de não existir escrita pública.
+
+Webhooks (`transaction.created`, `task.completed`) são enfileirados por `record_transaction` e
+`complete_task` via `enqueueWebhookEvent()` (`packages/core/src/webhooks/dispatch.ts`) — best
+effort, nunca bloqueia a tool nem a resposta ao usuário. Entrega real acontece na fila
+`webhook-dispatch` (handler em `apps/worker/src/handlers/webhook-dispatch.ts`), assinada por
+HMAC-SHA256 (`X-ZapBuddy-Signature`).
 
 ## Comportamento padrão em falha
 

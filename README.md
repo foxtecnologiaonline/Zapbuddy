@@ -10,9 +10,13 @@ categoriza gastos/receitas, organiza tarefas e lembretes, guarda
 documentos, agenda compromissos no Google Agenda, e tudo fica visível
 num dashboard web read-only. Dado é escopado por **conta** (Fase 2,
 `docs/adr/0002`), que pode ser compartilhada entre mais de um número de
-WhatsApp (ex.: sócio, cônjuge). Proatividade (não só reagir a comando)
-é o diferencial central do produto — ver `CLAUDE.md` pra contexto
-completo de escopo/roadmap.
+WhatsApp (ex.: sócio, cônjuge). Desde a Fase 3 (`docs/adr/0003`), o Tom
+também manda **insight proativo** (sem a pessoa perguntar) quando um
+sinal financeiro real dispara, tem **programa de indicação**, e a conta
+pode gerar **chave de API**/**webhooks** pra integração externa (só
+leitura). Proatividade (não só reagir a comando) é o diferencial
+central do produto — ver `CLAUDE.md` pra contexto completo de
+escopo/roadmap.
 
 ## Como funciona
 
@@ -68,14 +72,23 @@ deploy/
   usado pela tool de agenda e pela rota de callback do dashboard
 - `security/crypto.ts` — AES-256-GCM pra criptografar o refresh token do
   Google em repouso (`TOKEN_ENCRYPTION_KEY`)
+- `insights/` — detecção de sinal financeiro (agregação SQL
+  determinística) + template de mensagem proativa (Fase 3, sem chamada
+  nova ao LLM — ver `docs/adr/0003-*.md`)
+- `webhooks/dispatch.ts` — enfileira (`enqueueWebhookEvent`) e entrega
+  (`dispatchWebhookEvent`, assinado HMAC-SHA256) eventos pras
+  assinaturas de webhook da conta
 - `llm/web-search/`, `llm/embeddings/` — pesquisa autônoma do Tom e
   base de conhecimento (cache/RAG); ver amendamento "Pesquisa autônoma
   e aprendizado contínuo" no `CLAUDE.md`
 
 ### `apps/worker/src`
-- `worker.ts` — os 6 workers BullMQ (mensagem recebida, transcrição de
-  áudio, disparo de lembrete, upload de documento, pesquisa proativa
-  semanal, loop de feedback de interpretação semanal)
+- `worker.ts` — os 9 workers BullMQ (mensagem recebida, transcrição de
+  áudio, disparo de lembrete, upload de documento, sweep + geração de
+  insight proativo, disparo de webhook, pesquisa proativa semanal, loop
+  de feedback de interpretação semanal) — registra também os jobs
+  repetíveis (sweep de insights 1x/hora, pesquisa proativa e feedback
+  de interpretação semanais) no boot
 - `handlers/` — lógica de cada fila
 - `scheduled-jobs.ts` — registra os jobs recorrentes (pesquisa proativa,
   feedback de interpretação) via `repeat` do BullMQ no boot do worker
@@ -90,11 +103,14 @@ em lembretes) → `0004_admin.sql` (`webhook_events`, `error_logs`,
 (Fase 2: `accounts`/`account_members`/`account_invites`, migra
 transactions/tasks/reminders de `user_id` pra `account_id` como escopo)
 → `0006_documents.sql` (`documents` + bucket de Storage) →
-`0007_calendar.sql` (`calendar_connections`) → `0008_knowledge_base.sql`
-(`pgvector`, `knowledge_entries`, `interpretation_insights` — pesquisa
-autônoma e loop de feedback, ver `CLAUDE.md`). Rodar em ordem,
-manualmente, no SQL Editor do Supabase. Ver `docs/adr/0002-*.md` pras
-decisões por trás da Fase 2.
+`0007_calendar.sql` (`calendar_connections`) → `0008_proactive_insights.sql`
+(`proactive_insight_logs`) → `0009_referrals.sql` (`accounts.referral_code`
++ `referrals`) → `0010_public_api.sql` (`api_keys`, `webhook_subscriptions`,
+`webhook_delivery_logs`) → `0011_knowledge_base.sql` (`pgvector`,
+`knowledge_entries`, `interpretation_insights` — pesquisa autônoma e loop
+de feedback, ver `CLAUDE.md`). Rodar em ordem, manualmente, no SQL Editor
+do Supabase. Ver `docs/adr/0002-*.md` e `docs/adr/0003-*.md` pras decisões
+por trás das Fases 2 e 3.
 
 ### Admin (`/admin`)
 
@@ -119,6 +135,19 @@ dashboard de clientes (`apps/web/lib/admin-session.ts`).
 - **Erros** (`/admin/errors`): lista unificada das últimas falhas de
   cada fonte (webhook, worker, orchestrator, tool call, lembrete).
 
+### API pública (Fase 3, `docs/adr/0003-*.md`)
+
+Só leitura, de propósito (ver ADR pro motivo de não ter escrita pública). Chave de API e
+assinatura de webhook são criadas pelo dashboard (seção "API e webhooks"), nunca pelo WhatsApp.
+
+```
+GET /api/v1/transactions?from=<iso>&to=<iso>   Authorization: Bearer <chave>
+GET /api/v1/tasks?status=pending|completed     Authorization: Bearer <chave>
+```
+
+Webhooks: `transaction.created` e `task.completed`, POST assinado (`X-ZapBuddy-Signature:
+sha256=<hmac>`, segredo é o mesmo gerado na criação da assinatura).
+
 ## Stack
 
 Node.js + TypeScript · Next.js (App Router) · Supabase (Postgres +
@@ -140,7 +169,7 @@ npm run dev:web        # apps/web em http://localhost:3000
 npm run dev:worker      # apps/worker consumindo as filas
 
 npm run typecheck      # tsc --noEmit em todos os workspaces
-npm test                # vitest — lógica pura (categorias, timezone, sessão, whisper)
+npm test                # vitest — lógica pura (categorias, timezone, sessão, whisper, insights)
 npm run build           # build de produção de todos os workspaces
 ```
 
@@ -178,6 +207,8 @@ obrigatório:
 
 `npm test` roda a suíte vitest — cobre lógica pura sem dependências
 externas (normalização de categoria, matemática de timezone, sessão de
-auth, heurística de detecção de alucinação do Whisper). Não cobre
-integração real com Claude/Supabase/WhatsApp — isso é validado
-manualmente, ponta a ponta, mandando mensagem pro número conectado.
+auth, heurística de detecção de alucinação do Whisper, templates de
+insight proativo). Não cobre integração real com Claude/Supabase/WhatsApp
+nem a detecção de sinal em si (depende de `summarizeTransactions` no
+banco) — isso é validado manualmente, ponta a ponta, mandando mensagem
+pro número conectado.
