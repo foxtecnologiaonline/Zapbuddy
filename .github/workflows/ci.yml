@@ -25,6 +25,7 @@ jobs:
       WHATSAPP_VERIFY_TOKEN: ci-placeholder
       SUPABASE_URL: http://localhost:54321
       SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
+      ANTHROPIC_API_KEY: ci-placeholder
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
