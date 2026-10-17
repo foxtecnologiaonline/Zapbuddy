@@ -10,7 +10,7 @@ export const createTaskTool = defineTool({
     due_at: z.string().datetime().optional(),
   }),
   execute: async (params, ctx) => {
-    const task = await createTask(ctx.userId, params.title, params.due_at);
+    const task = await createTask(ctx.accountId, ctx.userId, params.title, params.due_at);
     return { task_id: task.id, created: true };
   },
 });
@@ -22,7 +22,7 @@ export const listTasksTool = defineTool({
     status: z.enum(['pending', 'completed']).optional(),
   }),
   execute: async (params, ctx) => {
-    const tasks = await listTasks(ctx.userId, params.status);
+    const tasks = await listTasks(ctx.accountId, params.status);
     return { tasks };
   },
 });
@@ -34,7 +34,7 @@ export const completeTaskTool = defineTool({
     task_id: z.string().uuid(),
   }),
   execute: async (params, ctx) => {
-    const task = await completeTask(ctx.userId, params.task_id);
+    const task = await completeTask(ctx.accountId, params.task_id);
     return { task_id: task.id, completed: true };
   },
 });

@@ -7,9 +7,11 @@ import { getSupabaseClient } from '../client.js';
  */
 const COUNTABLE_TABLES = [
   'users',
+  'accounts',
   'transactions',
   'tasks',
   'reminders',
+  'documents',
   'tool_call_logs',
   'webhook_events',
   'error_logs',

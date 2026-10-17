@@ -1,6 +1,6 @@
 import { Queue, type DefaultJobOptions } from 'bullmq';
 import { getRedisConnection } from '../redis.js';
-import type { AudioRef } from '../whatsapp/types.js';
+import type { MediaRef } from '../whatsapp/types.js';
 
 /**
  * Sem isso, uma falha transitória (rate limit da Claude, timeout de rede no
@@ -19,13 +19,14 @@ export const QUEUE_NAMES = {
   audioTranscription: 'audio-transcription',
   incomingMessage: 'incoming-message',
   reminderDispatch: 'reminder-dispatch',
+  documentUpload: 'document-upload',
 } as const;
 
 export interface AudioTranscriptionJob {
   userId: string;
   whatsappNumber: string;
   /** Opaco por provider — só o canal que emitiu a mensagem sabe interpretar. */
-  audioRef: AudioRef;
+  audioRef: MediaRef;
   waMessageId: string;
 }
 
@@ -40,9 +41,19 @@ export interface ReminderDispatchJob {
   reminderId: string;
 }
 
+export interface DocumentUploadJob {
+  userId: string;
+  whatsappNumber: string;
+  mediaRef: MediaRef;
+  fileName: string;
+  caption?: string;
+  waMessageId: string;
+}
+
 let audioQueue: Queue<AudioTranscriptionJob> | null = null;
 let messageQueue: Queue<IncomingMessageJob> | null = null;
 let reminderQueue: Queue<ReminderDispatchJob> | null = null;
+let documentQueue: Queue<DocumentUploadJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
   audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
@@ -66,4 +77,12 @@ export function getReminderDispatchQueue(): Queue<ReminderDispatchJob> {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return reminderQueue;
+}
+
+export function getDocumentUploadQueue(): Queue<DocumentUploadJob> {
+  documentQueue ??= new Queue(QUEUE_NAMES.documentUpload, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return documentQueue;
 }

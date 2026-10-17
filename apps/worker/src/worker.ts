@@ -4,6 +4,7 @@ import { logError, markReminderFailed, logger } from '@zapbuddy/db';
 import { handleIncomingMessage } from './handlers/incoming-message.js';
 import { handleAudioTranscription } from './handlers/audio-transcription.js';
 import { handleReminderDispatch } from './handlers/reminder-dispatch.js';
+import { handleDocumentUpload } from './handlers/document-upload.js';
 
 const connection = getRedisConnection();
 
@@ -68,6 +69,12 @@ const QUEUE_CONFIGS: {
         logger.error('mark_reminder_failed_error', { reminderId, dbError });
       });
     },
+  },
+  {
+    name: QUEUE_NAMES.documentUpload,
+    handler: handleDocumentUpload,
+    concurrency: 3,
+    onExhausted: (job) => notifyUserOfExhaustedJob(job.data.whatsappNumber),
   },
 ];
 

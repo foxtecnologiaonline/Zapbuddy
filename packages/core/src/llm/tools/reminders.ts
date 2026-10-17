@@ -12,7 +12,7 @@ export const createReminderTool = defineTool({
     task_id: z.string().uuid().optional(),
   }),
   execute: async (params, ctx) => {
-    const reminder = await createReminder(ctx.userId, params.message, params.remind_at, params.task_id);
+    const reminder = await createReminder(ctx.accountId, ctx.userId, params.message, params.remind_at, params.task_id);
 
     const delay = Math.max(0, new Date(params.remind_at).getTime() - Date.now());
     await getReminderDispatchQueue().add(

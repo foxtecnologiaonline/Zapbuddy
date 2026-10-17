@@ -2,6 +2,7 @@ import { getSupabaseClient } from '../client.js';
 import type { Reminder } from '../types.js';
 
 export async function createReminder(
+  accountId: string,
   userId: string,
   message: string,
   remindAtIso: string,
@@ -9,7 +10,7 @@ export async function createReminder(
 ): Promise<Reminder> {
   const { data, error } = await getSupabaseClient()
     .from('reminders')
-    .insert({ user_id: userId, message, remind_at: remindAtIso, task_id: taskId ?? null })
+    .insert({ account_id: accountId, user_id: userId, message, remind_at: remindAtIso, task_id: taskId ?? null })
     .select('*')
     .single();
 

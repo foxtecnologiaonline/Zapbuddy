@@ -1,6 +1,6 @@
 import { CloudApiChannel } from './cloud-api-channel.js';
 import { EvolutionChannel } from './evolution-channel.js';
-import type { AudioRef, WhatsappChannel } from './types.js';
+import type { MediaRef, WhatsappChannel } from './types.js';
 
 let cached: WhatsappChannel | null = null;
 
@@ -28,8 +28,8 @@ export async function sendWhatsappTextMessage(to: string, body: string): Promise
   await getWhatsappChannel().sendText(to, body);
 }
 
-export async function downloadWhatsappAudio(ref: AudioRef): Promise<{ buffer: Buffer; mimeType: string }> {
-  return getWhatsappChannel().downloadAudio(ref);
+export async function downloadWhatsappMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {
+  return getWhatsappChannel().downloadMedia(ref);
 }
 
-export type { AudioRef, WhatsappChannel } from './types.js';
+export type { MediaRef, WhatsappChannel } from './types.js';

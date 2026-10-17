@@ -1,4 +1,10 @@
-import { getAudioTranscriptionQueue, getIncomingMessageQueue, getReminderDispatchQueue, QUEUE_NAMES } from './definitions.js';
+import {
+  getAudioTranscriptionQueue,
+  getIncomingMessageQueue,
+  getReminderDispatchQueue,
+  getDocumentUploadQueue,
+  QUEUE_NAMES,
+} from './definitions.js';
 
 export interface QueueCounts {
   name: string;
@@ -16,6 +22,7 @@ export async function getAllQueueCounts(): Promise<QueueCounts[]> {
     { name: QUEUE_NAMES.incomingMessage, queue: getIncomingMessageQueue() },
     { name: QUEUE_NAMES.audioTranscription, queue: getAudioTranscriptionQueue() },
     { name: QUEUE_NAMES.reminderDispatch, queue: getReminderDispatchQueue() },
+    { name: QUEUE_NAMES.documentUpload, queue: getDocumentUploadQueue() },
   ];
 
   return Promise.all(

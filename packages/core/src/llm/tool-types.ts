@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { AccountRole } from '@zapbuddy/db';
 
 export interface ToolContext {
   userId: string;
@@ -7,6 +8,10 @@ export interface ToolContext {
   messageSource: 'text' | 'audio';
   /** IANA timezone do usuário — usado por tools que calculam limites de data (ex. resumo financeiro). */
   timezone: string;
+  /** Escopo de dado (ADR 0002) — financeiro/tarefas/lembretes/documentos/agenda são por conta, não por usuário. */
+  accountId: string;
+  /** Só 'owner' pode convidar novos membros (tools/account.ts) — checado em código, nunca decidido pelo modelo. */
+  role: AccountRole;
 }
 
 export interface ToolDefinition<Schema extends z.ZodTypeAny> {

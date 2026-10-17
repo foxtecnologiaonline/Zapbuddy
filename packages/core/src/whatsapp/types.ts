@@ -1,15 +1,15 @@
 /**
- * Referência opaca a um áudio recebido — carregada através da fila (BullMQ
- * serializa isto em JSON) e devolvida ao mesmo provider que a emitiu via
- * WhatsappChannel.downloadAudio. Nunca interpretar o campo `raw`/`mediaId`
- * fora do provider correspondente.
+ * Referência opaca a uma mídia recebida (áudio, documento, imagem) —
+ * carregada através da fila (BullMQ serializa isto em JSON) e devolvida ao
+ * mesmo provider que a emitiu via WhatsappChannel.downloadMedia. Nunca
+ * interpretar o campo `raw`/`mediaId` fora do provider correspondente.
  */
-export type AudioRef =
+export type MediaRef =
   | { provider: 'cloud-api'; mediaId: string }
   | { provider: 'evolution'; raw: unknown };
 
 export interface WhatsappChannel {
-  readonly provider: AudioRef['provider'];
+  readonly provider: MediaRef['provider'];
   sendText(to: string, body: string): Promise<void>;
-  downloadAudio(ref: AudioRef): Promise<{ buffer: Buffer; mimeType: string }>;
+  downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }>;
 }

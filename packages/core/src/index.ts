@@ -10,3 +10,6 @@ export * from './llm/orchestrator.js';
 export * from './llm/tool-registry.js';
 export * from './audio/transcriber.js';
 export * from './whatsapp/channel.js';
+export * from './security/crypto.js';
+export * from './google/oauth.js';
+export * from './google/calendar.js';

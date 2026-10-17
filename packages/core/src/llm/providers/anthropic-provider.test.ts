@@ -31,6 +31,8 @@ const toolContext: ToolContext = {
   whatsappNumber: '5511999999999',
   messageSource: 'text',
   timezone: 'America/Sao_Paulo',
+  accountId: 'account-1',
+  role: 'owner',
 };
 
 beforeEach(() => {

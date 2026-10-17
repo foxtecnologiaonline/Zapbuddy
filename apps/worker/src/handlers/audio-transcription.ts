@@ -3,7 +3,7 @@ import { findUserById, logger } from '@zapbuddy/db';
 import {
   orchestrateTurn,
   sendWhatsappTextMessage,
-  downloadWhatsappAudio,
+  downloadWhatsappMedia,
   getCachedReply,
   setCachedReply,
   MESSAGES,
@@ -34,7 +34,7 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
   let replyText = await getCachedReply(waMessageId);
   if (replyText === null) {
     try {
-      const { buffer, mimeType } = await downloadWhatsappAudio(audioRef);
+      const { buffer, mimeType } = await downloadWhatsappMedia(audioRef);
       const transcript = await getAudioTranscriber().transcribe(buffer, mimeType);
 
       const result = await orchestrateTurn({ user, messageText: transcript, messageSource: 'audio' });

@@ -89,6 +89,54 @@ cada tool individual logar.
 - **Execução:** gera magic link (`createMagicLink`), monta a URL a partir de `WEB_APP_URL`.
 - **Retorno:** `{ login_url, expires_in_minutes: 15 }`
 
+---
+
+# Fase 2 (docs/adr/0002) — multiusuário, documentos, Google Agenda
+
+Toda tool acima passou a escopar leitura/escrita por `ctx.accountId` (conta — pode ser
+compartilhada), não mais `ctx.userId` (continua existindo em `ToolContext`, usado só como autor
+em `record_transaction`/`create_task`/`create_reminder`, nunca mais pra filtrar).
+
+## `invite_member` (`tools/account.ts`)
+
+- **Schema:** `{}` (sem parâmetros)
+- **Execução:** só `ctx.role === 'owner'` gera convite de verdade — checado em código, nunca
+  decidido pelo modelo. `createAccountInvite()` gera código numérico de 6 dígitos, válido 15 min.
+- **Retorno:** `{ invited: true, code, expires_in_minutes: 15 }` ou `{ invited: false, reason:
+  'not_owner' }`.
+- **Entrada na conta não é uma tool** — é interceptada em `orchestrator.ts` (regex
+  `entrar <código>`) antes de qualquer chamada ao LLM. Ver decisão 1 do ADR 0002.
+
+## `list_members` (`tools/account.ts`)
+
+- **Schema:** `{}` (sem parâmetros)
+- **Retorno:** `{ members: [{ name, role }] }`
+
+## `find_document` (`tools/documents.ts`)
+
+- **Schema:** `{ query?: string }`
+- **Execução:** sem `query`, lista os mais recentes (`listRecentDocuments`); com `query`, busca
+  por `tsvector` (nome do arquivo + legenda — **não** o conteúdo do arquivo, ver decisão 2 do
+  ADR 0002) via `searchDocuments`.
+- **Retorno:** `{ documents: [{ file_name, caption, created_at, download_url }] }` —
+  `download_url` é um signed URL do Supabase Storage, válido 15 min.
+- **Upload não é uma tool** — mensagens de documento/imagem do WhatsApp são processadas pelo
+  handler `document-upload` (fila BullMQ dedicada), fora do loop do LLM.
+
+## `create_calendar_event` (`tools/calendar.ts`)
+
+- **Schema:** `{ summary: string, start_at: datetime, end_at: datetime, description?: string }`
+- **Execução:** exige `calendar_connections` existente pra `ctx.accountId` (conectado via
+  dashboard, `/api/calendar/connect`) — sem isso, retorna `{ connected: false }` e não tenta
+  criar nada. Access token é sempre renovado via refresh token antes da chamada (sem cache, ver
+  decisão 3 do ADR 0002).
+- **Retorno:** `{ connected: true, created: true, event_id, html_link }` ou `{ connected: false }`.
+
+## `list_calendar_events` (`tools/calendar.ts`)
+
+- **Schema:** `{ period: 'today' | 'last_7_days' }`
+- **Retorno:** `{ connected: true, events: [{ id, summary, startIso }] }` ou `{ connected: false }`.
+
 ## Comportamento padrão em falha
 
 - **Campo obrigatório ausente por ambiguidade do usuário** (valor, categoria ou data incertos):

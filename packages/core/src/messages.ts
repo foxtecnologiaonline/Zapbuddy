@@ -13,4 +13,8 @@ export const MESSAGES = {
   stillProcessing: 'Só um instante, ainda to vendo isso pra você...',
   audioTooLong: 'Esse áudio é muito longo pra eu processar. Pode mandar um mais curto ou escrever em texto?',
   reminder: (text: string) => `⏰ Lembrete: ${text}`,
+  inviteCodeInvalid:
+    'Esse código não é válido ou expirou. Confirma com quem te convidou e manda de novo (ex.: "entrar 482913"), ' +
+    'ou me conta seu nome que eu sigo com seu cadastro normal.',
+  documentReceived: (fileName: string) => `📎 Salvei "${fileName}". Pode pedir pra eu procurar depois.`,
 } as const;

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateUser, InvalidWhatsappNumberError, logError, logWebhookEvent, logger } from '@zapbuddy/db';
-import { getAudioTranscriptionQueue, getIncomingMessageQueue, isRateLimited } from '@zapbuddy/core';
+import { getAudioTranscriptionQueue, getIncomingMessageQueue, getDocumentUploadQueue, isRateLimited } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +28,8 @@ interface WhatsappWebhookPayload {
           type: string;
           text?: { body: string };
           audio?: { id: string };
+          document?: { id: string; filename?: string; mime_type?: string; caption?: string };
+          image?: { id: string; mime_type?: string; caption?: string };
         }>;
       };
     }>;
@@ -106,8 +108,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           { jobId: message.id },
         );
         await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'audio', status: 'accepted' });
+      } else if ((message.type === 'document' && message.document) || (message.type === 'image' && message.image)) {
+        const media = message.type === 'document' ? message.document! : message.image!;
+        const fileName = message.type === 'document' ? (media as { filename?: string }).filename ?? 'arquivo' : 'imagem.jpg';
+        await getDocumentUploadQueue().add(
+          'upload',
+          {
+            userId: user.id,
+            whatsappNumber: user.whatsapp_number,
+            mediaRef: { provider: 'cloud-api', mediaId: media.id },
+            fileName,
+            caption: media.caption,
+            waMessageId: message.id,
+          },
+          { jobId: message.id },
+        );
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'document', status: 'accepted' });
       } else {
-        // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
+        // Outros tipos (sticker, localização, contato, etc.) estão fora do escopo da Fase 2.
         await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'other', status: 'accepted' });
       }
     } catch (error) {

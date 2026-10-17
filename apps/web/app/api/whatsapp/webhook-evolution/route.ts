@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateUser, InvalidWhatsappNumberError, logError, logWebhookEvent, logger } from '@zapbuddy/db';
-import { getAudioTranscriptionQueue, getIncomingMessageQueue, isRateLimited } from '@zapbuddy/core';
+import { getAudioTranscriptionQueue, getIncomingMessageQueue, getDocumentUploadQueue, isRateLimited } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +29,8 @@ interface EvolutionWebhookBody {
       extendedTextMessage?: { text?: string };
       audioMessage?: unknown;
       pttMessage?: unknown;
+      documentMessage?: { fileName?: string; mimetype?: string; caption?: string };
+      imageMessage?: { mimetype?: string; caption?: string };
     };
   };
 }
@@ -141,8 +143,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { jobId: key.id },
       );
       await logWebhookEvent({ channel: 'evolution', whatsappNumber: user.whatsapp_number, eventType: 'audio', status: 'accepted' });
+    } else if (message?.documentMessage || message?.imageMessage) {
+      const doc = message.documentMessage;
+      const fileName = doc?.fileName ?? 'imagem.jpg';
+      const caption = doc?.caption ?? message.imageMessage?.caption;
+      await getDocumentUploadQueue().add(
+        'upload',
+        {
+          userId: user.id,
+          whatsappNumber: user.whatsapp_number,
+          mediaRef: { provider: 'evolution', raw: body.data },
+          fileName,
+          caption,
+          waMessageId: key.id,
+        },
+        { jobId: key.id },
+      );
+      await logWebhookEvent({ channel: 'evolution', whatsappNumber: user.whatsapp_number, eventType: 'document', status: 'accepted' });
     } else {
-      // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
+      // Outros tipos (sticker, localização, contato, etc.) estão fora do escopo da Fase 2.
       await logWebhookEvent({ channel: 'evolution', whatsappNumber: user.whatsapp_number, eventType: 'other', status: 'accepted' });
     }
   } catch (error) {

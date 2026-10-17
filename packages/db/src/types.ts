@@ -11,11 +11,38 @@ export interface User {
   created_at: string;
 }
 
+export type AccountRole = 'owner' | 'member';
+
+export interface Account {
+  id: string;
+  name: string | null;
+  created_at: string;
+}
+
+export interface AccountMember {
+  account_id: string;
+  user_id: string;
+  role: AccountRole;
+  created_at: string;
+}
+
+export interface AccountInvite {
+  id: string;
+  account_id: string;
+  code: string;
+  created_by_user_id: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by_user_id: string | null;
+  created_at: string;
+}
+
 export type TransactionType = 'expense' | 'income';
 export type TransactionSource = 'text' | 'audio';
 
 export interface Transaction {
   id: string;
+  account_id: string;
   user_id: string;
   type: TransactionType;
   amount_cents: number;
@@ -31,6 +58,7 @@ export type TaskStatus = 'pending' | 'completed';
 
 export interface Task {
   id: string;
+  account_id: string;
   user_id: string;
   title: string;
   status: TaskStatus;
@@ -43,6 +71,7 @@ export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
 
 export interface Reminder {
   id: string;
+  account_id: string;
   user_id: string;
   task_id: string | null;
   message: string;
@@ -73,7 +102,7 @@ export interface MagicLink {
 }
 
 export type WebhookChannel = 'cloud-api' | 'evolution';
-export type WebhookEventType = 'verify' | 'text' | 'audio' | 'other' | 'rejected';
+export type WebhookEventType = 'verify' | 'text' | 'audio' | 'document' | 'other' | 'rejected';
 export type WebhookEventStatus = 'accepted' | 'rejected';
 
 export interface WebhookEvent {
@@ -86,7 +115,7 @@ export interface WebhookEvent {
   created_at: string;
 }
 
-export type ErrorLogSource = 'webhook' | 'worker' | 'orchestrator';
+export type ErrorLogSource = 'webhook' | 'worker' | 'orchestrator' | 'web';
 
 export interface ErrorLog {
   id: string;
@@ -95,4 +124,24 @@ export interface ErrorLog {
   detail: unknown;
   user_id: string | null;
   created_at: string;
+}
+
+export interface Document {
+  id: string;
+  account_id: string;
+  uploaded_by_user_id: string | null;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  caption: string | null;
+  created_at: string;
+}
+
+export interface CalendarConnection {
+  id: string;
+  account_id: string;
+  google_refresh_token_encrypted: string;
+  google_calendar_id: string;
+  connected_by_user_id: string | null;
+  connected_at: string;
 }

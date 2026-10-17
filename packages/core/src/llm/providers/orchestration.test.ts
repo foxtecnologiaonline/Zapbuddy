@@ -30,7 +30,14 @@ const baseInput: Omit<LlmProviderRunInput, 'toolContext'> & { toolContext: LlmPr
   system: 'system prompt',
   history: [],
   userMessage: 'oi',
-  toolContext: { userId: 'user-1', whatsappNumber: '5511999999999', messageSource: 'text', timezone: 'America/Sao_Paulo' },
+  toolContext: {
+    userId: 'user-1',
+    whatsappNumber: '5511999999999',
+    messageSource: 'text',
+    timezone: 'America/Sao_Paulo',
+    accountId: 'account-1',
+    role: 'owner',
+  },
 };
 
 beforeEach(() => {

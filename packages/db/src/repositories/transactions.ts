@@ -2,6 +2,7 @@ import { getSupabaseClient } from '../client.js';
 import type { Transaction, TransactionSource, TransactionType } from '../types.js';
 
 export interface RecordTransactionInput {
+  accountId: string;
   userId: string;
   type: TransactionType;
   amountCents: number;
@@ -15,12 +16,15 @@ export interface RecordTransactionInput {
 /**
  * The single write path for financial data. The AI must call this (via the
  * record_transaction tool) before it is allowed to confirm an expense/income
- * to the user — never confirm from the model's own text.
+ * to the user — never confirm from the model's own text. `accountId` scopes
+ * the data (shared across members in a multiuser account — ADR 0002);
+ * `userId` is kept as the author for audit, not for scoping reads.
  */
 export async function recordTransaction(input: RecordTransactionInput): Promise<Transaction> {
   const { data, error } = await getSupabaseClient()
     .from('transactions')
     .insert({
+      account_id: input.accountId,
       user_id: input.userId,
       type: input.type,
       amount_cents: input.amountCents,
@@ -44,19 +48,20 @@ export async function recordTransaction(input: RecordTransactionInput): Promise<
 const CORRECTION_WINDOW_MINUTES = 30;
 
 export interface UpdateLastTransactionInput {
-  userId: string;
+  accountId: string;
   amountCents?: number;
   category?: string;
   description?: string;
 }
 
 /**
- * Corrige a transação mais recente do usuário (dentro da janela acima), sem
- * exigir um transaction_id — o modelo nunca recebe esse id de volta de forma
- * que consiga repeti-lo num turno futuro (o histórico curto prazo guarda só
- * texto da conversa, não os blocos de tool call/resultado), então pedir o id
- * não seria algo que a IA consegue preencher na prática. Retorna null se não
- * houver transação recente o bastante pra corrigir.
+ * Corrige a transação mais recente da conta (dentro da janela acima, não
+ * necessariamente lançada por quem está corrigindo — numa conta
+ * compartilhada, um membro pode corrigir o que o outro acabou de lançar),
+ * sem exigir um transaction_id — o modelo nunca recebe esse id de volta de
+ * forma que consiga repeti-lo num turno futuro (o histórico curto prazo
+ * guarda só texto da conversa, não os blocos de tool call/resultado).
+ * Retorna null se não houver transação recente o bastante pra corrigir.
  */
 export async function updateLastTransaction(input: UpdateLastTransactionInput): Promise<Transaction | null> {
   const cutoffIso = new Date(Date.now() - CORRECTION_WINDOW_MINUTES * 60 * 1000).toISOString();
@@ -64,7 +69,7 @@ export async function updateLastTransaction(input: UpdateLastTransactionInput): 
   const { data: candidates, error: findError } = await getSupabaseClient()
     .from('transactions')
     .select('id')
-    .eq('user_id', input.userId)
+    .eq('account_id', input.accountId)
     .gte('created_at', cutoffIso)
     .order('created_at', { ascending: false })
     .limit(1);
@@ -82,7 +87,7 @@ export async function updateLastTransaction(input: UpdateLastTransactionInput): 
     .from('transactions')
     .update(changes)
     .eq('id', last.id)
-    .eq('user_id', input.userId)
+    .eq('account_id', input.accountId)
     .select('*')
     .single();
 
@@ -105,7 +110,7 @@ export interface ListTransactionsOptions {
 }
 
 export async function listTransactions(
-  userId: string,
+  accountId: string,
   fromIso: string,
   toIso: string,
   options: ListTransactionsOptions = {},
@@ -114,7 +119,7 @@ export async function listTransactions(
   const { data, error } = await getSupabaseClient()
     .from('transactions')
     .select(columns)
-    .eq('user_id', userId)
+    .eq('account_id', accountId)
     .gte('occurred_at', fromIso)
     .lte('occurred_at', toIso)
     .order('occurred_at', { ascending: false })
@@ -135,13 +140,13 @@ export interface TransactionSummary {
 }
 
 export async function summarizeTransactions(
-  userId: string,
+  accountId: string,
   fromIso: string,
   toIso: string,
 ): Promise<TransactionSummary> {
   // Só soma/agrupa — não precisa de description/raw_input/source, então pede
   // só as colunas usadas abaixo em vez do '*' default.
-  const rows = await listTransactions(userId, fromIso, toIso, { columns: 'type, amount_cents, category' });
+  const rows = await listTransactions(accountId, fromIso, toIso, { columns: 'type, amount_cents, category' });
 
   const summary: TransactionSummary = {
     totalIncomeCents: 0,

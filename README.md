@@ -6,25 +6,31 @@ pequenos negócios (MEI/PJ). O nome do assistente que o usuário vê é
 dentro dele.
 
 O usuário manda mensagem (texto ou áudio) pro WhatsApp do Tom; ele
-categoriza gastos/receitas, organiza tarefas e lembretes, e tudo fica
-visível num dashboard web read-only. Proatividade (não só reagir a
-comando) é o diferencial central do produto — ver `CLAUDE.md` pra
-contexto completo de escopo/roadmap.
+categoriza gastos/receitas, organiza tarefas e lembretes, guarda
+documentos, agenda compromissos no Google Agenda, e tudo fica visível
+num dashboard web read-only. Dado é escopado por **conta** (Fase 2,
+`docs/adr/0002`), que pode ser compartilhada entre mais de um número de
+WhatsApp (ex.: sócio, cônjuge). Proatividade (não só reagir a comando)
+é o diferencial central do produto — ver `CLAUDE.md` pra contexto
+completo de escopo/roadmap.
 
 ## Como funciona
 
 ```
 WhatsApp (Cloud API ou Evolution API) → webhook (Vercel)
-  → fila (BullMQ/Redis) para áudio e ações lentas
+  → fila (BullMQ/Redis) para áudio, documentos e ações lentas
   → orquestrador LLM (Claude, via tool use)
-  → tools: financeiro, tarefas, lembretes
-  → Postgres (Supabase)
+  → tools: financeiro, tarefas, lembretes, documentos, agenda, conta
+  → Postgres (Supabase) + Storage (documentos)
   → resposta de volta pro usuário no WhatsApp
 ```
 
 Regra não-negociável: a IA nunca persiste um dado financeiro "no
 achismo" — toda transação/tarefa vira registro estruturado no banco
-antes de qualquer confirmação ser enviada ao usuário.
+antes de qualquer confirmação ser enviada ao usuário. O mesmo vale pra
+entrada numa conta compartilhada: nunca é decisão do LLM, só um código
+de convite determinístico interceptado antes de qualquer chamada ao
+modelo (`packages/core/src/llm/orchestrator.ts`).
 
 ## Estrutura do monorepo
 
@@ -47,9 +53,10 @@ deploy/
 ### `packages/core/src`
 - `llm/` — orquestrador, system prompt (persona do Tom), tools da IA
   (`llm/tools/`: financeiro, tarefas, lembretes, onboarding, acesso ao
-  dashboard). `llm/providers/` — Claude (primário) com fallback automático
-  pra OpenAI quando o Anthropic falha (créditos, rate limit,
-  indisponibilidade); ver amendamento no `CLAUDE.md`.
+  dashboard, conta/convite, documentos, agenda). `llm/providers/` —
+  Claude (primário) com fallback automático pra OpenAI quando o
+  Anthropic falha (créditos, rate limit, indisponibilidade); ver
+  amendamento no `CLAUDE.md`.
 - `whatsapp/` — abstração de canal (`cloud-api-channel.ts` /
   `evolution-channel.ts`), trocável via `WHATSAPP_CHANNEL_PROVIDER`
 - `queues/` — definições das filas BullMQ
@@ -57,10 +64,14 @@ deploy/
   em retry)
 - `audio/` — interface de transcrição (implementação real fica em
   `apps/worker/src/audio`)
+- `google/` — OAuth + Calendar API do Google via fetch direto (sem SDK),
+  usado pela tool de agenda e pela rota de callback do dashboard
+- `security/crypto.ts` — AES-256-GCM pra criptografar o refresh token do
+  Google em repouso (`TOKEN_ENCRYPTION_KEY`)
 
 ### `apps/worker/src`
-- `worker.ts` — os 3 workers BullMQ (mensagem recebida, transcrição de
-  áudio, disparo de lembrete)
+- `worker.ts` — os 4 workers BullMQ (mensagem recebida, transcrição de
+  áudio, disparo de lembrete, upload de documento)
 - `handlers/` — lógica de cada fila
 - `audio/` — pipeline Whisper (Groq → Groq full → OpenAI, com detector
   de alucinação) e conversão de áudio via ffmpeg
@@ -69,8 +80,13 @@ deploy/
 `0001_init.sql` (schema base) → `0002_enable_rls.sql` (RLS como defesa
 em profundidade) → `0003_reminder_failed_status.sql` (status `failed`
 em lembretes) → `0004_admin.sql` (`webhook_events`, `error_logs`,
-`users.plan_status` — suporte ao admin em `/admin`). Rodar em ordem,
-manualmente, no SQL Editor do Supabase.
+`users.plan_status` — suporte ao admin em `/admin`) → `0005_accounts.sql`
+(Fase 2: `accounts`/`account_members`/`account_invites`, migra
+transactions/tasks/reminders de `user_id` pra `account_id` como escopo)
+→ `0006_documents.sql` (`documents` + bucket de Storage) →
+`0007_calendar.sql` (`calendar_connections`). Rodar em ordem,
+manualmente, no SQL Editor do Supabase. Ver `docs/adr/0002-*.md` pras
+decisões por trás da Fase 2.
 
 ### Admin (`/admin`)
 
@@ -135,6 +151,8 @@ obrigatório:
 | `GROQ_API_KEY` e/ou `OPENAI_API_KEY` | Transcrição de áudio (pelo menos uma) |
 | `WEB_APP_URL`, `SESSION_SECRET` | Dashboard e magic link |
 | `ADMIN_PASSWORD` | Login do painel admin (`/admin`) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Fase 2 — OAuth do Google Agenda. Sem isso, `create_calendar_event`/`list_calendar_events` sempre retornam `connected: false` e o botão "Conectar Google Agenda" do dashboard falha |
+| `TOKEN_ENCRYPTION_KEY` | Fase 2 — criptografa o refresh token do Google em repouso (obrigatório se Google Agenda for usado) |
 
 ## Deploy
 

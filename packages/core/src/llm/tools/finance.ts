@@ -26,6 +26,7 @@ export const recordTransactionTool = defineTool({
   execute: async (params, ctx) => {
     const category = normalizeCategory(params.category);
     const transaction = await recordTransaction({
+      accountId: ctx.accountId,
       userId: ctx.userId,
       type: params.type,
       amountCents: params.amount_cents,
@@ -69,7 +70,7 @@ export const correctLastTransactionTool = defineTool({
   execute: async (params, ctx) => {
     const category = params.category !== undefined ? normalizeCategory(params.category) : undefined;
     const updated = await updateLastTransaction({
-      userId: ctx.userId,
+      accountId: ctx.accountId,
       amountCents: params.amount_cents,
       category,
       description: params.description,
@@ -100,6 +101,6 @@ export const getSummaryTool = defineTool({
   }),
   execute: async (params, ctx) => {
     const range = params.period === 'today' ? getTodayRange(ctx.timezone) : getLast7DaysRange(ctx.timezone);
-    return summarizeTransactions(ctx.userId, range.startIso, range.endIso);
+    return summarizeTransactions(ctx.accountId, range.startIso, range.endIso);
   },
 });

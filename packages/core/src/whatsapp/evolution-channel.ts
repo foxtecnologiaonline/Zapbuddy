@@ -1,5 +1,5 @@
 import { fetchWithRetry } from './http-retry.js';
-import type { AudioRef, WhatsappChannel } from './types.js';
+import type { MediaRef, WhatsappChannel } from './types.js';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -45,9 +45,9 @@ export class EvolutionChannel implements WhatsappChannel {
     }
   }
 
-  async downloadAudio(ref: AudioRef): Promise<{ buffer: Buffer; mimeType: string }> {
+  async downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {
     if (ref.provider !== 'evolution') {
-      throw new Error(`EvolutionChannel recebeu audioRef de provider errado: ${ref.provider}`);
+      throw new Error(`EvolutionChannel recebeu mediaRef de provider errado: ${ref.provider}`);
     }
 
     const response = await fetchWithRetry(
@@ -69,6 +69,6 @@ export class EvolutionChannel implements WhatsappChannel {
     const base64 = data.base64 ?? data.data;
     if (!base64) throw new Error('Evolution não retornou base64 do áudio');
 
-    return { buffer: Buffer.from(base64, 'base64'), mimeType: data.mimetype ?? 'audio/ogg' };
+    return { buffer: Buffer.from(base64, 'base64'), mimeType: data.mimetype ?? 'application/octet-stream' };
   }
 }

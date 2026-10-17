@@ -52,6 +52,12 @@ Explicitamente fora do MVP (não implementar até Fase 2+):
 - **Fase 2:** Open Finance via parceiro (Pluggy/Belvo — não integração direta com bancos), Google Agenda, documentos com storage + busca, multiusuário
 - **Fase 3:** insights proativos de IA (alertas preditivos, sugestões de economia), cobranças, nota fiscal, programa de indicação, API/webhooks públicos
 
+**Amendamento 2026-10 (motivo documentado):** gate de retenção do MVP confirmado cumprido fora
+deste repo — autorizada a entrada em código de Fase 2. Implementadas nesta rodada: multiusuário
+(conta compartilhada via convite — fundação pras outras duas, ver `docs/adr/0002-*.md`),
+documentos com storage + busca, Google Agenda. **Open Finance explicitamente fora desta rodada**
+— decisão do usuário, continua não implementado. Não revisitar esse recorte sem pedido explícito.
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

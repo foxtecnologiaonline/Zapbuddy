@@ -1,5 +1,5 @@
 import { fetchWithRetry } from './http-retry.js';
-import type { AudioRef, WhatsappChannel } from './types.js';
+import type { MediaRef, WhatsappChannel } from './types.js';
 
 const GRAPH_API_VERSION = 'v20.0';
 
@@ -41,9 +41,9 @@ export class CloudApiChannel implements WhatsappChannel {
     }
   }
 
-  async downloadAudio(ref: AudioRef): Promise<{ buffer: Buffer; mimeType: string }> {
+  async downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {
     if (ref.provider !== 'cloud-api') {
-      throw new Error(`CloudApiChannel recebeu audioRef de provider errado: ${ref.provider}`);
+      throw new Error(`CloudApiChannel recebeu mediaRef de provider errado: ${ref.provider}`);
     }
     const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
 

@@ -7,6 +7,9 @@ import { createTaskTool, listTasksTool, completeTaskTool } from './tools/tasks.j
 import { createReminderTool } from './tools/reminders.js';
 import { completeOnboardingTool } from './tools/onboarding.js';
 import { sendDashboardLoginLinkTool } from './tools/dashboard-access.js';
+import { inviteMemberTool, listMembersTool } from './tools/account.js';
+import { findDocumentTool } from './tools/documents.js';
+import { createCalendarEventTool, listCalendarEventsTool } from './tools/calendar.js';
 
 export const ALL_TOOLS: ToolDefinition<any>[] = [
   recordTransactionTool,
@@ -18,6 +21,11 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   createReminderTool,
   completeOnboardingTool,
   sendDashboardLoginLinkTool,
+  inviteMemberTool,
+  listMembersTool,
+  findDocumentTool,
+  createCalendarEventTool,
+  listCalendarEventsTool,
 ];
 
 export function getToolByName(name: string) {
