@@ -9,9 +9,11 @@
     "@supabase/supabase-js": "^2.45.4"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "export:finetune-dataset": "tsx scripts/export-finetune-dataset.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3"
   }
 }

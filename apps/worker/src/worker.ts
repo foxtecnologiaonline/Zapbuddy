@@ -4,6 +4,9 @@ import { logError, markReminderFailed, logger } from '@zapbuddy/db';
 import { handleIncomingMessage } from './handlers/incoming-message.js';
 import { handleAudioTranscription } from './handlers/audio-transcription.js';
 import { handleReminderDispatch } from './handlers/reminder-dispatch.js';
+import { handleProactiveResearch } from './handlers/proactive-research.js';
+import { handleInterpretationFeedback } from './handlers/interpretation-feedback.js';
+import { scheduleRecurringJobs } from './scheduled-jobs.js';
 
 const connection = getRedisConnection();
 
@@ -69,6 +72,16 @@ const QUEUE_CONFIGS: {
       });
     },
   },
+  {
+    name: QUEUE_NAMES.proactiveResearch,
+    handler: handleProactiveResearch,
+    concurrency: 1,
+  },
+  {
+    name: QUEUE_NAMES.interpretationFeedback,
+    handler: handleInterpretationFeedback,
+    concurrency: 1,
+  },
 ];
 
 const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, onExhausted }) => {
@@ -92,6 +105,10 @@ const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, onExhausted }) 
 });
 
 logger.info('worker_started', { queues: workers.map((w) => w.name) });
+
+void scheduleRecurringJobs().catch((error) => {
+  logger.error('schedule_recurring_jobs_failed', { error: error instanceof Error ? error.message : String(error) });
+});
 
 async function shutdown(): Promise<void> {
   await Promise.all(workers.map((worker) => worker.close()));

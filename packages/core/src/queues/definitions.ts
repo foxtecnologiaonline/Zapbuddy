@@ -19,6 +19,8 @@ export const QUEUE_NAMES = {
   audioTranscription: 'audio-transcription',
   incomingMessage: 'incoming-message',
   reminderDispatch: 'reminder-dispatch',
+  proactiveResearch: 'proactive-research',
+  interpretationFeedback: 'interpretation-feedback',
 } as const;
 
 export interface AudioTranscriptionJob {
@@ -40,9 +42,17 @@ export interface ReminderDispatchJob {
   reminderId: string;
 }
 
+// Jobs sem payload — cada handler decide seu próprio escopo (lista fixa de
+// tópicos, período fixo de 7 dias — ver apps/worker/src/handlers/). Existem
+// só pra caber no mesmo formato Queue<T>/Worker das outras filas.
+export type ProactiveResearchJob = Record<string, never>;
+export type InterpretationFeedbackJob = Record<string, never>;
+
 let audioQueue: Queue<AudioTranscriptionJob> | null = null;
 let messageQueue: Queue<IncomingMessageJob> | null = null;
 let reminderQueue: Queue<ReminderDispatchJob> | null = null;
+let proactiveResearchQueue: Queue<ProactiveResearchJob> | null = null;
+let interpretationFeedbackQueue: Queue<InterpretationFeedbackJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
   audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
@@ -66,4 +76,20 @@ export function getReminderDispatchQueue(): Queue<ReminderDispatchJob> {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return reminderQueue;
+}
+
+export function getProactiveResearchQueue(): Queue<ProactiveResearchJob> {
+  proactiveResearchQueue ??= new Queue(QUEUE_NAMES.proactiveResearch, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return proactiveResearchQueue;
+}
+
+export function getInterpretationFeedbackQueue(): Queue<InterpretationFeedbackJob> {
+  interpretationFeedbackQueue ??= new Queue(QUEUE_NAMES.interpretationFeedback, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return interpretationFeedbackQueue;
 }

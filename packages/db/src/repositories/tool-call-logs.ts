@@ -68,6 +68,27 @@ export async function listToolCallLogs(page: number, success?: boolean): Promise
   return { logs: (data ?? []) as ToolCallLog[], total: count ?? 0 };
 }
 
+// Teto de segurança pro job interpretation-feedback (mesmo raciocínio do
+// MAX_TRANSACTIONS_PER_QUERY em transactions.ts): evita que um período com
+// volume muito alto vire uma consulta sem fim — as estatísticas ficariam
+// parciais nesse caso, aceitável pra um relatório de apoio, não pra dado
+// financeiro.
+const MAX_TOOL_CALL_LOGS_PER_RANGE = 5000;
+
+/** Todas as tool calls (sucesso e falha) num período — usado pelo job de agregação de erros de interpretação. */
+export async function listToolCallLogsInRange(fromIso: string, toIso: string): Promise<ToolCallLog[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tool_call_logs')
+    .select('*')
+    .gte('created_at', fromIso)
+    .lte('created_at', toIso)
+    .order('created_at', { ascending: false })
+    .limit(MAX_TOOL_CALL_LOGS_PER_RANGE);
+
+  if (error) throw error;
+  return (data ?? []) as ToolCallLog[];
+}
+
 export async function listRecentFailedToolCallLogs(limit: number): Promise<ToolCallLog[]> {
   const { data, error } = await getSupabaseClient()
     .from('tool_call_logs')
