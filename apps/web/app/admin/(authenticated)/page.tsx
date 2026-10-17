@@ -106,7 +106,11 @@ export default async function AdminOverviewPage() {
         <CardRow>
           <StatCard label="Hoje" value={errorsTotalToday} hint="error_logs + tool calls falhas" />
           <StatCard label="7 dias" value={errorsTotal7d} hint="error_logs + tool calls falhas" />
-          <StatCard label="Lembretes travados" value={failedReminders} hint="status = failed, sem janela de tempo" />
+          <StatCard
+            label="Lembretes travados"
+            value={<Link href="/admin/reminders?status=failed" style={{ color: '#f87171', textDecoration: 'none' }}>{failedReminders}</Link>}
+            hint="status = failed, sem janela de tempo"
+          />
         </CardRow>
       </Section>
 

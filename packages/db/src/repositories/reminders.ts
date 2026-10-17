@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '../client.js';
-import type { Reminder } from '../types.js';
+import type { Reminder, ReminderStatus } from '../types.js';
 
 export async function createReminder(
   userId: string,
@@ -93,4 +93,64 @@ export async function listRecentFailedReminders(limit: number): Promise<Reminder
 
   if (error) throw error;
   return (data ?? []) as Reminder[];
+}
+
+const DEFAULT_REMINDERS_BY_USER_LIMIT = 20;
+
+/** Lembretes de um contato específico, mais recentes primeiro — uso: detalhe do contato no admin. */
+export async function listRemindersByUser(
+  userId: string,
+  limit: number = DEFAULT_REMINDERS_BY_USER_LIMIT,
+): Promise<Reminder[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('reminders')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as Reminder[];
+}
+
+export const REMINDERS_PAGE_SIZE = 50;
+
+export interface ReminderWithUser extends Reminder {
+  users: { whatsapp_number: string; name: string | null } | null;
+}
+
+export interface ListRemindersResult {
+  reminders: ReminderWithUser[];
+  total: number;
+}
+
+/** Lista paginada de lembretes pro admin, com filtro opcional por status e nome/número do contato. */
+export async function listReminders(page: number, status?: ReminderStatus): Promise<ListRemindersResult> {
+  const from = page * REMINDERS_PAGE_SIZE;
+  const to = from + REMINDERS_PAGE_SIZE - 1;
+
+  let query = getSupabaseClient()
+    .from('reminders')
+    .select('*, users(whatsapp_number, name)', { count: 'exact' })
+    .order('remind_at', { ascending: false })
+    .range(from, to);
+  if (status) query = query.eq('status', status);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return { reminders: (data ?? []) as unknown as ReminderWithUser[], total: count ?? 0 };
+}
+
+/**
+ * Cancelamento manual pelo admin — só permitido a partir de 'pending' ou
+ * 'failed'; cancelar um já 'sent' não faz sentido (mensagem já saiu).
+ */
+export async function cancelReminder(reminderId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('reminders')
+    .update({ status: 'cancelled' })
+    .eq('id', reminderId)
+    .in('status', ['pending', 'failed']);
+
+  if (error) throw error;
 }

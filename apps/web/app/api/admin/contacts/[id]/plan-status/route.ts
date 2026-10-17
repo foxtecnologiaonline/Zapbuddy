@@ -23,5 +23,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   await updateUserPlanStatus(id, status as PlanStatus);
 
-  return NextResponse.redirect(new URL('/admin/contacts', request.url), { status: 303 });
+  // Volta pra página de origem (lista ou detalhe do contato) quando o form a informa;
+  // sem isso, salvar no detalhe do contato te chutava de volta pra lista.
+  const referer = request.headers.get('referer');
+  const redirectTarget = referer && referer.startsWith(new URL('/', request.url).origin) ? referer : '/admin/contacts';
+
+  return NextResponse.redirect(new URL(redirectTarget, request.url), { status: 303 });
 }

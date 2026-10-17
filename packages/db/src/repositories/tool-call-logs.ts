@@ -51,8 +51,15 @@ export interface ListToolCallLogsResult {
   total: number;
 }
 
-/** Lista paginada de "chamadas" (tool calls da IA) pro admin, com filtro opcional por sucesso. */
-export async function listToolCallLogs(page: number, success?: boolean): Promise<ListToolCallLogsResult> {
+export interface ListToolCallLogsFilters {
+  success?: boolean;
+  toolName?: string;
+  userId?: string;
+}
+
+/** Lista paginada de "chamadas" (tool calls da IA) pro admin, com filtros opcionais. */
+export async function listToolCallLogs(page: number, filters: ListToolCallLogsFilters = {}): Promise<ListToolCallLogsResult> {
+  const { success, toolName, userId } = filters;
   const from = page * TOOL_CALL_LOGS_PAGE_SIZE;
   const to = from + TOOL_CALL_LOGS_PAGE_SIZE - 1;
 
@@ -62,6 +69,8 @@ export async function listToolCallLogs(page: number, success?: boolean): Promise
     .order('created_at', { ascending: false })
     .range(from, to);
   if (success !== undefined) query = query.eq('success', success);
+  if (toolName) query = query.eq('tool_name', toolName);
+  if (userId) query = query.eq('user_id', userId);
 
   const { data, error, count } = await query;
   if (error) throw error;
@@ -73,6 +82,24 @@ export async function listRecentFailedToolCallLogs(limit: number): Promise<ToolC
     .from('tool_call_logs')
     .select('*')
     .eq('success', false)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as ToolCallLog[];
+}
+
+const DEFAULT_TOOL_CALL_LOGS_BY_USER_LIMIT = 20;
+
+/** Chamadas de tool de um contato específico, mais recentes primeiro — uso: detalhe do contato no admin. */
+export async function listToolCallLogsByUser(
+  userId: string,
+  limit: number = DEFAULT_TOOL_CALL_LOGS_BY_USER_LIMIT,
+): Promise<ToolCallLog[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tool_call_logs')
+    .select('*')
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(limit);
 

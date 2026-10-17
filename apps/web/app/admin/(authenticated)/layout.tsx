@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: '/admin', label: 'Visão geral' },
   { href: '/admin/contacts', label: 'Contatos' },
   { href: '/admin/calls', label: 'Chamadas' },
+  { href: '/admin/reminders', label: 'Lembretes' },
   { href: '/admin/errors', label: 'Erros' },
 ];
 
