@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../client.js';
+import { logger } from '../logger.js';
 import type { ErrorLog, ErrorLogSource } from '../types.js';
 
 export interface LogErrorInput {
@@ -22,7 +23,7 @@ export async function logError(input: LogErrorInput): Promise<void> {
   });
 
   if (error) {
-    console.error('Failed to write error_log', { source: input.source, error });
+    logger.error('error_log_write_failed', { source: input.source, error });
   }
 }
 

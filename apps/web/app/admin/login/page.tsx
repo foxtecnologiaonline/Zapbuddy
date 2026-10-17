@@ -7,6 +7,7 @@ interface AdminLoginPageProps {
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_password: 'Senha incorreta.',
+  rate_limited: 'Muitas tentativas. Espera alguns minutos e tenta de novo.',
 };
 
 export default async function AdminLoginPage({ searchParams }: AdminLoginPageProps) {

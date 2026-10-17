@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminLoginRateLimited } from '@zapbuddy/core';
 import { adminSessionCookieName, adminSessionMaxAgeSeconds, createAdminSessionCookieValue, isAdminPasswordCorrect } from '@/lib/admin-session';
 
 export const dynamic = 'force-dynamic';
 
+function clientIp(request: NextRequest): string {
+  // Vercel injeta x-forwarded-for; sem ele (dev local), cai num bucket
+  // único — pior caso é todo mundo compartilhando o limite localmente,
+  // nunca "sem limite".
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  if (await isAdminLoginRateLimited(clientIp(request))) {
+    return NextResponse.redirect(new URL('/admin/login?error=rate_limited', request.url), { status: 303 });
+  }
+
   const form = await request.formData();
   const password = form.get('password');
 

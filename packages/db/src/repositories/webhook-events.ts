@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../client.js';
+import { logger } from '../logger.js';
 import type { WebhookChannel, WebhookEvent, WebhookEventType, WebhookEventStatus } from '../types.js';
 
 export interface LogWebhookEventInput {
@@ -25,7 +26,7 @@ export async function logWebhookEvent(input: LogWebhookEventInput): Promise<void
   });
 
   if (error) {
-    console.error('Failed to write webhook_event', { channel: input.channel, error });
+    logger.error('webhook_event_write_failed', { channel: input.channel, error });
   }
 }
 
