@@ -68,16 +68,24 @@ Explicitamente fora do MVP (não implementar até Fase 2+):
 ## Fluxo de branches (2026-10, motivo documentado)
 
 `main` é o único ponto de integração entre sessões — produção (Vercel) e
-branch padrão do GitHub apontam pra ela. Motivo: antes disso, cada sessão
-criava sua própria branch (`ccr-*`/auto-gerada) sem saber das outras, e
-pelo menos duas sessões refizeram o mesmo trabalho em paralelo (o fallback
+branch padrão do GitHub apontam pra ela. Motivo original: antes disso, cada
+sessão criava sua própria branch (`ccr-*`/auto-gerada) sem saber das outras,
+e pelo menos duas sessões refizeram o mesmo trabalho em paralelo (o fallback
 multi-provider do LLM foi implementado duas vezes de forma independente
 antes de alguém perceber).
 
-Regra pra toda sessão/agente novo:
-1. **Partir de `main` atualizada** (`git fetch origin main && git checkout -B <branch-da-sessão> origin/main`) — nunca de uma branch de sessão antiga.
-2. Trabalhar na branch da sessão normalmente.
-3. **Mesclar de volta em `main`** ao final (fast-forward quando possível; merge normal + resolução de conflito quando `main` andou). Nunca deixar trabalho pronto preso só na branch da sessão.
-4. Depois de mesclado e validado (typecheck/test/build), a branch da sessão pode ser apagada — o trabalho já está em `main`.
+**Amendamento 2026-10 (motivo documentado):** a etapa intermediária de
+"branch de sessão + merge de volta" foi abandonada — mesmo com a regra
+acima, sessões continuaram divergindo de `main` e acumulando branches que
+precisavam ser reconciliadas manualmente (ex.: `claude/trusting-meitner-eipvnk`
+recebeu commits direto, sem passar por `main`, forçando merge retroativo).
+Commit novo vai **direto pra `main`**, sem branch própria:
 
-Sem isso, o repositório acumula branches soltas que nenhuma sessão futura sabe que existem.
+1. Garantir `main` local atualizada antes de começar (`git fetch origin main && git checkout main && git merge --ff-only origin/main`).
+2. Trabalhar e commitar direto em `main`.
+3. Validar (typecheck/test/build) antes de dar push.
+4. `git push origin main`. Se alguém empurrou antes, `git pull --rebase` (ou merge) e revalidar antes de tentar de novo — nunca force-push em `main`.
+
+Branch de sessão só se justifica pra trabalho experimental/grande demais pra
+validar de uma vez — e aí ela é mesclada em `main` e apagada no mesmo dia,
+nunca deixada pra trás.
