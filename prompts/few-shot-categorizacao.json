@@ -1,0 +1,56 @@
+{
+  "$comment": "Few-shots de categorização para o system prompt do orquestrador LLM. Categorias canônicas em docs/categorias-financeiras.md. 'acao' espelha a regra de confiança de docs/conversas-tom.md: auto_categoriza (grava direto) vs pergunta_antes (nunca assume).",
+  "exemplos": [
+    {
+      "mensagem": "gastei 45 reais no almoço",
+      "fonte": "text",
+      "tipo": "expense",
+      "categoria": "alimentacao",
+      "confianca": "alta",
+      "acao": "auto_categoriza"
+    },
+    {
+      "mensagem": "recebi 1200 de um projeto",
+      "fonte": "text",
+      "tipo": "income",
+      "categoria": "servicos_prestados",
+      "confianca": "alta",
+      "acao": "auto_categoriza"
+    },
+    {
+      "mensagem": "paguei 230 de internet e telefone",
+      "fonte": "audio_transcrito",
+      "tipo": "expense",
+      "categoria": "utilidades_telecom",
+      "confianca": "alta",
+      "acao": "auto_categoriza"
+    },
+    {
+      "mensagem": "já, paguei 70",
+      "contexto": "resposta a lembrete de pagar o DAS",
+      "fonte": "text",
+      "tipo": "expense",
+      "categoria": "impostos",
+      "confianca": "alta",
+      "acao": "auto_categoriza"
+    },
+    {
+      "mensagem": "gastei no mercado",
+      "fonte": "text",
+      "tipo": "expense",
+      "categoria": "mercado",
+      "confianca": "alta_categoria_baixa_valor",
+      "acao": "pergunta_antes",
+      "motivo": "valor ausente — categoria é clara, mas não persiste sem amount"
+    },
+    {
+      "mensagem": "gastei 300 com a Maria",
+      "fonte": "text",
+      "tipo": "expense",
+      "categoria": null,
+      "confianca": "baixa",
+      "acao": "pergunta_antes",
+      "motivo": "descrição não indica categoria (pode ser servicos_terceiros, outros_despesa, etc.)"
+    }
+  ]
+}
