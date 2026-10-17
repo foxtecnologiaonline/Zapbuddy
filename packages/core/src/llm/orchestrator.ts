@@ -26,6 +26,7 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     userId: user.id,
     whatsappNumber: user.whatsapp_number,
     messageSource,
+    timezone: user.timezone,
   };
 
   const history = await getRecentTurns(user.whatsapp_number);

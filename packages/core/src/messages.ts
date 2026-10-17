@@ -10,6 +10,7 @@ export const MESSAGES = {
   genericProcessingError:
     'Desculpa, tive um problema técnico pra processar sua última mensagem. Pode mandar de novo?',
   noReplyGenerated: 'Desculpe, não consegui processar sua mensagem agora.',
+  stillProcessing: 'Só um instante, ainda to vendo isso pra você...',
   audioTooLong: 'Esse áudio é muito longo pra eu processar. Pode mandar um mais curto ou escrever em texto?',
   reminder: (text: string) => `⏰ Lembrete: ${text}`,
 } as const;

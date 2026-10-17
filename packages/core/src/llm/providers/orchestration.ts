@@ -1,6 +1,16 @@
 import { logger } from '@zapbuddy/db';
+import { MESSAGES } from '../../messages.js';
+import { sendWhatsappTextMessage } from '../../whatsapp/channel.js';
 import { LLM_PROVIDERS_BY_PRIORITY } from './config.js';
 import type { LlmProviderRunInput, LlmProviderRunResult } from './types.js';
+
+// Nenhum timeout aborta o processamento — só avisa o usuário que o bot ainda
+// está vendo a mensagem, pra silêncio (ex.: Anthropic/OpenAI engasgando, ou
+// o fallback inteiro sendo tentado) não parecer que o bot sumiu. 8s é bem
+// acima da latência normal de 1 iteração, então só dispara em turno
+// realmente lento. Fica aqui (não em cada provider) porque cobre a
+// tentativa inteira, incluindo a troca pro fallback.
+export const INTERIM_NOTICE_MS = 8_000;
 
 /**
  * Tenta cada provider configurado em ordem de prioridade, caindo pro
@@ -15,32 +25,49 @@ export async function runLlmWithFallback(input: LlmProviderRunInput): Promise<Ll
     throw new Error('Nenhum provider de LLM configurado (ANTHROPIC_API_KEY / OPENAI_API_KEY)');
   }
 
-  let lastError: unknown;
-  for (const [index, provider] of configured.entries()) {
-    const startedAt = Date.now();
-    try {
-      const result = await provider.run(input);
-      if (index > 0) {
-        // Só loga explicitamente quando um fallback foi de fato usado —
-        // o caminho feliz (primeiro provider, sempre) não precisa de ruído.
-        logger.warn('llm_provider_fallback_used', {
+  // Só dispara se a tentativa inteira (todos os providers, na ordem de
+  // prioridade) ainda não tiver terminado em INTERIM_NOTICE_MS — cancelado
+  // no finally abaixo assim que há uma resposta real pra enviar.
+  let interimTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    interimTimer = null;
+    void sendWhatsappTextMessage(input.toolContext.whatsappNumber, MESSAGES.stillProcessing).catch((error) => {
+      logger.error('interim_notice_failed', {
+        userId: input.toolContext.userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }, INTERIM_NOTICE_MS);
+
+  try {
+    let lastError: unknown;
+    for (const [index, provider] of configured.entries()) {
+      const startedAt = Date.now();
+      try {
+        const result = await provider.run(input);
+        if (index > 0) {
+          // Só loga explicitamente quando um fallback foi de fato usado —
+          // o caminho feliz (primeiro provider, sempre) não precisa de ruído.
+          logger.warn('llm_provider_fallback_used', {
+            provider: provider.name,
+            userId: input.toolContext.userId,
+            latencyMs: Date.now() - startedAt,
+          });
+        }
+        return result;
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('llm_provider_failed', {
           provider: provider.name,
           userId: input.toolContext.userId,
-          latencyMs: Date.now() - startedAt,
+          error: message,
+          willRetryWithNextProvider: index < configured.length - 1,
         });
       }
-      return result;
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error('llm_provider_failed', {
-        provider: provider.name,
-        userId: input.toolContext.userId,
-        error: message,
-        willRetryWithNextProvider: index < configured.length - 1,
-      });
     }
-  }
 
-  throw lastError instanceof Error ? lastError : new Error('Todos os providers de LLM falharam');
+    throw lastError instanceof Error ? lastError : new Error('Todos os providers de LLM falharam');
+  } finally {
+    if (interimTimer) clearTimeout(interimTimer);
+  }
 }
