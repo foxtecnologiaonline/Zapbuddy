@@ -46,7 +46,9 @@ deploy/
 ### `packages/core/src`
 - `llm/` — orquestrador, system prompt (persona do Tom), tools da IA
   (`llm/tools/`: financeiro, tarefas, lembretes, onboarding, acesso ao
-  dashboard)
+  dashboard). `llm/providers/` — Claude (primário) com fallback automático
+  pra OpenAI quando o Anthropic falha (créditos, rate limit,
+  indisponibilidade); ver amendamento no `CLAUDE.md`.
 - `whatsapp/` — abstração de canal (`cloud-api-channel.ts` /
   `evolution-channel.ts`), trocável via `WHATSAPP_CHANNEL_PROVIDER`
 - `queues/` — definições das filas BullMQ
