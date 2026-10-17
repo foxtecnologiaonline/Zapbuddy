@@ -19,6 +19,12 @@ jobs:
           --health-retries 5
     env:
       REDIS_URL: redis://127.0.0.1:6379
+      WHATSAPP_APP_SECRET: ci-placeholder
+      WHATSAPP_PHONE_NUMBER_ID: ci-placeholder
+      WHATSAPP_ACCESS_TOKEN: ci-placeholder
+      WHATSAPP_VERIFY_TOKEN: ci-placeholder
+      SUPABASE_URL: http://localhost:54321
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,3 +34,4 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run test
+      - run: npm run build

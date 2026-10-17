@@ -7,6 +7,16 @@ export interface LogContext {
   [key: string]: unknown;
 }
 
+// JSON.stringify ignora message/stack de um Error (não são enumeráveis) e
+// produz "{}" — sem isso, qualquer `logger.error('x', { error })` com um
+// Error de verdade perderia a informação que o log existe pra capturar.
+function errorReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack };
+  }
+  return value;
+}
+
 function write(level: LogLevel, message: string, context?: LogContext): void {
   const entry = {
     level,
@@ -15,7 +25,7 @@ function write(level: LogLevel, message: string, context?: LogContext): void {
     ...context,
   };
 
-  const line = JSON.stringify(entry);
+  const line = JSON.stringify(entry, errorReplacer);
 
   if (level === 'error') {
     console.error(line);

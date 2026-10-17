@@ -5,16 +5,23 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "worker": "ts-node src/queue/start-worker.ts"
+    "worker": "ts-node src/queue/start-worker.ts",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "bullmq": "^5.28.1",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "next": "^16.4.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
     "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
     "vitest": "^5.0.5",
     "ts-node": "^10.9.2"
   }

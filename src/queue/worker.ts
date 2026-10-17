@@ -35,7 +35,7 @@ export function startMessageWorker(): Worker<ProcessMessageJobData> {
   });
 
   worker.on('failed', (job, error) => {
-    logger.error('queue.job_failed', { jobId: job?.id, error: error.message });
+    logger.error('queue.job_failed', { jobId: job?.id, error });
   });
 
   return worker;
