@@ -1,9 +1,13 @@
+export type PlanStatus = 'trial' | 'active' | 'canceled';
+
 export interface User {
   id: string;
   whatsapp_number: string;
   name: string | null;
   timezone: string;
   onboarding_completed_at: string | null;
+  plan_status: PlanStatus;
+  plan_status_updated_at: string | null;
   created_at: string;
 }
 
@@ -65,5 +69,30 @@ export interface MagicLink {
   token_hash: string;
   expires_at: string;
   used_at: string | null;
+  created_at: string;
+}
+
+export type WebhookChannel = 'cloud-api' | 'evolution';
+export type WebhookEventType = 'verify' | 'text' | 'audio' | 'other' | 'rejected';
+export type WebhookEventStatus = 'accepted' | 'rejected';
+
+export interface WebhookEvent {
+  id: string;
+  channel: WebhookChannel;
+  whatsapp_number: string | null;
+  event_type: WebhookEventType;
+  status: WebhookEventStatus;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+export type ErrorLogSource = 'webhook' | 'worker' | 'orchestrator';
+
+export interface ErrorLog {
+  id: string;
+  source: ErrorLogSource;
+  message: string;
+  detail: unknown;
+  user_id: string | null;
   created_at: string;
 }

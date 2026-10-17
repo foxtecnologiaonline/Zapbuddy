@@ -5,6 +5,7 @@ export * from './security/rate-limit.js';
 export * from './context/conversation-context.js';
 export * from './context/reply-cache.js';
 export * from './queues/definitions.js';
+export * from './queues/stats.js';
 export * from './llm/orchestrator.js';
 export * from './llm/tool-registry.js';
 export * from './audio/transcriber.js';

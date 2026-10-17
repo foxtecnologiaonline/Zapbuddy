@@ -11,3 +11,13 @@ export function getRedisConnection(): Redis {
   cached = new Redis(url, { maxRetriesPerRequest: null });
   return cached;
 }
+
+/** Usado só pelo card "Infraestrutura" do admin pra checar se o Redis está alcançável. */
+export async function pingRedis(): Promise<boolean> {
+  try {
+    const reply = await getRedisConnection().ping();
+    return reply === 'PONG';
+  } catch {
+    return false;
+  }
+}

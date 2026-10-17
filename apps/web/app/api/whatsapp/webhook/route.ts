@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrCreateUser, InvalidWhatsappNumberError, logger } from '@zapbuddy/db';
+import { getOrCreateUser, InvalidWhatsappNumberError, logError, logWebhookEvent, logger } from '@zapbuddy/db';
 import { getAudioTranscriptionQueue, getIncomingMessageQueue, isRateLimited } from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const rawBody = await request.text();
 
   if (!isValidSignature(rawBody, request.headers.get('x-hub-signature-256'))) {
+    await logWebhookEvent({ channel: 'cloud-api', eventType: 'rejected', status: 'rejected', rejectionReason: 'invalid signature' });
     return new NextResponse('Forbidden', { status: 403 });
   }
 
@@ -65,56 +66,63 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const messages = payload.entry?.flatMap((entry) => entry.changes ?? []).flatMap((change) => change.value?.messages ?? []) ?? [];
 
   for (const message of messages) {
-    let user;
+    // Cada mensagem é tratada isoladamente: uma falha numa não deve impedir o
+    // processamento das demais nem a resposta 200 rápida que a Meta exige.
     try {
-      user = await getOrCreateUser(message.from);
+      const user = await getOrCreateUser(message.from);
+
+      // Checado por número já resolvido (não message.from direto) pra cobrir
+      // igual os dois canais (cloud-api/evolution) com a mesma chave — ver
+      // packages/core/src/security/rate-limit.ts.
+      if (await isRateLimited(user.whatsapp_number)) {
+        logger.warn('rate_limited', { whatsappNumber: user.whatsapp_number, waMessageId: message.id });
+        continue;
+      }
+
+      // jobId = id da mensagem do WhatsApp: a Meta reentrega webhooks em caso de
+      // timeout/erro, e sem dedupe isso duplicaria o processamento (e, pior,
+      // transações financeiras) para a mesma mensagem.
+      if (message.type === 'text' && message.text) {
+        await getIncomingMessageQueue().add(
+          'process',
+          {
+            userId: user.id,
+            whatsappNumber: user.whatsapp_number,
+            text: message.text.body,
+            waMessageId: message.id,
+          },
+          { jobId: message.id },
+        );
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'text', status: 'accepted' });
+      } else if (message.type === 'audio' && message.audio) {
+        await getAudioTranscriptionQueue().add(
+          'transcribe',
+          {
+            userId: user.id,
+            whatsappNumber: user.whatsapp_number,
+            audioRef: { provider: 'cloud-api', mediaId: message.audio.id },
+            waMessageId: message.id,
+          },
+          { jobId: message.id },
+        );
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'audio', status: 'accepted' });
+      } else {
+        // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'other', status: 'accepted' });
+      }
     } catch (error) {
       if (error instanceof InvalidWhatsappNumberError) {
         // Payload malformado (ex.: JID de grupo mal filtrado por um provider,
         // campo vazio) não deve virar registro no banco nem derrubar o
-        // webhook inteiro — pula só esta mensagem, as outras do mesmo batch
-        // continuam normalmente.
+        // webhook inteiro — pula só esta mensagem. Não é falha de sistema,
+        // então não vai pro card "Erros" do admin, só warn estruturado.
         logger.warn('invalid_whatsapp_number', { from: message.from, waMessageId: message.id });
         continue;
       }
-      throw error;
+      const message_ = error instanceof Error ? error.message : String(error);
+      logger.error('webhook_message_failed', { waMessageId: message.id, error: message_ });
+      await logError({ source: 'webhook', message: message_, detail: { waMessageId: message.id, from: message.from } });
     }
-
-    // Checado por número já resolvido (não message.from direto) pra cobrir
-    // igual os dois canais (cloud-api/evolution) com a mesma chave — ver
-    // packages/core/src/security/rate-limit.ts.
-    if (await isRateLimited(user.whatsapp_number)) {
-      logger.warn('rate_limited', { whatsappNumber: user.whatsapp_number, waMessageId: message.id });
-      continue;
-    }
-
-    // jobId = id da mensagem do WhatsApp: a Meta reentrega webhooks em caso de
-    // timeout/erro, e sem dedupe isso duplicaria o processamento (e, pior,
-    // transações financeiras) para a mesma mensagem.
-    if (message.type === 'text' && message.text) {
-      await getIncomingMessageQueue().add(
-        'process',
-        {
-          userId: user.id,
-          whatsappNumber: user.whatsapp_number,
-          text: message.text.body,
-          waMessageId: message.id,
-        },
-        { jobId: message.id },
-      );
-    } else if (message.type === 'audio' && message.audio) {
-      await getAudioTranscriptionQueue().add(
-        'transcribe',
-        {
-          userId: user.id,
-          whatsappNumber: user.whatsapp_number,
-          audioRef: { provider: 'cloud-api', mediaId: message.audio.id },
-          waMessageId: message.id,
-        },
-        { jobId: message.id },
-      );
-    }
-    // Outros tipos (imagem, documento, etc.) estão fora do escopo do MVP.
   }
 
   // Meta exige resposta 200 rápida; o processamento real acontece no worker via fila.

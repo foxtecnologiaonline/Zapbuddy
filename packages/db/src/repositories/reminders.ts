@@ -66,3 +66,31 @@ export async function markReminderFailed(reminderId: string, reason: string): Pr
 
   if (error) throw error;
 }
+
+/**
+ * Total atual de lembretes travados em 'failed', sem janela de tempo: a
+ * tabela só guarda `created_at` (quando o lembrete foi agendado), não quando
+ * ele falhou — um filtro por data aqui contaria errado (lembrete agendado há
+ * dias mas que falhou hoje ficaria fora da janela "hoje").
+ */
+export async function countFailedReminders(): Promise<number> {
+  const { count, error } = await getSupabaseClient()
+    .from('reminders')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'failed');
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function listRecentFailedReminders(limit: number): Promise<Reminder[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('reminders')
+    .select('*')
+    .eq('status', 'failed')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as Reminder[];
+}

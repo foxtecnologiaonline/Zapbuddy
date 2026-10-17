@@ -19,6 +19,8 @@ function baseUser(overrides: Partial<User> = {}): User {
     name: 'Marina',
     timezone: 'America/Sao_Paulo',
     onboarding_completed_at: '2026-01-01T00:00:00.000Z',
+    plan_status: 'trial',
+    plan_status_updated_at: null,
     created_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
