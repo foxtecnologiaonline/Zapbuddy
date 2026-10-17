@@ -68,11 +68,17 @@ deploy/
   usado pela tool de agenda e pela rota de callback do dashboard
 - `security/crypto.ts` — AES-256-GCM pra criptografar o refresh token do
   Google em repouso (`TOKEN_ENCRYPTION_KEY`)
+- `llm/web-search/`, `llm/embeddings/` — pesquisa autônoma do Tom e
+  base de conhecimento (cache/RAG); ver amendamento "Pesquisa autônoma
+  e aprendizado contínuo" no `CLAUDE.md`
 
 ### `apps/worker/src`
-- `worker.ts` — os 4 workers BullMQ (mensagem recebida, transcrição de
-  áudio, disparo de lembrete, upload de documento)
+- `worker.ts` — os 6 workers BullMQ (mensagem recebida, transcrição de
+  áudio, disparo de lembrete, upload de documento, pesquisa proativa
+  semanal, loop de feedback de interpretação semanal)
 - `handlers/` — lógica de cada fila
+- `scheduled-jobs.ts` — registra os jobs recorrentes (pesquisa proativa,
+  feedback de interpretação) via `repeat` do BullMQ no boot do worker
 - `audio/` — pipeline Whisper (Groq → Groq full → OpenAI, com detector
   de alucinação) e conversão de áudio via ffmpeg
 
@@ -84,7 +90,9 @@ em lembretes) → `0004_admin.sql` (`webhook_events`, `error_logs`,
 (Fase 2: `accounts`/`account_members`/`account_invites`, migra
 transactions/tasks/reminders de `user_id` pra `account_id` como escopo)
 → `0006_documents.sql` (`documents` + bucket de Storage) →
-`0007_calendar.sql` (`calendar_connections`). Rodar em ordem,
+`0007_calendar.sql` (`calendar_connections`) → `0008_knowledge_base.sql`
+(`pgvector`, `knowledge_entries`, `interpretation_insights` — pesquisa
+autônoma e loop de feedback, ver `CLAUDE.md`). Rodar em ordem,
 manualmente, no SQL Editor do Supabase. Ver `docs/adr/0002-*.md` pras
 decisões por trás da Fase 2.
 

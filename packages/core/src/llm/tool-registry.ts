@@ -10,6 +10,7 @@ import { sendDashboardLoginLinkTool } from './tools/dashboard-access.js';
 import { inviteMemberTool, listMembersTool } from './tools/account.js';
 import { findDocumentTool } from './tools/documents.js';
 import { createCalendarEventTool, listCalendarEventsTool } from './tools/calendar.js';
+import { webSearchTool } from './tools/web-search.js';
 
 export const ALL_TOOLS: ToolDefinition<any>[] = [
   recordTransactionTool,
@@ -26,6 +27,7 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   findDocumentTool,
   createCalendarEventTool,
   listCalendarEventsTool,
+  webSearchTool,
 ];
 
 export function getToolByName(name: string) {

@@ -58,6 +58,54 @@ deste repo — autorizada a entrada em código de Fase 2. Implementadas nesta ro
 documentos com storage + busca, Google Agenda. **Open Finance explicitamente fora desta rodada**
 — decisão do usuário, continua não implementado. Não revisitar esse recorte sem pedido explícito.
 
+## Pesquisa autônoma e aprendizado contínuo (2026-10, motivo documentado)
+
+**Exceção explícita ao gating de fases abaixo** ("nenhuma feature de Fase
+2/3 entra em código antes do MVP validar retenção básica"): dono do
+produto pediu essa entrada antecipada mesmo sabendo do conflito com a
+regra — decisão dele, registrada aqui em vez de silenciosamente ignorada.
+Não é precedente pra pular o gating de novo sem o mesmo tipo de pedido
+explícito.
+
+Escopo do que entra:
+1. **Tool `web_search`** (`packages/core/src/llm/tools/web-search.ts`): dá
+   ao Tom capacidade de buscar na web durante a conversa — pra responder
+   dúvida geral fora do domínio financeiro/tarefas (ex.: "o que é o MEI",
+   "taxa do Simples esse ano") e pra identificar um estabelecimento
+   desconhecido antes de escolher categoria de gasto (reaproveita a mesma
+   tool, não é um pipeline separado). Passa por `runToolCall()` igual
+   qualquer outra tool — logada, nunca usada pra inventar/confirmar dado
+   financeiro por conta própria (a regra não-negociável original continua
+   valendo: quem persiste a transação é sempre `record_transaction`).
+2. **Base de conhecimento (`knowledge_entries`, pgvector)**: cache +
+   RAG simples das buscas feitas (por usuário em conversa, por pesquisa
+   proativa, por apoio à categorização) — evita repetir a mesma busca e dá
+   contexto reaproveitável. Embeddings via OpenAI (reaproveita
+   `OPENAI_API_KEY`, já presente pelo fallback de LLM/transcrição — mesmo
+   padrão de reúso dos amendamentos anteriores).
+3. **Job periódico de pesquisa proativa** (fila BullMQ
+   `proactive-research`, semanal): pesquisa uma lista fixa de temas do
+   nicho (MEI, Simples Nacional, organização financeira pra autônomo) e
+   alimenta a base de conhecimento — não envia nada ao usuário sozinho,
+   só amplia repertório pra uso futuro em conversa.
+4. **Loop de feedback sobre interpretação** (fila BullMQ
+   `interpretation-feedback`, semanal): agrega `tool_call_logs` (já exigido
+   desde o primeiro commit) em estatísticas de erro por tool, grava em
+   `interpretation_insights`. É só um relatório pra revisão humana — nunca
+   ajusta prompt/regra sozinho; qualquer mudança em `system-prompt.ts` a
+   partir disso é feita por uma pessoa, em PR separado.
+
+Explicitamente **não** implementado agora (ficaria por conta de uma
+decisão de infra/orçamento separada, não cabe nesta entrada):
+- Fine-tuning/treino de modelo próprio de verdade. Só existe o script de
+  **exportação de dataset** (`packages/db/scripts/export-finetune-dataset.ts`),
+  que prepara os dados — rodar um job de fine-tuning de verdade e decidir
+  qual modelo treinar fica pra depois.
+
+Config nova: `WEB_SEARCH_API_KEY` (Tavily) — opcional; sem ela, a tool
+`web_search` falha de forma controlada (tool loga erro, Tom explica que
+não conseguiu buscar agora, sem inventar resposta).
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

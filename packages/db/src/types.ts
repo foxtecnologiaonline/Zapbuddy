@@ -145,3 +145,36 @@ export interface CalendarConnection {
   connected_by_user_id: string | null;
   connected_at: string;
 }
+
+export type KnowledgeEntryOrigin = 'user_query' | 'proactive_research' | 'categorization';
+
+export interface KnowledgeEntry {
+  id: string;
+  origin: KnowledgeEntryOrigin;
+  query: string;
+  normalized_query: string;
+  summary: string;
+  source_urls: string[];
+  embedding: number[] | null;
+  user_id: string | null;
+  created_at: string;
+}
+
+export interface SimilarKnowledgeEntry {
+  id: string;
+  origin: KnowledgeEntryOrigin;
+  query: string;
+  summary: string;
+  source_urls: string[];
+  created_at: string;
+  similarity: number;
+}
+
+export interface InterpretationInsight {
+  id: string;
+  period_start: string;
+  period_end: string;
+  summary: string;
+  stats: Record<string, unknown>;
+  created_at: string;
+}
