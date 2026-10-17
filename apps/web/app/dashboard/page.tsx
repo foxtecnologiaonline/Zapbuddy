@@ -7,6 +7,9 @@ import {
   listRecentDocuments,
   getCalendarConnection,
   listAccountMembers,
+  getReferralStats,
+  listApiKeys,
+  listWebhookSubscriptions,
 } from '@zapbuddy/db';
 import { getCurrentUserId, getCurrentAccount } from '@/lib/auth';
 import { getCurrentMonthRange } from '@/lib/timezone';
@@ -18,7 +21,7 @@ function formatCents(cents: number): string {
 }
 
 interface DashboardPageProps {
-  searchParams: Promise<{ calendar?: string }>;
+  searchParams: Promise<{ calendar?: string; new_api_key?: string; new_webhook_secret?: string; webhook?: string }>;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -31,24 +34,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const account = await getCurrentAccount(userId);
   if (!account) redirect('/login');
 
-  const { calendar: calendarStatus } = await searchParams;
+  const { calendar: calendarStatus, new_api_key: newApiKey, new_webhook_secret: newWebhookSecret, webhook: webhookStatus } = await searchParams;
   const { startIso, endIso } = getCurrentMonthRange(user.timezone);
 
   // Consultas direcionadas (não uma só buscando 2000 linhas completas pra só
   // somar totais e exibir 20): o resumo só pede as colunas que soma, e a
   // tabela já vem limitada ao que de fato é exibido. Tudo escopado pela
   // conta (ADR 0002), não pelo usuário — pode incluir dado de outro membro.
-  const [summary, recentTransactions, pendingTasks, documents, calendarConnection, members] = await Promise.all([
-    summarizeTransactions(account.accountId, startIso, endIso),
-    listTransactions(account.accountId, startIso, endIso, {
-      limit: RECENT_TRANSACTIONS_LIMIT,
-      columns: 'id, occurred_at, category, amount_cents, type',
-    }),
-    listTasks(account.accountId, 'pending'),
-    listRecentDocuments(account.accountId, 5),
-    getCalendarConnection(account.accountId),
-    listAccountMembers(account.accountId),
-  ]);
+  const [summary, recentTransactions, pendingTasks, documents, calendarConnection, members, referralStats, apiKeys, webhookSubscriptions] =
+    await Promise.all([
+      summarizeTransactions(account.accountId, startIso, endIso),
+      listTransactions(account.accountId, startIso, endIso, {
+        limit: RECENT_TRANSACTIONS_LIMIT,
+        columns: 'id, occurred_at, category, amount_cents, type',
+      }),
+      listTasks(account.accountId, 'pending'),
+      listRecentDocuments(account.accountId, 5),
+      getCalendarConnection(account.accountId),
+      listAccountMembers(account.accountId),
+      getReferralStats(account.accountId),
+      listApiKeys(account.accountId),
+      listWebhookSubscriptions(account.accountId),
+    ]);
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
@@ -190,6 +197,95 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ))}
           </ul>
         )}
+      </section>
+
+      <section>
+        <h2>Programa de indicação</h2>
+        <p style={{ opacity: 0.7 }}>
+          Seu código: <strong>{referralStats.code}</strong> — {referralStats.totalReferred} pessoa(s) já se cadastraram com ele.
+        </p>
+        <p style={{ opacity: 0.6, fontSize: 13 }}>
+          Pra indicar alguém, peça pra essa pessoa mandar &quot;indicado {referralStats.code}&quot; pro Tom como uma das primeiras mensagens dela.
+        </p>
+      </section>
+
+      <section>
+        <h2>API e webhooks</h2>
+        <p style={{ opacity: 0.6, fontSize: 13 }}>Pra integrar seu financeiro/tarefas com outro sistema. Leitura apenas.</p>
+
+        {newApiKey && (
+          <p style={{ background: 'var(--card-bg)', borderRadius: 8, padding: '8px 12px', fontSize: 13, wordBreak: 'break-all' }}>
+            Sua chave de API (só aparece agora, guarde num lugar seguro): <code>{newApiKey}</code>
+          </p>
+        )}
+        {newWebhookSecret && (
+          <p style={{ background: 'var(--card-bg)', borderRadius: 8, padding: '8px 12px', fontSize: 13, wordBreak: 'break-all' }}>
+            Segredo de assinatura do webhook (só aparece agora): <code>{newWebhookSecret}</code>
+          </p>
+        )}
+        {webhookStatus === 'error' && (
+          <p style={{ color: 'var(--expense)', fontSize: 13 }}>URL inválida (precisa ser https://) ou nenhum evento selecionado.</p>
+        )}
+
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Chaves de API</h3>
+        {apiKeys.length === 0 ? (
+          <p style={{ opacity: 0.6, fontSize: 13 }}>Nenhuma chave criada.</p>
+        ) : (
+          <ul style={{ fontSize: 13 }}>
+            {apiKeys.map((key) => (
+              <li key={key.id}>
+                {key.name} — criada em {new Date(key.created_at).toLocaleDateString('pt-BR')}
+                {key.revoked_at ? (
+                  <span style={{ opacity: 0.5 }}> (revogada)</span>
+                ) : (
+                  <form action={`/api/dashboard/api-keys/${key.id}/revoke`} method="POST" style={{ display: 'inline' }}>
+                    <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
+                      revogar
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action="/api/dashboard/api-keys" method="POST" style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <input name="name" placeholder="Nome da chave (ex.: planilha)" style={{ flex: 1, padding: '6px 8px' }} />
+          <button type="submit">Gerar chave</button>
+        </form>
+
+        <h3 style={{ fontSize: 15, marginTop: 16, marginBottom: 4 }}>Webhooks</h3>
+        {webhookSubscriptions.length === 0 ? (
+          <p style={{ opacity: 0.6, fontSize: 13 }}>Nenhum webhook configurado.</p>
+        ) : (
+          <ul style={{ fontSize: 13 }}>
+            {webhookSubscriptions.map((sub) => (
+              <li key={sub.id}>
+                {sub.url} ({sub.event_types.join(', ')})
+                {sub.disabled_at ? (
+                  <span style={{ opacity: 0.5 }}> (desabilitado)</span>
+                ) : (
+                  <form action={`/api/dashboard/webhooks/${sub.id}/disable`} method="POST" style={{ display: 'inline' }}>
+                    <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
+                      desabilitar
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action="/api/dashboard/webhooks" method="POST" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          <input name="url" placeholder="https://seu-sistema.com/webhook" style={{ padding: '6px 8px' }} />
+          <label style={{ fontSize: 13 }}>
+            <input type="checkbox" name="event_types" value="transaction.created" /> transação criada
+          </label>
+          <label style={{ fontSize: 13 }}>
+            <input type="checkbox" name="event_types" value="task.completed" /> tarefa concluída
+          </label>
+          <button type="submit" style={{ alignSelf: 'flex-start' }}>
+            Adicionar webhook
+          </button>
+        </form>
       </section>
     </main>
   );

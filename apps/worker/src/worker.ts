@@ -1,12 +1,24 @@
 import { Worker, type Job } from 'bullmq';
-import { getRedisConnection, QUEUE_NAMES, sendWhatsappTextMessage, MESSAGES } from '@zapbuddy/core';
+import { getRedisConnection, QUEUE_NAMES, sendWhatsappTextMessage, MESSAGES, getInsightsSweepQueue } from '@zapbuddy/core';
 import { logError, markReminderFailed, logger } from '@zapbuddy/db';
 import { handleIncomingMessage } from './handlers/incoming-message.js';
 import { handleAudioTranscription } from './handlers/audio-transcription.js';
 import { handleReminderDispatch } from './handlers/reminder-dispatch.js';
 import { handleDocumentUpload } from './handlers/document-upload.js';
+import { handleInsightsSweep } from './handlers/insights-sweep.js';
+import { handleInsightsGenerate } from './handlers/insights-generate.js';
+import { handleWebhookDispatch } from './handlers/webhook-dispatch.js';
 
 const connection = getRedisConnection();
+
+// Job repetível (1x/hora) registrado no boot do worker — BullMQ dedupa pelo
+// jobId interno do repeat, então reiniciar o worker (deploy, crash) não cria
+// um segundo agendamento. Único lugar que "liga" o sweep de insights
+// proativos (ADR 0003, decisão 2); sem isso rodando em algum processo, a
+// fila existe mas nunca dispara sozinha.
+void getInsightsSweepQueue()
+  .add('sweep', {}, { repeat: { pattern: '0 * * * *' }, jobId: 'hourly-insights-sweep' })
+  .catch((error) => logger.error('insights_sweep_schedule_failed', { error: error instanceof Error ? error.message : String(error) }));
 
 function isExhausted(job: Job): boolean {
   return job.attemptsMade >= (job.opts.attempts ?? 1);
@@ -75,6 +87,24 @@ const QUEUE_CONFIGS: {
     handler: handleDocumentUpload,
     concurrency: 3,
     onExhausted: (job) => notifyUserOfExhaustedJob(job.data.whatsappNumber),
+  },
+  {
+    // Sem onExhausted: ninguém está esperando resposta em tempo real (mesmo
+    // raciocínio do reminder-dispatch) — uma falha esgotada só fica no log
+    // genérico de erro acima, não precisa de tratamento especial.
+    name: QUEUE_NAMES.insightsSweep,
+    handler: handleInsightsSweep,
+    concurrency: 1,
+  },
+  {
+    name: QUEUE_NAMES.insightsGenerate,
+    handler: handleInsightsGenerate,
+    concurrency: 5,
+  },
+  {
+    name: QUEUE_NAMES.webhookDispatch,
+    handler: handleWebhookDispatch,
+    concurrency: 5,
   },
 ];
 

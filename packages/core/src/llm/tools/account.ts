@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createAccountInvite, listAccountMembers } from '@zapbuddy/db';
+import { createAccountInvite, listAccountMembers, getReferralStats } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 
 export const inviteMemberTool = defineTool({
@@ -25,5 +25,18 @@ export const listMembersTool = defineTool({
   execute: async (_params, ctx) => {
     const members = await listAccountMembers(ctx.accountId);
     return { members: members.map((m) => ({ name: m.name, role: m.role })) };
+  },
+});
+
+export const getReferralInfoTool = defineTool({
+  name: 'get_referral_info',
+  description:
+    'Retorna o código de indicação da conta e quantas pessoas já se cadastraram usando ele. ' +
+    'Use quando perguntarem "como funciona a indicação", "meu código", "quantas pessoas eu indiquei" etc. ' +
+    'Pra indicar alguém, essa pessoa deve mandar "indicado <código>" como uma das primeiras mensagens dela.',
+  schema: z.object({}),
+  execute: async (_params, ctx) => {
+    const stats = await getReferralStats(ctx.accountId);
+    return { referral_code: stats.code, total_referred: stats.totalReferred };
   },
 });

@@ -1,6 +1,7 @@
 import { Queue, type DefaultJobOptions } from 'bullmq';
 import { getRedisConnection } from '../redis.js';
 import type { MediaRef } from '../whatsapp/types.js';
+import type { WebhookEventTypePublic } from '@zapbuddy/db';
 
 /**
  * Sem isso, uma falha transitória (rate limit da Claude, timeout de rede no
@@ -20,6 +21,9 @@ export const QUEUE_NAMES = {
   incomingMessage: 'incoming-message',
   reminderDispatch: 'reminder-dispatch',
   documentUpload: 'document-upload',
+  insightsSweep: 'insights-sweep',
+  insightsGenerate: 'insights-generate',
+  webhookDispatch: 'webhook-dispatch',
 } as const;
 
 export interface AudioTranscriptionJob {
@@ -50,10 +54,28 @@ export interface DocumentUploadJob {
   waMessageId: string;
 }
 
+/** Job único, sem payload — o handler faz a varredura inteira (ver ADR 0003, decisão 2). */
+export type InsightsSweepJob = Record<string, never>;
+
+export interface InsightsGenerateJob {
+  accountId: string;
+  ownerWhatsappNumber: string;
+  ownerTimezone: string;
+}
+
+export interface WebhookDispatchJob {
+  accountId: string;
+  eventType: WebhookEventTypePublic;
+  payload: Record<string, unknown>;
+}
+
 let audioQueue: Queue<AudioTranscriptionJob> | null = null;
 let messageQueue: Queue<IncomingMessageJob> | null = null;
 let reminderQueue: Queue<ReminderDispatchJob> | null = null;
 let documentQueue: Queue<DocumentUploadJob> | null = null;
+let insightsSweepQueue: Queue<InsightsSweepJob> | null = null;
+let insightsGenerateQueue: Queue<InsightsGenerateJob> | null = null;
+let webhookDispatchQueue: Queue<WebhookDispatchJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
   audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
@@ -85,4 +107,28 @@ export function getDocumentUploadQueue(): Queue<DocumentUploadJob> {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return documentQueue;
+}
+
+export function getInsightsSweepQueue(): Queue<InsightsSweepJob> {
+  insightsSweepQueue ??= new Queue(QUEUE_NAMES.insightsSweep, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return insightsSweepQueue;
+}
+
+export function getInsightsGenerateQueue(): Queue<InsightsGenerateJob> {
+  insightsGenerateQueue ??= new Queue(QUEUE_NAMES.insightsGenerate, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return insightsGenerateQueue;
+}
+
+export function getWebhookDispatchQueue(): Queue<WebhookDispatchJob> {
+  webhookDispatchQueue ??= new Queue(QUEUE_NAMES.webhookDispatch, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return webhookDispatchQueue;
 }

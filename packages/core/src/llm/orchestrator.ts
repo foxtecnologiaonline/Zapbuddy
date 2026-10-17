@@ -1,5 +1,5 @@
 import type { User } from '@zapbuddy/db';
-import { getAccountForUser, createAccountForUser, redeemAccountInvite } from '@zapbuddy/db';
+import { getAccountForUser, createAccountForUser, redeemAccountInvite, findAccountByReferralCode, recordReferral } from '@zapbuddy/db';
 import { buildSystemPrompt } from './system-prompt.js';
 import type { ToolContext } from './tool-types.js';
 import { appendTurn, getRecentTurns } from '../context/conversation-context.js';
@@ -17,6 +17,7 @@ export interface OrchestrateResult {
 }
 
 const INVITE_CODE_MESSAGE_PATTERN = /^\s*entrar\s+(\d{4,8})\s*$/i;
+const REFERRAL_CODE_MESSAGE_PATTERN = /indicad[oa]\s+([a-z0-9]{6})/i;
 
 /**
  * Resolve a conta (ADR 0002) do usuário, incluindo o fluxo de convite —
@@ -43,7 +44,22 @@ async function resolveAccount(
     return { replyText: MESSAGES.inviteCodeInvalid };
   }
 
-  return createAccountForUser(user.id);
+  const newAccount = await createAccountForUser(user.id);
+
+  // Indicação é atribuição de métrica, não controle de acesso a dado
+  // financeiro de terceiro (diferente do convite acima) — por isso não é
+  // bloqueante: código não reconhecido simplesmente não gera o registro,
+  // sem impedir nem atrasar o cadastro normal (ADR 0003, decisão 3).
+  const referralMatch = REFERRAL_CODE_MESSAGE_PATTERN.exec(messageText);
+  const referralCode = referralMatch?.[1];
+  if (referralCode) {
+    const referrerAccount = await findAccountByReferralCode(referralCode.toUpperCase());
+    if (referrerAccount && referrerAccount.id !== newAccount.accountId) {
+      await recordReferral(referrerAccount.id, newAccount.accountId);
+    }
+  }
+
+  return newAccount;
 }
 
 /**

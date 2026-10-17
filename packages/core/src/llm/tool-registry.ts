@@ -7,7 +7,7 @@ import { createTaskTool, listTasksTool, completeTaskTool } from './tools/tasks.j
 import { createReminderTool } from './tools/reminders.js';
 import { completeOnboardingTool } from './tools/onboarding.js';
 import { sendDashboardLoginLinkTool } from './tools/dashboard-access.js';
-import { inviteMemberTool, listMembersTool } from './tools/account.js';
+import { inviteMemberTool, listMembersTool, getReferralInfoTool } from './tools/account.js';
 import { findDocumentTool } from './tools/documents.js';
 import { createCalendarEventTool, listCalendarEventsTool } from './tools/calendar.js';
 
@@ -23,6 +23,7 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   sendDashboardLoginLinkTool,
   inviteMemberTool,
   listMembersTool,
+  getReferralInfoTool,
   findDocumentTool,
   createCalendarEventTool,
   listCalendarEventsTool,
