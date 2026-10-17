@@ -64,3 +64,20 @@ Explicitamente fora do MVP (não implementar até Fase 2+):
 - Nenhuma feature de Fase 2/3 entra em código antes do MVP validar retenção básica
 - Toda integração financeira passa por camada de abstração própria (nunca acoplar direto ao provedor de Open Finance)
 - Antes de iniciar trabalho grande (não uma correção pontual), checar branches e PRs abertos no repo — sessões/agentes diferentes já duplicaram esforço (ex.: múltiplas branches implementando a mesma rodada de melhorias em paralelo) por falta dessa checagem
+
+## Fluxo de branches (2026-10, motivo documentado)
+
+`main` é o único ponto de integração entre sessões — produção (Vercel) e
+branch padrão do GitHub apontam pra ela. Motivo: antes disso, cada sessão
+criava sua própria branch (`ccr-*`/auto-gerada) sem saber das outras, e
+pelo menos duas sessões refizeram o mesmo trabalho em paralelo (o fallback
+multi-provider do LLM foi implementado duas vezes de forma independente
+antes de alguém perceber).
+
+Regra pra toda sessão/agente novo:
+1. **Partir de `main` atualizada** (`git fetch origin main && git checkout -B <branch-da-sessão> origin/main`) — nunca de uma branch de sessão antiga.
+2. Trabalhar na branch da sessão normalmente.
+3. **Mesclar de volta em `main`** ao final (fast-forward quando possível; merge normal + resolução de conflito quando `main` andou). Nunca deixar trabalho pronto preso só na branch da sessão.
+4. Depois de mesclado e validado (typecheck/test/build), a branch da sessão pode ser apagada — o trabalho já está em `main`.
+
+Sem isso, o repositório acumula branches soltas que nenhuma sessão futura sabe que existem.
