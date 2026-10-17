@@ -25,3 +25,25 @@ export async function isRateLimited(whatsappNumber: string): Promise<boolean> {
   }
   return count > MAX_MESSAGES_PER_WINDOW;
 }
+
+const LOGIN_WINDOW_SECONDS = 15 * 60;
+// ADMIN_PASSWORD é uma senha única e compartilhada (não por usuário) —
+// sem limite de tentativas, o painel admin (que expõe contato/telefone de
+// clientes) fica vulnerável a força bruta. Comparação em si já é em tempo
+// constante (admin-session.ts); isto cobre o volume de tentativas.
+const MAX_LOGIN_ATTEMPTS_PER_WINDOW = 5;
+
+function loginKey(identifier: string): string {
+  return `ratelimit:admin-login:${identifier}`;
+}
+
+/** Janela fixa por IP (ou outro identificador do cliente) pras tentativas de login do admin. */
+export async function isAdminLoginRateLimited(identifier: string): Promise<boolean> {
+  const redis = getRedisConnection();
+  const k = loginKey(identifier);
+  const count = await redis.incr(k);
+  if (count === 1) {
+    await redis.expire(k, LOGIN_WINDOW_SECONDS);
+  }
+  return count > MAX_LOGIN_ATTEMPTS_PER_WINDOW;
+}

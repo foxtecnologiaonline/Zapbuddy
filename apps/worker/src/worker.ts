@@ -1,6 +1,6 @@
 import { Worker, type Job } from 'bullmq';
 import { getRedisConnection, QUEUE_NAMES, sendWhatsappTextMessage, MESSAGES } from '@zapbuddy/core';
-import { markReminderFailed, logger } from '@zapbuddy/db';
+import { logError, markReminderFailed, logger } from '@zapbuddy/db';
 import { handleIncomingMessage } from './handlers/incoming-message.js';
 import { handleAudioTranscription } from './handlers/audio-transcription.js';
 import { handleReminderDispatch } from './handlers/reminder-dispatch.js';
@@ -75,7 +75,18 @@ const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, onExhausted }) 
   const worker = new Worker(name, handler, { connection, concurrency });
   worker.on('failed', (job, error) => {
     logger.error('job_failed', { queue: name, jobId: job?.id, error: error.message, attemptsMade: job?.attemptsMade });
-    if (job && isExhausted(job) && onExhausted) void onExhausted(job, error);
+    if (!job || !isExhausted(job)) return;
+
+    // Só loga no admin quando esgota as tentativas — um retry intermediário
+    // ainda pode se recuperar sozinho (ver DEFAULT_JOB_OPTIONS), e logar cada
+    // tentativa intermediária inflaria o card "Erros" com ruído transitório.
+    void logError({
+      source: 'worker',
+      message: error.message,
+      detail: { queue: name, jobId: job.id, data: job.data },
+      userId: (job.data as { userId?: string }).userId ?? null,
+    });
+    if (onExhausted) void onExhausted(job, error);
   });
   return worker;
 });
