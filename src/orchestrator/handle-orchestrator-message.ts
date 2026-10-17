@@ -6,8 +6,8 @@ import { logger } from '../lib/logger';
 
 // Áudio/imagem ainda não têm transcrição/processamento (fila da Fase 2 do
 // roadmap). Por ora, só pede pra escrever.
-const NON_TEXT_FALLBACK = 'Por enquanto eu só processo mensagens em texto 🙂 Pode escrever?';
-const ORCHESTRATOR_ERROR_MESSAGE = 'Tive um problema pra processar isso agora. Pode tentar de novo? 🙏';
+const NON_TEXT_FALLBACK = 'Por enquanto eu só processo mensagens em texto 🙂\nPode escrever?';
+const ORCHESTRATOR_ERROR_MESSAGE = 'Tive um problema pra processar isso agora 🙏\nPode tentar de novo?';
 
 export async function handleOrchestratorMessage(client: Client, message: InboundMessage): Promise<void> {
   const context = { clientId: client.id, whatsappId: client.whatsappId, messageId: message.messageId };
