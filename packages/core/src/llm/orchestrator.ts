@@ -15,7 +15,7 @@ const MAX_TOOL_ITERATIONS = 6;
 // não parecer que o bot sumiu. 8s é bem acima da latência normal de 1
 // iteração (1 chamada à Claude + tools), então só dispara em turno
 // realmente lento, não em toda mensagem.
-const INTERIM_NOTICE_MS = 8_000;
+export const INTERIM_NOTICE_MS = 8_000;
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
