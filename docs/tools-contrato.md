@@ -30,9 +30,21 @@ cada tool individual logar.
 - **Retorno:** `{ transaction_id, recorded: true, category (normalizada), category_fallback: boolean }`
 - **Nunca rejeita por categoria inválida** — cai em `outros` e sinaliza via `category_fallback`.
   Isso corrige uma versão anterior deste documento, que descrevia validação estrita.
-- **Não existe tool de correção/edição de uma transação já registrada.** O cenário "errei, foi
-  54 não 45" do roteiro de conversa é uma proposta de produto sem implementação — hoje não há
-  como a IA corrigir um lançamento já persistido.
+## `correct_last_transaction` (`tools/finance.ts`)
+
+- **Schema:** `{ amount_cents?: int > 0, category?: string, description?: string }` — ao menos um
+  campo obrigatório (refine do Zod).
+- **Execução:** `updateLastTransaction()` busca a transação mais recente do usuário com
+  `created_at` dentro dos últimos 30 minutos e aplica só os campos informados. Não recebe
+  `transaction_id` — o modelo nunca teria como repetir esse id num turno futuro (o histórico
+  curto prazo em Redis guarda só texto de conversa, não os blocos de tool call/resultado do
+  turno anterior), então a resolução é sempre "a última transação do usuário", não uma busca por
+  id.
+- **Retorno:** `{ corrected: true, transaction_id, amount_cents, category }` ou
+  `{ corrected: false, reason: 'no_recent_transaction' }` se não houver transação dentro da
+  janela de 30 min.
+- Cobre o cenário "errei, foi 54 não 45" do roteiro de conversa (`docs/conversas-tom.md`, 2.6).
+  Não cobre correção de uma transação antiga ou busca por descrição/valor — só a mais recente.
 
 ## `get_financial_summary` (`tools/finance.ts`)
 

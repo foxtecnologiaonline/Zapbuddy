@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { recordTransaction, summarizeTransactions } from '@zapbuddy/db';
+import { recordTransaction, summarizeTransactions, updateLastTransaction } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, isRecognizedCategory, normalizeCategory } from '../categories.js';
 import { getLast7DaysRange, getTodayRange } from '../../time/zoned-ranges.js';
@@ -44,6 +44,47 @@ export const recordTransactionTool = defineTool({
       // tabela transactions em vez de olhar o log da tool diretamente.
       category: transaction.category,
       category_fallback: !isRecognizedCategory(params.category),
+    };
+  },
+});
+
+export const correctLastTransactionTool = defineTool({
+  name: 'correct_last_transaction',
+  description:
+    'Corrige a transação financeira mais recente do usuário (registrada há no máximo 30 minutos), ' +
+    'para quando a pessoa avisa logo em seguida que errou algo (ex.: "errei, foi 54 não 45"). ' +
+    'Informe só os campos que mudaram. NUNCA use record_transaction para "consertar" um lançamento ' +
+    'recente — isso duplicaria o gasto/receita. Se não houver transação recente o bastante, a tool ' +
+    'retorna corrected: false — nesse caso, diga à pessoa que não achou um lançamento recente para ' +
+    'corrigir e pergunte se quer registrar como um novo gasto/receita.',
+  schema: z
+    .object({
+      amount_cents: z.number().int().positive().optional(),
+      category: z.string().min(1).optional(),
+      description: z.string().optional(),
+    })
+    .refine((value) => value.amount_cents !== undefined || value.category !== undefined || value.description !== undefined, {
+      message: 'Informe ao menos um campo para corrigir (amount_cents, category ou description).',
+    }),
+  execute: async (params, ctx) => {
+    const category = params.category !== undefined ? normalizeCategory(params.category) : undefined;
+    const updated = await updateLastTransaction({
+      userId: ctx.userId,
+      amountCents: params.amount_cents,
+      category,
+      description: params.description,
+    });
+
+    if (!updated) {
+      return { corrected: false, reason: 'no_recent_transaction' };
+    }
+
+    return {
+      corrected: true,
+      transaction_id: updated.id,
+      amount_cents: updated.amount_cents,
+      category: updated.category,
+      category_fallback: params.category !== undefined ? !isRecognizedCategory(params.category) : undefined,
     };
   },
 });

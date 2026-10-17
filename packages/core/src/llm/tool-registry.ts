@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { ToolDefinition } from './tool-types.js';
-import { recordTransactionTool, getSummaryTool } from './tools/finance.js';
+import { recordTransactionTool, correctLastTransactionTool, getSummaryTool } from './tools/finance.js';
 import { createTaskTool, listTasksTool, completeTaskTool } from './tools/tasks.js';
 import { createReminderTool } from './tools/reminders.js';
 import { completeOnboardingTool } from './tools/onboarding.js';
@@ -10,6 +10,7 @@ import { sendDashboardLoginLinkTool } from './tools/dashboard-access.js';
 
 export const ALL_TOOLS: ToolDefinition<any>[] = [
   recordTransactionTool,
+  correctLastTransactionTool,
   getSummaryTool,
   createTaskTool,
   listTasksTool,

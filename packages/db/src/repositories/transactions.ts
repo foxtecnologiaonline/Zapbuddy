@@ -37,6 +37,59 @@ export async function recordTransaction(input: RecordTransactionInput): Promise<
   return data as Transaction;
 }
 
+// Janela de correção: "errei, foi 54 não 45" só faz sentido como correção do
+// lançamento que acabou de ser feito na mesma conversa — fora dessa janela,
+// é mais seguro a IA tratar como um gasto novo (ou perguntar) do que mexer
+// num registro antigo que a pessoa pode nem estar se referindo.
+const CORRECTION_WINDOW_MINUTES = 30;
+
+export interface UpdateLastTransactionInput {
+  userId: string;
+  amountCents?: number;
+  category?: string;
+  description?: string;
+}
+
+/**
+ * Corrige a transação mais recente do usuário (dentro da janela acima), sem
+ * exigir um transaction_id — o modelo nunca recebe esse id de volta de forma
+ * que consiga repeti-lo num turno futuro (o histórico curto prazo guarda só
+ * texto da conversa, não os blocos de tool call/resultado), então pedir o id
+ * não seria algo que a IA consegue preencher na prática. Retorna null se não
+ * houver transação recente o bastante pra corrigir.
+ */
+export async function updateLastTransaction(input: UpdateLastTransactionInput): Promise<Transaction | null> {
+  const cutoffIso = new Date(Date.now() - CORRECTION_WINDOW_MINUTES * 60 * 1000).toISOString();
+
+  const { data: candidates, error: findError } = await getSupabaseClient()
+    .from('transactions')
+    .select('id')
+    .eq('user_id', input.userId)
+    .gte('created_at', cutoffIso)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (findError) throw findError;
+  const last = (candidates ?? [])[0] as { id: string } | undefined;
+  if (!last) return null;
+
+  const changes: Record<string, unknown> = {};
+  if (input.amountCents !== undefined) changes.amount_cents = input.amountCents;
+  if (input.category !== undefined) changes.category = input.category;
+  if (input.description !== undefined) changes.description = input.description;
+
+  const { data, error } = await getSupabaseClient()
+    .from('transactions')
+    .update(changes)
+    .eq('id', last.id)
+    .eq('user_id', input.userId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as Transaction;
+}
+
 // Teto de segurança, não um limite esperado na prática (MVP é resumo
 // diário/semanal/mensal) — evita que um range muito largo vire uma consulta
 // sem fim. Se algum dia for atingido, soma/resumo ficam parciais e

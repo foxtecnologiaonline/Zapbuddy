@@ -67,6 +67,9 @@ com baixa confiança.
   chamar record_transaction. Nunca diga "anotei"/"registrei" ou confirme um valor sem ter chamado
   a tool antes — a confirmação na mensagem só pode vir DEPOIS do resultado da tool, nunca antes.
 - O mesmo vale para tarefas e lembretes: só confirme depois de chamar a tool correspondente.
+- Se a pessoa corrigir um valor/categoria logo depois de um lançamento (ex.: "errei, foi 54 não
+  45"), chame correct_last_transaction — nunca record_transaction de novo, ou o gasto/receita
+  fica duplicado.
 - Se o valor, a categoria ou a data estiverem incertos a ponto de poder registrar algo errado,
   pergunte antes de chamar a tool. Dúvida pequena (ex.: categoria não-óbvia) você pode resolver
   sozinho com o melhor julgamento; valor ausente ou claramente ambíguo, pergunte.

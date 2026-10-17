@@ -178,16 +178,21 @@ não "pequena"), então o modelo pergunta em vez de resolver sozinho.
 **Resposta:**
 > Certo, 300 reais com a Maria anotados.
 
-### 2.6 Correção de lançamento ⚠️ não implementado
+### 2.6 Correção de lançamento
 
 **Usuário:** "errei, o almoço foi 54 não 45"
 
-> ⚠️ **Não existe tool de correção/edição de uma transação já registrada.** Nenhuma versão do
-> código (`packages/core/src/llm/tools/finance.ts`) expõe um `update_transaction` ou
-> equivalente. Hoje, essa mensagem provavelmente seria interpretada como um novo gasto
-> (duplicando o lançamento) ou como algo que o modelo não sabe resolver — comportamento real
-> não testado para este caso. Fica registrado aqui como lacuna de produto, não como algo que
-> funciona.
+**Consequência:** `correct_last_transaction` — `{amount_cents: 5400}` → corrige a transação mais
+recente do usuário (sem precisar de `transaction_id`, que o modelo nunca teria como repetir —
+o histórico curto prazo guarda só texto da conversa, não o id que a tool devolveu). Só corrige
+se essa transação tiver sido registrada há no máximo 30 minutos; fora dessa janela, a tool
+retorna `{corrected: false}` e Tom avisa que não achou um lançamento recente pra corrigir.
+
+**Resposta:**
+> Corrigido, 54 reais de almoço.
+
+> Importante: isto corrige **a transação mais recente**, não uma busca por descrição/valor —
+> cenário fora disso (ex.: "aquele gasto de terça era 54, não 45") não é coberto.
 
 ### 2.7 Resumo do dia ⚠️ não é proativo
 
