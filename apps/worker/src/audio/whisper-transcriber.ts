@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { AudioTranscriber } from '@zapbuddy/core';
+import { logger } from '@zapbuddy/db';
 import { convertToMp3, estimateMp3DurationSec, splitMp3ByDuration } from './convert.js';
 
 // ── Clientes Whisper ─────────────────────────────────────────────────────────
@@ -120,15 +121,23 @@ async function transcribeBuffer(mp3Buffer: Buffer): Promise<{ text: string; dura
   }
 
   let lastErr: Error | null = null;
-  for (const a of attempts) {
+  for (const [index, a] of attempts.entries()) {
     try {
       const r = await runWhisper(a.client, a.model, audioFile, a.prompt, a.temperature);
       if (isWhisperHallucination(r.text, r.durationSec)) {
         throw new Error('alucinação detectada (prompt/silêncio)');
       }
+      if (index > 0) {
+        // Mesmo critério de ruído do fallback de LLM (orchestration.ts): só
+        // loga quando uma tentativa além da primeira venceu — dá
+        // visibilidade de quantas transcrições dependem do fallback/retry
+        // sem logar o caminho feliz toda vez.
+        logger.warn('whisper_fallback_used', { attempt: a.label, attemptIndex: index });
+      }
       return r;
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
+      logger.error('whisper_attempt_failed', { attempt: a.label, attemptIndex: index, error: lastErr.message });
     }
   }
   throw new Error(`Transcrição falhou após ${attempts.length} tentativa(s): ${lastErr?.message}`);
