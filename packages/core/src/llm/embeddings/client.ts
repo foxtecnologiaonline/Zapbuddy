@@ -1,8 +1,9 @@
 import OpenAI from 'openai';
 import { logger } from '@zapbuddy/db';
 
+// text-embedding-3-small: 1536 dimensões — mesmo tamanho da coluna
+// `embedding vector(1536)` em knowledge_entries (migration 0011).
 const EMBEDDING_MODEL = 'text-embedding-3-small';
-export const EMBEDDING_DIMENSIONS = 1536;
 
 let client: OpenAI | null = null;
 function getClient(): OpenAI {

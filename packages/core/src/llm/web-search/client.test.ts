@@ -5,6 +5,7 @@ vi.mock('@zapbuddy/db', async (importOriginal) => {
   return {
     ...actual,
     findFreshKnowledgeEntryByQuery: vi.fn(),
+    findSimilarKnowledgeEntries: vi.fn().mockResolvedValue([]),
     insertKnowledgeEntry: vi.fn(),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   };
@@ -14,7 +15,8 @@ vi.mock('../embeddings/client.js', () => ({
   embedText: vi.fn().mockResolvedValue(null),
 }));
 
-import { findFreshKnowledgeEntryByQuery, insertKnowledgeEntry } from '@zapbuddy/db';
+import { findFreshKnowledgeEntryByQuery, findSimilarKnowledgeEntries, insertKnowledgeEntry } from '@zapbuddy/db';
+import { embedText } from '../embeddings/client.js';
 import { searchWeb } from './client.js';
 
 const originalEnv = { ...process.env };
@@ -23,7 +25,9 @@ const originalFetch = global.fetch;
 beforeEach(() => {
   process.env.WEB_SEARCH_API_KEY = 'test-key';
   vi.mocked(findFreshKnowledgeEntryByQuery).mockReset();
+  vi.mocked(findSimilarKnowledgeEntries).mockReset().mockResolvedValue([]);
   vi.mocked(insertKnowledgeEntry).mockReset();
+  vi.mocked(embedText).mockReset().mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -71,6 +75,58 @@ describe('searchWeb', () => {
     expect(result.fromCache).toBe(false);
     expect(result.sourceUrls).toEqual(['https://gov.br/mei']);
     expect(insertKnowledgeEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it('reaproveita entrada semanticamente similar (cache por embedding) sem chamar a API externa', async () => {
+    vi.mocked(findFreshKnowledgeEntryByQuery).mockResolvedValue(null);
+    vi.mocked(embedText).mockResolvedValue([0.1, 0.2, 0.3]);
+    vi.mocked(findSimilarKnowledgeEntries).mockResolvedValue([
+      {
+        id: 'k2',
+        origin: 'user_query',
+        query: 'o que é o MEI',
+        summary: 'resumo semanticamente similar',
+        source_urls: ['https://gov.br/mei'],
+        created_at: new Date().toISOString(),
+        similarity: 0.95,
+      },
+    ]);
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await searchWeb('me explica o que é MEI', { origin: 'user_query' });
+
+    expect(result.fromCache).toBe(true);
+    expect(result.summary).toBe('resumo semanticamente similar');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(insertKnowledgeEntry).not.toHaveBeenCalled();
+  });
+
+  it('ignora entrada similar abaixo do limiar de similaridade e busca na API', async () => {
+    vi.mocked(findFreshKnowledgeEntryByQuery).mockResolvedValue(null);
+    vi.mocked(insertKnowledgeEntry).mockResolvedValue({} as never);
+    vi.mocked(embedText).mockResolvedValue([0.1, 0.2, 0.3]);
+    vi.mocked(findSimilarKnowledgeEntries).mockResolvedValue([
+      {
+        id: 'k3',
+        origin: 'user_query',
+        query: 'taxa do simples nacional',
+        summary: 'resumo de assunto só parecido',
+        source_urls: [],
+        created_at: new Date().toISOString(),
+        similarity: 0.5,
+      },
+    ]);
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ title: 'MEI', url: 'https://gov.br/mei', content: 'é um regime...' }] }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await searchWeb('o que é MEI', { origin: 'user_query' });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(result.fromCache).toBe(false);
   });
 
   it('falha de forma controlada quando WEB_SEARCH_API_KEY não está configurada', async () => {
