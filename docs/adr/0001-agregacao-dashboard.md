@@ -1,8 +1,23 @@
 # ADR 0001 — Agregação de resumos financeiros (dashboard e WhatsApp)
 
-**Status:** aceita
+**Status:** proposta, **não implementada** — ver nota de reconciliação abaixo.
 
-## Contexto
+## Nota de reconciliação (2026-10-17)
+
+Esta ADR foi escrita sem visibilidade da implementação real, que já existia em outra
+branch/sessão quando foi criada. O código real (`packages/db/src/repositories/transactions.ts`,
+`summarizeTransactions()`) faz a agregação **on-the-fly** a cada chamada de
+`get_financial_summary` — soma/agrupa em memória sobre o resultado de uma query filtrada por
+usuário e período, com um teto de segurança de 2000 linhas (`MAX_TRANSACTIONS_PER_QUERY`), sem
+tabela nem view materializada. Não existe `daily_summaries`, não existe atualização incremental
+na escrita.
+
+A decisão abaixo permanece registrada como **proposta não adotada** — pode valer a pena
+revisitá-la se o volume de transações por usuário crescer a ponto do teto de 2000 linhas ou da
+agregação em memória virar gargalo real, mas hoje (MVP, poucos usuários, períodos curtos de
+`'today'`/`'last_7_days'`) a implementação simples é suficiente e é a que está em produção.
+
+## Contexto (como escrito originalmente, mantido por histórico)
 
 O roteiro do Tom (`docs/conversas-tom.md`, seção 2.7/2.8) e o dashboard web (seção 5) exibem
 resumo diário, semanal e o histórico de transações. Sem uma decisão explícita, a implementação

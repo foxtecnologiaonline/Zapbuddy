@@ -1,214 +1,219 @@
 # Tom — roteiro de interações (IA do ZapBuddy)
 
-Persona da IA no WhatsApp: **Tom**. Este documento é o roteiro de conversas do MVP: para cada
-interação, especifica a mensagem do usuário, o que Tom interpreta/faz, a **consequência**
-(o que é gravado no banco, nessa ordem, antes de qualquer confirmação) e a **resposta** enviada
-de volta. Serve de referência para implementar o orquestrador LLM + tools (finance, tasks,
-reminders) — nenhum cenário aqui sai do escopo da Fase 1 travado no `CLAUDE.md`.
+> **Reconciliado com o código real em 2026-10-17.** Esta versão foi revisada contra
+> `packages/core/src/llm/*` e `packages/db/src/repositories/*` depois de ter sido escrita sem
+> visibilidade da implementação (que já existia em outras branches/sessões). Nomes de tool,
+> schemas e categorias abaixo batem com o código. Cenários que **não têm tool/job correspondente
+> hoje** ficam marcados com ⚠️ e continuam aqui só como proposta de produto, não como
+> documentação do que existe.
 
-## Tom — tom de voz
+Persona da IA no WhatsApp: **Tom**. Para cada interação: mensagem do usuário → **consequência**
+(tool call real + persistência) → **resposta**. Nomes de tool, schemas e comportamento de
+validação são os de `packages/core/src/llm/tools/*.ts` — ver `docs/tools-contrato.md` para o
+contrato completo.
 
-- Direto, caloroso, sem jargão financeiro. Frases curtas (é WhatsApp, não e-mail).
-- Nunca confirma uma ação antes de persistir o registro estruturado (regra não-negociável do
-  projeto). Primeiro grava, depois responde.
-- Quando não tem certeza (valor ambíguo, categoria duvidosa, comando incompleto), pergunta —
-  nunca assume e segue em frente.
-- Proativo nos momentos certos (resumo diário, lembrete vencendo), mas não manda mensagem sem
-  gatilho (sem spam).
+## Tom — tom de voz (de `system-prompt.ts`)
 
-Convenção usada abaixo: **Consequência** = o que acontece no sistema antes de Tom responder
-(tool call + persistência). **Resposta** = texto literal que Tom manda no WhatsApp.
+- Conversa, não menu de comando — texto ou áudio tratados igual, sem palavra-chave fixa.
+- Mensagens curtas (1–3 frases), confirmação natural ("Beleza, 35 reais de almoço anotado"), não
+  um recibo técnico.
+- Nunca confirma gasto/receita/tarefa/lembrete antes de ter chamado a tool correspondente — a
+  confirmação só pode vir depois do resultado da tool, nunca antes.
+- Dúvida pequena (categoria não-óbvia) o modelo resolve com o melhor julgamento dele; valor
+  ausente ou claramente ambíguo, ele pergunta antes de chamar a tool.
+- **Proatividade real hoje é só o disparo de lembrete agendado** (fila `reminder-dispatch`).
+  ⚠️ Não existe job de resumo diário/semanal proativo — só resumo quando o usuário pergunta.
 
-**Regra de confiança para categorização automática** (detalha a regra 2 da seção 7): Tom
-categoriza sozinho, sem perguntar, quando a descrição deixa a categoria clara (ex.: "almoço" →
-Alimentação, "projeto" como receita → Serviços prestados — casos 2.1 e 2.2). Quando a descrição
-pode se encaixar em mais de uma categoria com peso parecido, ou não dá pista nenhuma (ex.:
-"gastei 300 com a Maria" — caso 2.5), Tom pergunta antes de gravar. A mesma regra vale para
-dado vindo de áudio transcrito (caso 2.3): confiança baixa na transcrição ou na categoria segue
-o mesmo fluxo de pergunta, nunca grava um valor/categoria "chutado".
+Valores são sempre normalizados para `amount_cents` (inteiro, em centavos) antes de chamar a
+tool financeira — "30 reais" → `3000`, "R$ 30,50" → `3050`.
 
 **Nota de sintaxe:** as respostas abaixo usam `**negrito**` por ser a convenção markdown deste
-documento. Na implementação real, a sintaxe de negrito do WhatsApp é `*negrito*` (um asterisco
-de cada lado) — a mensagem enviada pela API nunca deve conter `**` literal.
+documento. A sintaxe de negrito do WhatsApp é `*negrito*` (um asterisco de cada lado) — a
+mensagem enviada pela API nunca deve conter `**` literal.
 
 ---
 
 ## 1. Onboarding (primeiro contato)
 
+Real: o webhook chama `getOrCreateUser(whatsappNumber)` antes de qualquer resposta — cria a
+linha em `users` com `onboarding_completed_at: null` se o número é novo. O system prompt então
+entra no estado de onboarding enquanto esse campo for nulo.
+
 ### 1.1 Primeira mensagem de sempre
 
 **Usuário:** "oi"
 
-**Consequência:** `createUser` — cria registro em `users` com telefone, status `onboarding`.
-Log da tool call (nome, params, resultado) desde este primeiro turno.
+**Consequência:** `getOrCreateUser` (fora do orquestrador, no webhook) — nenhuma tool call do
+LLM ainda, pois não há nada pra persistir a partir de "oi".
 
 **Resposta:**
 > Oi! Eu sou o Tom 👋 Vou te ajudar a organizar seu dinheiro, tarefas e lembretes por aqui
-> mesmo, sem precisar instalar nada.
->
-> Pra começar, me diz seu nome e o que você faz (ex: "sou autônomo", "tenho uma loja")?
+> mesmo. Pra começar, qual é seu nome?
 
-### 1.2 Usuário responde
+### 1.2 Usuário informa o nome
 
-**Usuário:** "Marcos, sou designer freelancer"
+**Usuário:** "Marcos"
 
-**Consequência:** `updateUser` — grava `name="Marcos"`, `segment="autonomo"`,
-`status="active"`.
+**Consequência:** `complete_onboarding` — `{name: "Marcos"}` → grava `name` e
+`onboarding_completed_at`.
 
 **Resposta:**
 > Prazer, Marcos! Já pode me mandar um gasto, uma tarefa ou um lembrete que eu organizo tudo.
 > Por exemplo: "gastei 45 no almoço" ou "lembrar de pagar o DAS dia 20".
->
-> Quer que eu te mande um resumo todo fim de dia? (sim/não)
 
-### 1.3 Preferência de resumo
+### 1.3 Nome + pedido na mesma mensagem
 
-**Usuário:** "sim"
+**Usuário:** "sou o Marcos, gastei 45 no almoço"
 
-**Consequência:** `updateUserPreferences` — `daily_summary_enabled=true`,
-`daily_summary_time` default (ex: 20h, horário local).
-
-**Resposta:**
-> Combinado. Resumo diário às 20h. Qualquer coisa você muda depois só me falando.
-
-### 1.4 Preferência de resumo — recusa
-
-**Usuário:** "não"
-
-**Consequência:** `updateUserPreferences` — `daily_summary_enabled=false`.
+**Consequência:** o system prompt instrui resolver os dois na mesma resposta — `complete_onboarding`
+`{name: "Marcos"}` seguido de `record_transaction` `{type: "expense", amount_cents: 4500,
+category: "alimentacao"}`, nessa ordem, antes de responder.
 
 **Resposta:**
-> Sem problema, não te mando resumo automático. Se mudar de ideia é só me falar.
+> Prazer, Marcos! Já anotei os 45 reais do almoço. Pode me mandar gasto, tarefa ou lembrete
+> quando quiser.
+
+> ⚠️ **Não implementado:** uma versão anterior deste roteiro descrevia um segundo passo de
+> onboarding perguntando o "segmento" (autônomo/PJ) e um terceiro perguntando preferência de
+> resumo diário (sim/não). Nenhum dos dois tem campo no modelo de `User`
+> (`id, whatsapp_number, name, timezone, onboarding_completed_at, created_at`) nem tool — o
+> onboarding real termina em `complete_onboarding`.
 
 ---
 
 ## 2. Financeiro — registro de gasto/receita
 
+Categorias canônicas e o comportamento real de normalização (nunca rejeita, cai em `outros`)
+estão em `docs/categorias-financeiras.md`. `amount_cents` é sempre inteiro.
+
 ### 2.1 Gasto simples por texto (caminho feliz)
 
 **Usuário:** "gastei 45 reais no almoço"
 
-**Consequência:** `createTransaction` — persiste **antes** de responder:
-`{type: "expense", amount: 45.00, category: "alimentacao", description: "almoço", source: "text", raw_text: "gastei 45 reais no almoço"}`
-(categoria canônica em `docs/categorias-financeiras.md`; Tom exibe o rótulo em português na resposta).
-Categoria vem de classificação automática via IA.
+**Consequência:** `record_transaction` — `{type: "expense", amount_cents: 4500, category:
+"alimentacao", description: "almoço"}` → `{transaction_id, recorded: true, category:
+"alimentacao", category_fallback: false}`.
 
 **Resposta:**
-> Anotado: R$ 45,00 em Alimentação (almoço). 🍽️
-> Hoje você já gastou R$ 45,00.
+> Beleza, 45 reais de almoço anotado. 🍽️
 
 ### 2.2 Receita
 
 **Usuário:** "recebi 1200 de um projeto"
 
-**Consequência:** `createTransaction` — `{type: "income", amount: 1200.00, category: "servicos_prestados", description: "projeto"}`.
+**Consequência:** `record_transaction` — `{type: "income", amount_cents: 120000, category:
+"servico_prestado", description: "projeto"}`.
 
 **Resposta:**
-> Boa! Entrada de R$ 1.200,00 em Serviços prestados registrada. 💰
+> Boa! 1.200 reais de serviço prestado registrados. 💰
 
 ### 2.3 Áudio (transcrição assíncrona)
 
 **Usuário:** [áudio] "paguei 230 de internet e telefone"
 
 **Consequência:**
-1. Webhook recebe o áudio → enfileira job na fila BullMQ (`transcribe-audio`).
-2. Tom responde de imediato (sem persistir nada ainda, pois não há dado confirmado):
+1. Webhook enfileira o áudio na fila `audio-transcription` (BullMQ).
+2. Worker transcreve e enfileira o texto resultante na fila `incoming-message`, que roda o
+   orquestrador normalmente — chega como se fosse texto digitado
+   (`messageSource: "audio"` no `ToolContext`, só isso muda).
+3. `record_transaction` — `{type: "expense", amount_cents: 23000, category: "moradia",
+   description: "internet e telefone"}` (categoria real mais próxima; não existe
+   `utilidades_telecom` na lista canônica).
 
-**Resposta imediata:**
-> Recebi seu áudio, só um instante que já te confirmo. 🎧
+**Resposta (única, depois do processamento — não há uma "resposta imediata" separada hoje):**
+> Beleza, 230 reais de internet e telefone anotados. ✅
 
-**Consequência (após job processar):** transcrição → `createTransaction`
-`{type: "expense", amount: 230.00, category: "utilidades_telecom", description: "internet e telefone"}`.
+> ⚠️ **Divergência de uma versão anterior:** este roteiro descrevia duas mensagens (uma
+> confirmação imediata de "recebi seu áudio" e depois a confirmação do valor). O pipeline real
+> não manda uma mensagem intermediária por padrão — só processa e responde uma vez, pela fila
+> `incoming-message`. O aviso de turno lento (2.3b abaixo) é o único "estou processando" que
+> existe, e só dispara se passar de 8s.
 
-**Resposta (segunda mensagem, assíncrona):**
-> Entendi: R$ 230,00 em Internet/Telefone. Já registrei. ✅
+### 2.3b Turno lento (implementado, mas por timeout de LLM, não de transcrição)
 
-### 2.3b Áudio demorando além do SLA
+**Gatilho:** `runLlmWithFallback` (`packages/core/src/llm/providers/orchestration.ts`) não
+terminou em `INTERIM_NOTICE_MS` (8s) — cobre qualquer turno lento, incluindo troca pro provider
+de fallback (OpenAI), não é específico de áudio.
 
-**Gatilho:** job de transcrição não concluiu dentro do limite definido em
-`docs/arquitetura-sla.md` (15s, p95) após a resposta imediata do caso 2.3.
-
-**Consequência:** nenhuma escrita ainda — o job continua rodando, Tom só evita deixar o
-usuário sem retorno.
+**Consequência:** nenhuma escrita — só envia `MESSAGES.stillProcessing` via WhatsApp, sem
+abortar o processamento em curso.
 
 **Resposta (mensagem intermediária):**
-> Ainda processando seu áudio, só mais um instante. 🎧
+> Só um instante, ainda to vendo isso pra você...
 
-### 2.4 Valor não informado — Tom pergunta antes de gravar
+### 2.4 Valor não informado — pergunta antes de chamar a tool
 
 **Usuário:** "gastei no mercado"
 
-**Consequência:** nenhuma — **nada é persistido** sem valor. Regra não-negociável: IA nunca
-inventa dado financeiro.
+**Consequência:** nenhuma tool call — `record_transaction` exige `amount_cents > 0`; o modelo
+pergunta antes de inventar um valor.
 
 **Resposta:**
-> Quanto foi o gasto no mercado?
+> Quanto foi?
 
 **Usuário:** "uns 150"
 
-**Consequência:** `createTransaction` `{type: "expense", amount: 150.00, category: "mercado"}`,
-com `amount_approximate: true` (o próprio usuário deu um valor aproximado — "uns 150" — então o
-registro guarda isso para o resumo não tratar como valor exato).
+**Consequência:** `record_transaction` — `{type: "expense", amount_cents: 15000, category:
+"outros"}` — "mercado" não está na lista de categorias de despesa; `category_fallback: true`
+no retorno.
 
 **Resposta:**
-> Anotado: R$ 150,00 em Mercado.
+> Anotados os 150. 🛒
 
-### 2.5 Categoria incerta — Tom confirma em vez de adivinhar
+### 2.5 Categoria incerta — pergunta em vez de adivinhar
 
 **Usuário:** "gastei 300 com a Maria"
 
-**Consequência:** nenhuma ainda — descrição não permite categorizar com confiança (pode ser
-pagamento a funcionário, presente, etc.).
+**Consequência:** nenhuma tool call ainda — descrição não dá pista de categoria (dúvida grande,
+não "pequena"), então o modelo pergunta em vez de resolver sozinho.
 
 **Resposta:**
-> Esses R$ 300 com a Maria foram de quê? Pagamento, presente, ou outra coisa?
+> Esses 300 com a Maria foram de quê?
 
-**Usuário:** "pagamento de freelancer que me ajudou"
+**Usuário:** "pagamento de uma freelancer que me ajudou"
 
-**Consequência:** `createTransaction` `{type: "expense", amount: 300.00, category: "servicos_terceiros", description: "pagamento freelancer - Maria"}`.
+**Consequência:** `record_transaction` — `{type: "expense", amount_cents: 30000, category:
+"fornecedores", description: "pagamento freelancer - Maria"}`.
 
 **Resposta:**
-> Certo, R$ 300,00 em Serviços de terceiros (Maria). Registrado.
+> Certo, 300 reais com a Maria anotados.
 
-### 2.6 Correção de lançamento
+### 2.6 Correção de lançamento ⚠️ não implementado
 
 **Usuário:** "errei, o almoço foi 54 não 45"
 
-**Consequência:** `findRecentTransaction` (match por categoria+janela de tempo) →
-`updateTransaction` com `amount: 54.00`. Se não achar candidato óbvio, Tom pergunta qual
-lançamento corrigir (nunca edita no escuro).
+> ⚠️ **Não existe tool de correção/edição de uma transação já registrada.** Nenhuma versão do
+> código (`packages/core/src/llm/tools/finance.ts`) expõe um `update_transaction` ou
+> equivalente. Hoje, essa mensagem provavelmente seria interpretada como um novo gasto
+> (duplicando o lançamento) ou como algo que o modelo não sabe resolver — comportamento real
+> não testado para este caso. Fica registrado aqui como lacuna de produto, não como algo que
+> funciona.
 
-**Resposta (achou):**
-> Corrigido: almoço agora está R$ 54,00.
+### 2.7 Resumo do dia ⚠️ não é proativo
 
-**Resposta (ambíguo — 2+ lançamentos de almoço hoje):**
-> Tenho dois lançamentos de almoço hoje: R$ 45,00 (12:10) e R$ 32,00 (13:35). Qual eu corrijo?
+**Usuário:** "como estão meus gastos hoje?"
 
-### 2.7 Resumo diário (proativo)
+**Consequência:** `get_financial_summary` — `{period: "today"}` → `{totalIncomeCents,
+totalExpenseCents, byCategory, count}` calculado no fuso do usuário. Leitura, sem escrita.
 
-**Gatilho:** job agendado às 20h (preferência do usuário).
+**Resposta:**
+> Hoje: 299 reais em gastos (maior categoria: mercado) e 1.200 em receita. Saldo positivo.
 
-**Consequência:** `getDailySummary` — leitura agregada de `transactions` do dia, nenhuma
-escrita.
+> ⚠️ Uma versão anterior deste roteiro descrevia esse resumo disparando sozinho às 20h. Isso
+> não existe — não há fila/cron de resumo proativo (`packages/core/src/queues/definitions.ts`
+> só tem `audio-transcription`, `incoming-message` e `reminder-dispatch`). O resumo só acontece
+> quando o usuário pergunta.
 
-**Resposta (Tom inicia a conversa):**
-> Fechando o dia, Marcos:
-> 💸 Gastos: R$ 299,00 (Alimentação R$ 99, Mercado R$ 150, Transporte R$ 50)
-> 💰 Receitas: R$ 1.200,00
-> Saldo do dia: +R$ 901,00
-
-### 2.8 Resumo semanal
+### 2.8 Resumo dos últimos 7 dias
 
 **Usuário:** "como foi minha semana?"
 
-**Consequência:** `getWeeklySummary` — leitura agregada, sem escrita.
+**Consequência:** `get_financial_summary` — `{period: "last_7_days"}`. **Não é** "semana de
+calendário" (domingo–sábado) — é janela rolante de hoje + 6 dias anteriores, no fuso do
+usuário.
 
 **Resposta:**
-> Semana de 7 a 13/out:
-> 💸 R$ 1.450,00 em gastos (maior categoria: Mercado, R$ 480,00)
-> 💰 R$ 3.600,00 em receitas
-> Saldo: +R$ 2.150,00
-> Quer ver por categoria?
+> Nos últimos 7 dias: 1.450 em gastos (mercado foi o maior, 480) e 3.600 em receita.
 
 ---
 
@@ -218,48 +223,55 @@ escrita.
 
 **Usuário:** "preciso enviar a proposta pro cliente X"
 
-**Consequência:** `createTask` — `{title: "enviar a proposta pro cliente X", status: "open", due_date: null}`.
+**Consequência:** `create_task` — `{title: "Enviar a proposta pro cliente X"}` → `{task_id,
+created: true}`.
 
 **Resposta:**
-> Adicionei: "Enviar a proposta pro cliente X". Quer colocar um prazo?
+> Adicionei: enviar a proposta pro cliente X.
 
 **Usuário:** "até sexta"
 
-**Consequência:** `updateTask` — `due_date` = próxima sexta-feira.
-
-**Resposta:**
-> Prazo: sexta-feira (17/10). Te aviso se chegar perto da data. ✅
+**Consequência:** não existe `update_task` para alterar `due_at` de uma tarefa já criada — o
+schema de `create_task` aceita `due_at` opcional na própria criação. Com as duas mensagens
+separadas como acima, a tarefa já foi criada sem prazo e **não há tool para adicioná-lo depois**.
+⚠️ Se o prazo vier na mesma mensagem ("enviar a proposta até sexta"), `create_task` resolve numa
+chamada só, com `due_at` preenchido.
 
 ### 3.2 Listar tarefas
 
 **Usuário:** "o que eu tenho pra fazer?"
 
-**Consequência:** `listTasks` `{status: "open"}` — leitura, sem escrita.
+**Consequência:** `list_tasks` — `{}` ou `{status: "pending"}` → `{tasks}`. Leitura, sem
+escrita.
 
 **Resposta:**
-> Suas tarefas em aberto:
-> 1. Enviar a proposta pro cliente X — prazo sexta (17/10)
-> 2. Pagar o DAS — prazo dia 20
-> 3. Revisar contrato — sem prazo
+> Suas tarefas em aberto: enviar a proposta pro cliente X, pagar o DAS, revisar contrato.
 
 ### 3.3 Concluir tarefa
 
 **Usuário:** "já enviei a proposta"
 
-**Consequência:** `findTaskByDescription` (match aproximado) → `updateTask` `{status: "done", completed_at: now}`.
-Se houver mais de um candidato plausível, pergunta antes de marcar.
+**Consequência:** `complete_task` exige `task_id` (uuid) — **não existe tool de busca por
+descrição** (`findTaskByDescription`, como uma versão anterior descrevia). O modelo precisa
+resolver qual `task_id` a partir do contexto da conversa (ex.: ele listou as tarefas antes e
+guardou os ids no histórico curto). Se tiver o id com confiança: `complete_task`
+`{task_id: "..."}`.
 
 **Resposta:**
-> Boa, marquei "Enviar a proposta pro cliente X" como concluída. 🎉
+> Boa, marquei como concluída. 🎉
+
+**Se não houver id resolvível no contexto:** o modelo não tem como chamar `complete_task` sem
+um id — precisa primeiro chamar `list_tasks` e aí perguntar/confirmar qual, dentro da mesma
+resposta ou da próxima.
 
 ### 3.4 Comando incompleto
 
 **Usuário:** "concluir"
 
-**Consequência:** nenhuma — não há tarefa referenciada, Tom não adivinha qual.
+**Consequência:** nenhuma tool call — não há referência nenhuma a um `task_id`.
 
 **Resposta:**
-> Qual tarefa você concluiu? Pode me mandar o número da lista ou parte do nome.
+> Qual tarefa?
 
 ---
 
@@ -269,38 +281,39 @@ Se houver mais de um candidato plausível, pergunta antes de marcar.
 
 **Usuário:** "lembrar de pagar o DAS dia 20"
 
-**Consequência:** `createReminder` — `{title: "pagar o DAS", due_at: <dia 20, 09:00 default>, status: "scheduled"}`.
-Job agendado na fila para disparo.
+**Consequência:** `create_reminder` — `{message: "pagar o DAS", remind_at: "<dia 20,
+09:00 — horário preenchido pelo modelo a partir do fuso do usuário, não um default fixo no
+código>"}` → persiste e enfileira o disparo (`reminder-dispatch`, BullMQ) com o delay calculado
+até `remind_at`.
 
 **Resposta:**
-> Combinado, vou te lembrar de pagar o DAS no dia 20 às 9h.
+> Combinado, te lembro de pagar o DAS no dia 20.
 
 ### 4.2 Lembrete dispara (proativo)
 
-**Gatilho:** job agendado executa no horário marcado.
+**Gatilho:** worker processa o job `reminder-dispatch` quando `remind_at` chega.
 
-**Consequência:** `markReminderFired` — `status: "fired"`, `fired_at: now`. Nenhuma ação
-financeira é criada automaticamente — é só o aviso; o registro financeiro acontece quando o
-usuário confirmar o pagamento.
+**Consequência:** `markReminderSent` — `status: "sent"`. O worker só manda a mensagem
+(`MESSAGES.reminder(message)`), sem chamar nenhuma tool financeira — isso nunca acontece
+automaticamente.
 
-**Resposta (Tom inicia):**
-> ⏰ Hoje é dia de pagar o DAS, Marcos. Já pagou?
+**Resposta (Tom, só a afirmação — não uma pergunta):**
+> ⏰ Lembrete: pagar o DAS
 
-**Usuário:** "já, paguei 70"
+> ⚠️ Uma versão anterior descrevia o lembrete perguntando "já pagou?" e, numa resposta
+> afirmativa, criando a transação e fechando o lembrete numa operação amarrada. O código real
+> só envia a frase acima. Se o usuário responder "já, paguei 70" depois, isso é processado como
+> uma mensagem comum — o modelo pode chamar `record_transaction` usando o contexto recente da
+> conversa, mas não há vínculo formal entre esse lembrete e essa transação, nem atualização
+> automática do `reminder` associado.
 
-**Consequência:** `createTransaction` `{type: "expense", amount: 70.00, category: "impostos", description: "DAS"}` + `updateReminder` `{status: "done"}`.
-
-**Resposta:**
-> Show, registrei R$ 70,00 em Impostos (DAS) e fechei o lembrete. ✅
-
-### 4.3 Usuário ainda não pagou
+### 4.3 Usuário ainda não pagou ⚠️ não implementado
 
 **Usuário:** "ainda não"
 
-**Consequência:** `updateReminder` `{status: "snoozed", snoozed_until: +1 dia}`.
-
-**Resposta:**
-> Tranquilo, te lembro de novo amanhã.
+> ⚠️ **Não existe status `snoozed`.** Os status possíveis de `reminders` são `pending`, `sent`,
+> `cancelled`, `failed` — não há como "adiar" um lembrete já disparado. Fica registrado aqui
+> como lacuna de produto.
 
 ---
 
@@ -310,19 +323,18 @@ usuário confirmar o pagamento.
 
 **Usuário:** "tem um painel disso?" / "quero ver meus gastos no site"
 
-**Consequência:** `createMagicLink` — gera token de login de uso único vinculado ao `user_id`
-(Supabase Auth), expiração curta (ex.: 15 min). Log da tool call.
+**Consequência:** `send_dashboard_login_link` — `{}` (sem parâmetros) → `createMagicLink` gera
+token de uso único; retorno `{login_url, expires_in_minutes: 15}`.
 
 **Resposta:**
-> Aqui está seu acesso (expira em 15 min): https://app.zapbuddy.com.br/login?token=...
-> Lá você vê seus gastos e tarefas organizados — só leitura por enquanto.
+> Aqui está seu acesso (expira em 15 min): {login_url}
 
 ### 5.2 Link expirado
 
 **Usuário:** [avisa que o link não abre mais]
 
-**Consequência:** a validação do token acontece no backend do dashboard (Next.js + Supabase
-Auth), não em uma tool do Tom — nenhuma escrita acontece nesse turno pelo WhatsApp.
+**Consequência:** validação do token acontece no backend do dashboard (Next.js + Supabase
+Auth), não numa tool do Tom.
 
 **Resposta:**
 > Esse link expira rápido por segurança. Quer que eu gere um novo agora?
@@ -335,66 +347,71 @@ Auth), não em uma tool do Tom — nenhuma escrita acontece nesse turno pelo Wha
 
 **Usuário:** "fzr aquele trem lá"
 
-**Consequência:** nenhuma tool call de escrita. Log registra a tentativa de interpretação com
-baixa confiança (insumo pra depuração de interpretação de linguagem natural).
+**Consequência:** nenhuma tool call de escrita. `tool_call_logs` só registra chamadas que de
+fato aconteceram — se o modelo não chamou nenhuma tool, não há linha de log pra esse turno
+(diferente do que uma versão anterior sugeria).
 
 **Resposta:**
-> Não entendi completamente — você quer registrar um gasto, uma tarefa ou um lembrete?
+> Não entendi — você quer registrar um gasto, uma tarefa ou um lembrete?
 
 ### 6.2 Pedido fora do escopo do MVP
 
 **Usuário:** "conecta minha conta do banco aí"
 
-**Consequência:** nenhuma. Open Finance é Fase 2 — não implementar, só comunicar.
+**Consequência:** nenhuma. O system prompt instrui dizer com clareza que isso não é algo que o
+Tom faz, sem inventar prazo.
 
 **Resposta:**
-> Isso ainda não faço por aqui, mas tá no radar pra uma próxima fase. Por agora você pode me
-> contar seus gastos e receitas por mensagem ou áudio que eu organizo tudo.
+> Isso eu ainda não faço por aqui. Mas pode me contar seus gastos e receitas por mensagem ou
+> áudio que eu organizo tudo.
 
 ### 6.3 Pedido de recurso de outro canal
 
 **Usuário:** "me manda isso por e-mail"
 
-**Consequência:** nenhuma. Único canal do MVP é WhatsApp.
+**Consequência:** nenhuma. Único canal é WhatsApp (mais o dashboard read-only via magic link).
 
 **Resposta:**
-> Por enquanto só funciono aqui no WhatsApp mesmo — mas dá pra ver tudo organizado no painel
-> web (te mando o link de acesso quando quiser).
+> Só funciono aqui no WhatsApp — mas dá pra ver tudo organizado no painel web, se quiser.
 
 ### 6.4 Falha ao persistir o registro
 
 **Usuário:** "gastei 80 no posto"
 
-**Consequência:** `createTransaction` é chamada e a escrita falha (ex.: banco indisponível).
-Regra transversal 1: sem persistência confirmada, nenhuma resposta de confirmação é montada.
+**Consequência:** `record_transaction` é chamada e a escrita no Supabase falha. `logToolCall`
+grava `success: false` e `error`. Regra não-negociável: sem persistência confirmada, nenhuma
+resposta de sucesso.
 
 **Resposta:**
-> Não consegui salvar esse gasto agora — pode tentar de novo em instantes? Nada foi perdido,
-> só ainda não registrei.
+> Não consegui salvar esse gasto agora — pode tentar de novo em instantes?
 
 ---
 
-## 7. Regras transversais (valem para todo cenário acima)
+## 7. Regras transversais
 
-1. **Persistir antes de confirmar.** Toda tool call de escrita (`createTransaction`,
-   `createTask`, `createReminder`, etc.) acontece antes da resposta de confirmação ser montada.
-   Se a escrita falhar, Tom nunca confirma — informa o erro como erro e pede pra tentar de novo
-   (caso 6.4), nunca mascara a falha com uma resposta de sucesso.
-2. **Nunca inventar valor/categoria.** Dado financeiro ambíguo sempre gera pergunta, nunca
-   suposição silenciosa.
-3. **Ambiguidade de referência (qual tarefa/lançamento) sempre pergunta.** Edição e conclusão
-   nunca agem sobre "o mais provável" sem confirmação quando há mais de um candidato.
-4. **Log de toda tool call** (nome + parâmetros + resultado), desde o onboarding.
-5. **Proatividade tem gatilho explícito** (horário configurado, lembrete vencendo) — Tom nunca
-   inicia conversa sem um desses gatilhos.
-6. **Categorização automática tem limiar de confiança.** Tom só categoriza sozinho quando a
-   descrição for clara (seção 2); abaixo do limiar, pergunta — vale igual para dado vindo de
-   áudio transcrito. Categoria é sempre um valor da lista fechada em
-   `docs/categorias-financeiras.md`, nunca string livre.
-7. **SLA de latência é explícito, com fallback.** Cada tipo de interação tem um alvo definido
-   em `docs/arquitetura-sla.md`; se o processamento de áudio estourar o p95, Tom avisa que
-   ainda está processando (caso 2.3b) em vez de deixar o usuário sem retorno.
-8. **Mensagens do mesmo usuário são serializadas.** Nenhuma tool de escrita roda em paralelo
-   para o mesmo `user_id` — fila/lock por usuário (`docs/arquitetura-sla.md`), evitando corrida
-   entre, por exemplo, dois áudios seguidos ou uma correção (caso 2.6) chegando antes do
-   lançamento anterior terminar de persistir.
+1. **Persistir antes de confirmar.** Toda tool de escrita (`record_transaction`, `create_task`,
+   `create_reminder`, `complete_task`, `complete_onboarding`) acontece antes da resposta de
+   confirmação. Se a escrita falhar, a resposta nunca confirma (caso 6.4).
+2. **Nunca inventar valor.** `amount_cents` ausente ou claramente ambíguo sempre gera pergunta.
+   **Categoria nunca bloqueia a escrita** — `record_transaction` sempre persiste, caindo em
+   `outros` quando a categoria não é reconhecida (ver `docs/categorias-financeiras.md`); a
+   pergunta sobre categoria incerta (caso 2.5) é uma escolha de UX do system prompt para dúvida
+   grande, não uma validação da tool.
+3. **Ambiguidade de referência trava a chamada, não a resposta.** `complete_task` exige
+   `task_id`; sem um id resolvível no contexto da conversa, a tool simplesmente não pode ser
+   chamada — o modelo precisa primeiro listar/perguntar.
+4. **Log incondicional de toda tool call de fato executada** — `tool_call_logs` grava
+   `tool_name`, `parameters`, `result`, `success`, `error`. Não há log de "intenção" quando
+   nenhuma tool foi chamada (caso 6.1).
+5. **A única proatividade real é o disparo de lembrete agendado.** Não existe job de resumo
+   diário/semanal nem qualquer outro gatilho automático de mensagem.
+6. **Categorização automática segue o julgamento do system prompt, não um limiar validado em
+   código.** Dúvida pequena de categoria: resolve sozinho. Valor ausente ou dúvida grande:
+   pergunta. A tool em si aceita qualquer categoria e nunca falha por isso.
+7. **Turno lento tem aviso único.** Se o provider de LLM (com fallback) não responder em 8s
+   (`INTERIM_NOTICE_MS`), uma mensagem de "ainda to vendo isso" é enviada uma vez, sem abortar
+   o processamento (caso 2.3b).
+8. **Lacunas conhecidas, sem tool hoje:** correção/edição de transação (2.6), snooze de
+   lembrete (4.3), atualização de prazo de tarefa após criada (3.1), vínculo formal entre
+   lembrete disparado e a transação que o confirma (4.2). Tratar como roadmap de produto, não
+   como comportamento implementado.

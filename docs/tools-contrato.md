@@ -1,82 +1,86 @@
-# Contrato de validação das tools
+# Contrato das tools do orquestrador LLM
 
-Reforça a regra transversal 1 do roteiro do Tom ("persistir antes de confirmar") com uma
-camada de validação declarada: toda tool de escrita valida seu input contra o schema abaixo
-*antes* de tocar o banco. Se a validação falhar, a tool não executa, nenhum dado é persistido
-e Tom nunca monta uma resposta de confirmação — ou pergunta o campo faltante (quando o motivo
-da falha é ambiguidade do usuário, não erro de programação) ou reporta erro (caso 6.4).
+> **Reconciliado com o código real em 2026-10-17.** Esta versão substitui a anterior — escrita
+> antes de eu ter visibilidade de `packages/core/src/llm/tools/*` — que inventou nomes de tool,
+> schemas e um comportamento de validação (rejeitar categoria desconhecida) que não existem na
+> implementação. Fonte de verdade: `packages/core/src/llm/tool-types.ts` e
+> `packages/core/src/llm/tools/*.ts`.
 
-Validação é feita com schema (ex.: Zod/JSON Schema) na borda da tool, não confiada ao
-julgamento do LLM.
+Toda tool é definida via `defineTool()` (`tool-types.ts`), que fixa `name`, `description`,
+`schema` (Zod) e `execute(params, ctx)`. `ctx: ToolContext` traz `userId`, `whatsappNumber`,
+`messageSource` ('text'|'audio') e `timezone`. Toda chamada é logada em `tool_call_logs`
+(ver `docs/schema-logs.md`), sucesso ou falha, pelo `tool-runner.ts` — não é responsabilidade de
+cada tool individual logar.
 
-## `createTransaction`
+## `complete_onboarding` (`tools/onboarding.ts`)
 
-| Campo | Tipo | Obrigatório | Validação |
-|---|---|---|---|
-| `user_id` | uuid | sim | existe em `users` |
-| `type` | enum | sim | `"expense"` \| `"income"` |
-| `amount` | numeric | sim | > 0 |
-| `category` | enum | sim | pertence a `docs/categorias-financeiras.md`, compatível com `type` |
-| `description` | text | não | — |
-| `source` | enum | sim | `"text"` \| `"audio"` |
-| `amount_approximate` | boolean | não | default `false` |
+- **Schema:** `{ name: string (min 1) }`
+- **Execução:** grava o nome e marca `onboarding_completed_at`.
+- **Retorno:** `{ user_id, onboarding_completed: true }`
+- Único passo do onboarding real — não existe campo de "segmento" (autônomo/PJ) nem preferência
+  de resumo diário no modelo de `User` (`id, whatsapp_number, name, timezone,
+  onboarding_completed_at, created_at`). Uma versão anterior deste roteiro descrevia esses dois
+  passos — **não têm tool nem coluna correspondente hoje**.
 
-Falha de validação mais comum: `amount` ausente ou `category` fora da lista fechada — ambas já
-tratadas no roteiro (casos 2.4 e 2.5) como pergunta ao usuário, nunca como erro técnico.
+## `record_transaction` (`tools/finance.ts`)
 
-## `updateTransaction`
+- **Schema:** `{ type: 'expense'|'income', amount_cents: int > 0, category: string (livre, min 1), description?: string, occurred_at?: string (datetime) }`
+- **Execução:** `normalizeCategory()` resolve a categoria (ver `docs/categorias-financeiras.md`)
+  e persiste via `recordTransaction()`.
+- **Retorno:** `{ transaction_id, recorded: true, category (normalizada), category_fallback: boolean }`
+- **Nunca rejeita por categoria inválida** — cai em `outros` e sinaliza via `category_fallback`.
+  Isso corrige uma versão anterior deste documento, que descrevia validação estrita.
+- **Não existe tool de correção/edição de uma transação já registrada.** O cenário "errei, foi
+  54 não 45" do roteiro de conversa é uma proposta de produto sem implementação — hoje não há
+  como a IA corrigir um lançamento já persistido.
 
-| Campo | Tipo | Obrigatório | Validação |
-|---|---|---|---|
-| `transaction_id` | uuid | sim | existe e pertence ao `user_id` da sessão |
-| `amount` | numeric | não (ao menos 1 campo de atualização obrigatório) | > 0 se presente |
-| `category` | enum | não | pertence à taxonomia, se presente |
+## `get_financial_summary` (`tools/finance.ts`)
 
-Se mais de um registro candidato for encontrado por `findRecentTransaction` (caso 2.6), a tool
-não executa — devolve a lista de candidatos para Tom perguntar, não escolhe sozinha.
+- **Schema:** `{ period: 'today' | 'last_7_days' }`
+- **Execução:** calcula o intervalo no fuso do usuário (`zoned-ranges.ts`) e chama
+  `summarizeTransactions()`.
+- **Retorno:** `{ totalIncomeCents, totalExpenseCents, byCategory, count }`
+- Reativo apenas — acionado quando o usuário pergunta. **Não existe job/fila que dispare um
+  resumo diário ou semanal proativamente** (confirmado em `packages/core/src/queues/definitions.ts`:
+  só há filas de transcrição de áudio, mensagem entrante e disparo de lembrete). O cenário "resumo
+  diário proativo" do roteiro de conversa é proposta de produto, não comportamento atual.
 
-## `createTask`
+## `create_task` / `list_tasks` / `complete_task` (`tools/tasks.ts`)
 
-| Campo | Tipo | Obrigatório | Validação |
-|---|---|---|---|
-| `user_id` | uuid | sim | existe em `users` |
-| `title` | text | sim | não vazio |
-| `due_date` | date | não | — |
-| `status` | enum | sim | default `"open"` |
+- `create_task`: `{ title: string (min 1), due_at?: datetime }` → `{ task_id, created: true }`
+- `list_tasks`: `{ status?: 'pending'|'completed' }` → `{ tasks }`
+- `complete_task`: `{ task_id: uuid }` → `{ task_id, completed: true }`
+- **`complete_task` exige o `task_id`, não uma descrição em texto livre.** Não existe uma tool
+  de "achar tarefa pela descrição" (`findTaskByDescription`, como uma versão anterior deste
+  documento descrevia) — a resolução de qual tarefa o usuário quer concluir é responsabilidade
+  do modelo dentro da conversa (ex.: ele já listou as tarefas e sabe o id pelo contexto
+  recente), não de uma tool dedicada.
 
-## `updateTask`
+## `create_reminder` (`tools/reminders.ts`)
 
-| Campo | Tipo | Obrigatório | Validação |
-|---|---|---|---|
-| `task_id` | uuid | sim | existe e pertence ao `user_id` |
-| `status` \| `due_date` | — | ao menos um presente | `status` ∈ `{"open","done"}` |
+- **Schema:** `{ message: string (min 1), remind_at: datetime, task_id?: uuid }`
+- **Execução:** persiste o lembrete e enfileira o disparo (`reminder-dispatch`, BullMQ) com o
+  delay calculado até `remind_at`.
+- **Retorno:** `{ reminder_id, scheduled: true }`
+- **Status possíveis do lembrete:** `pending`, `sent`, `cancelled`, `failed` — **não existe
+  `snoozed`.** O cenário "ainda não, me lembra depois" do roteiro de conversa não tem tool nem
+  status que o suporte hoje.
+- **Quando dispara, o worker manda só a mensagem** (`⏰ Lembrete: {message}`) — uma afirmação,
+  não uma pergunta tipo "já pagou?". Se o usuário responder confirmando um pagamento depois
+  disso, isso é processado como uma mensagem comum (o modelo pode chamar `record_transaction`
+  usando o contexto da conversa recente), não um fluxo dedicado de "lembrete → confirmação →
+  transação" com os dois registros amarrados.
 
-Mesma regra de ambiguidade de `updateTransaction`: mais de um candidato de `findTaskByDescription`
-→ a tool devolve candidatos, não decide sozinha (caso 3.3).
+## `send_dashboard_login_link` (`tools/dashboard-access.ts`)
 
-## `createReminder`
+- **Schema:** `{}` (sem parâmetros)
+- **Execução:** gera magic link (`createMagicLink`), monta a URL a partir de `WEB_APP_URL`.
+- **Retorno:** `{ login_url, expires_in_minutes: 15 }`
 
-| Campo | Tipo | Obrigatório | Validação |
-|---|---|---|---|
-| `user_id` | uuid | sim | existe em `users` |
-| `title` | text | sim | não vazio |
-| `due_at` | timestamptz | sim | no futuro |
-| `status` | enum | sim | default `"scheduled"` |
+## Comportamento padrão em falha
 
-## `updateReminder`
-
-| Campo | Tipo | Obrigatório | Validação |
-|---|---|---|---|
-| `reminder_id` | uuid | sim | existe e pertence ao `user_id` |
-| `status` | enum | sim | `{"fired","done","snoozed"}` |
-| `snoozed_until` | timestamptz | só se `status="snoozed"` | no futuro |
-
-## Comportamento padrão em caso de falha de validação
-
-1. **Campo obrigatório ausente por ambiguidade do usuário** (ex.: sem `amount`, sem
-   `category` clara) → não é erro técnico; Tom pergunta o campo faltante (casos 2.4, 2.5, 3.4).
-2. **Valor fora do domínio** (ex.: `category` que não existe na taxonomia, `amount` negativo)
-   → erro de programação/schema; a tool rejeita antes de chamar o banco, e isso é logado em
-   `tool_call_logs` (`docs/schema-logs.md`) com o motivo da rejeição.
-3. **Falha de escrita no banco** (conexão, timeout) → caso 6.4 do roteiro: Tom informa erro,
-   nunca confirma.
+- **Campo obrigatório ausente por ambiguidade do usuário** (valor, categoria ou data incertos):
+  não é uma validação de schema — é uma decisão do system prompt de perguntar antes de chamar a
+  tool (ver regra em `system-prompt.ts`: "valor ausente ou claramente ambíguo, pergunte").
+- **Falha de escrita no banco:** `logToolCall` registra `success: false` e `error`; a resposta
+  ao usuário não deve confirmar a ação (mesma regra não-negociável do `CLAUDE.md`).

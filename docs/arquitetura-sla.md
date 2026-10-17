@@ -1,36 +1,57 @@
-# Arquitetura — SLA de latência e concorrência por usuário
+# Arquitetura — filas, concorrência e proteções reais
 
-Referência para dimensionar workers da fila (BullMQ) e para alertas de monitoramento. Todo
-tipo de interação do roteiro do Tom (`docs/conversas-tom.md`) tem um alvo de latência abaixo.
-Sem esses números, não dá pra saber se uma resposta "demorada" é regressão ou comportamento
-esperado.
+> **Reconciliado com o código real em 2026-10-17.** A versão anterior deste documento propunha
+> SLAs numéricos e uma regra de serialização por usuário que não existem na implementação.
+> Esta versão descreve o que de fato está em `apps/worker/src/worker.ts`,
+> `packages/core/src/queues/definitions.ts` e `packages/core/src/security/*`/`context/*`.
 
-## Tabela de SLA por tipo de interação
+## Filas reais (BullMQ) e concorrência configurada
 
-| Interação | Alvo (p50) | Limite (p95) | Observação |
+| Fila | Handler | Concorrência | Retry |
 |---|---|---|---|
-| Mensagem de texto (gasto/receita/tarefa/lembrete simples) | 2s | 3s | síncrono, direto no handler do webhook, sem fila |
-| Áudio (transcrição + categorização) | 8s | 15s | assíncrono via fila BullMQ (`transcribe-audio`); acima do p95, vale a regra de fallback (ver item 4 abaixo) |
-| Resumo diário/semanal (leitura agregada) | 1s | 2s | depende de pré-agregação — ver `docs/adr/0001-agregacao-dashboard.md` |
-| Lembrete disparado (job agendado) | — | até 1 min de atraso do horário configurado | tolerância do scheduler, não da resposta do Tom |
-| Dashboard web (carregamento inicial) | 1.5s TTFB | 3s TTFB | Next.js + Supabase, read-only |
-| Magic link (geração do token) | 1s | 2s | síncrono |
+| `incoming-message` | `handleIncomingMessage` | 5 workers em paralelo | 3 tentativas, backoff exponencial (5s, 10s, 20s) |
+| `audio-transcription` | `handleAudioTranscription` | 3 workers em paralelo | idem |
+| `reminder-dispatch` | `handleReminderDispatch` | 5 workers em paralelo | idem |
 
-## Regra de fallback quando o SLA de áudio estoura
+Não há fila nem job de resumo diário/semanal proativo — só essas três.
 
-Se o job de transcrição/categorização não concluir dentro do limite de 15s (p95), Tom envia uma
-mensagem intermediária antes da confirmação final, para o usuário não achar que o sistema
-travou. Ver cenário concreto em `docs/conversas-tom.md`, seção 2 ("Áudio demorando além do
-SLA").
+## Não existe serialização por usuário
 
-## Concorrência por usuário
+Uma versão anterior deste documento afirmava que "nenhuma tool de escrita roda em paralelo para
+o mesmo `user_id`" via fila/lock dedicado. **Isso não existe.** A fila `incoming-message` roda
+com concorrência 5 sem particionamento por usuário — duas mensagens do mesmo número, enfileiradas
+quase ao mesmo tempo (ex.: dois áudios em sequência), podem ser processadas por workers
+diferentes em paralelo, cada um rodando `orchestrateTurn` de forma independente. Não há
+teste nem proteção específica para esse cenário hoje.
 
-Nenhuma tool de escrita (`createTransaction`, `updateTransaction`, `createTask`, `updateTask`,
-`createReminder`, `updateReminder`) pode processar duas mensagens do mesmo `user_id` em
-paralelo. Risco concreto: dois áudios em sequência, ou uma correção (caso 2.6 do roteiro)
-chegando antes do lançamento anterior terminar de persistir — sem serialização, isso pode
-gerar duas transações fora de ordem ou uma correção aplicada no registro errado.
+O que **existe de fato** contra duplicação/corrida:
 
-**Decisão:** mensagens do mesmo usuário são processadas em ordem — fila dedicada por
-`user_id` (ou lock otimista na linha do registro sendo editado) antes de qualquer tool de
-escrita. Nunca duas tool calls de escrita do mesmo usuário em voo ao mesmo tempo.
+- **Idempotência por mensagem** (`context/reply-cache.ts`): antes de orquestrar, o handler
+  verifica se já existe uma resposta cacheada para aquele `waMessageId` (TTL 24h). Isso protege
+  contra o BullMQ reprocessar a **mesma** mensagem em um retry — não contra duas mensagens
+  **diferentes** do mesmo usuário chegando em paralelo.
+- **Rate limit por número** (`security/rate-limit.ts`): no máximo 20 mensagens por minuto por
+  `whatsappNumber` (janela fixa via Redis `INCR`/`EXPIRE`), checado pelo webhook antes de
+  enfileirar. Protege contra número comprometido/automação, não é um controle de concorrência
+  de escrita.
+- **Idempotência de disparo de lembrete** (`hasReminderBeenDispatched`): evita reenviar a
+  notificação do mesmo lembrete se o envio já teve sucesso numa tentativa anterior e só a
+  marcação de status seguinte falhou.
+
+**Risco real conhecido, não mitigado:** dois áudios/mensagens de texto do mesmo usuário
+processados em paralelo podem, em teoria, gerar duas chamadas de `record_transaction`
+concorrentes sem nenhuma ordem garantida entre elas. Não é um caso coberto por teste nem por
+proteção de código hoje — fica registrado aqui como risco conhecido, não como comportamento
+seguro.
+
+## Aviso de turno lento (o único "SLA" com comportamento de fallback real)
+
+`INTERIM_NOTICE_MS = 8_000` em `packages/core/src/llm/providers/orchestration.ts`: se a
+tentativa inteira (todos os providers de LLM configurados, na ordem de prioridade) não terminar
+em 8s, uma mensagem (`MESSAGES.stillProcessing`) é enviada uma única vez, sem abortar o
+processamento em curso. Ver teste em `providers/orchestration.test.ts`.
+
+Não existem outros números de SLA (p50/p95 por tipo de interação) formalizados ou medidos no
+código — uma versão anterior deste documento inventava uma tabela de latência-alvo que nunca
+foi validada contra nada real. Se esses números forem necessários (ex.: para alertas de
+observabilidade), são trabalho futuro, não algo já decidido.
