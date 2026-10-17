@@ -21,7 +21,16 @@ export async function handleOnboardingMessage(client: Client, message: InboundMe
 
     await markOnboardingComplete(client.id, name);
     logger.info('onboarding.completed', { ...context, name });
-    await sendWhatsAppTextMessage(client.whatsappId, buildOnboardingCompleteMessage(name));
+
+    try {
+      await sendWhatsAppTextMessage(client.whatsappId, buildOnboardingCompleteMessage(name));
+    } catch (error) {
+      // O onboarding já foi persistido (status active) — não deixa o envio
+      // falho propagar: um retry do BullMQ re-derivaria a rota com esse
+      // novo status e mandaria essa mesma mensagem (o nome digitado) pro
+      // orquestrador, em vez de reenviar a confirmação.
+      logger.error('onboarding.confirmation_send_failed', { ...context, error });
+    }
     return;
   }
 

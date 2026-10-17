@@ -57,6 +57,12 @@ export async function listPendingTasks(clientId: string): Promise<Task[]> {
   return (data as TaskRow[]).map(mapRow);
 }
 
+// Escapa os wildcards do ILIKE (%, _, \) pra um título com esses caracteres
+// (ex: "pagar 50%") não virar um padrão de busca amplo sem querer.
+function escapeIlikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
 // Concluir por título (não por id) porque é assim que o cliente se refere à
 // tarefa numa mensagem de WhatsApp — ele não sabe nenhum UUID.
 export async function completeTaskByTitle(clientId: string, title: string): Promise<Task | null> {
@@ -65,7 +71,7 @@ export async function completeTaskByTitle(clientId: string, title: string): Prom
     .select('*')
     .eq('client_id', clientId)
     .eq('status', 'pending')
-    .ilike('title', `%${title}%`)
+    .ilike('title', `%${escapeIlikePattern(title)}%`)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
