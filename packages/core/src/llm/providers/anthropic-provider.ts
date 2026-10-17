@@ -38,6 +38,19 @@ export const anthropicProvider: LlmProvider = {
 
     const anthropic = getClient();
     const tools = toAnthropicToolSpecs();
+    // cache_control no último tool spec cacheia a lista inteira de tools (16
+    // schemas, idêntica em toda chamada de todo usuário) — e no bloco de
+    // system cacheia o prompt (idêntico dentro do mesmo turno: é montado uma
+    // vez por orchestrateTurn e reusado nas até 6 iterações do loop + no
+    // wrap-up abaixo). Ambos cobrem sozinhos >1024 tokens (mínimo da
+    // Anthropic pra cachear), então o ganho vale mesmo sem hit entre turnos
+    // diferentes. Ver suggestion #1 da revisão de performance.
+    const cachedTools: Anthropic.Tool[] = tools.map((tool, index) =>
+      index === tools.length - 1 ? { ...tool, cache_control: { type: 'ephemeral' } } : tool,
+    );
+    const cachedSystem: Anthropic.TextBlockParam[] = [
+      { type: 'text', text: system, cache_control: { type: 'ephemeral' } },
+    ];
 
     let finalText = '';
     // true sempre que a última coisa adicionada a `messages` foi um
@@ -50,9 +63,9 @@ export const anthropicProvider: LlmProvider = {
       const response = await anthropic.messages.create({
         model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,
         max_tokens: 1024,
-        system,
+        system: cachedSystem,
         messages,
-        tools,
+        tools: cachedTools,
       });
 
       const toolUseBlocks = response.content.filter(
@@ -99,7 +112,7 @@ export const anthropicProvider: LlmProvider = {
       const wrapUp = await anthropic.messages.create({
         model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,
         max_tokens: 1024,
-        system,
+        system: cachedSystem,
         messages,
       });
       const textBlocks = wrapUp.content.filter(

@@ -41,6 +41,26 @@ export function getLocalHour(timeZone: string, referenceDate: Date = new Date())
   return hour === 24 ? 0 : hour;
 }
 
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+/**
+ * Dia da semana local (0=domingo..6=sábado) no fuso informado — usado pelo
+ * sweep horário (insights-sweep.ts) pra decidir o dia do resumo semanal
+ * proativo, mesma mecânica de getLocalHour acima pro insight de anomalia.
+ */
+export function getLocalWeekday(timeZone: string, referenceDate: Date = new Date()): number {
+  const weekdayName = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'long' }).format(referenceDate);
+  return WEEKDAY_INDEX[weekdayName] ?? 0;
+}
+
 function datePartsInZone(timeZone: string, referenceDate: Date): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,

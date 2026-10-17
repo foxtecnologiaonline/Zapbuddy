@@ -24,6 +24,7 @@ export interface ToolCallOutcome {
  * chamar a tool.
  */
 export async function runToolCall(call: ToolCallRequest, ctx: ToolContext): Promise<ToolCallOutcome> {
+  const startedAt = Date.now();
   const tool = getToolByName(call.name);
 
   if (!tool) {
@@ -35,6 +36,7 @@ export async function runToolCall(call: ToolCallRequest, ctx: ToolContext): Prom
       result: null,
       success: false,
       error: 'unknown tool',
+      durationMs: Date.now() - startedAt,
     });
     return { id: call.id, isError: true, content: `Tool desconhecida: ${call.name}` };
   }
@@ -48,6 +50,7 @@ export async function runToolCall(call: ToolCallRequest, ctx: ToolContext): Prom
       parameters: call.input as Record<string, unknown>,
       result,
       success: true,
+      durationMs: Date.now() - startedAt,
     });
     return { id: call.id, isError: false, content: JSON.stringify(result) };
   } catch (error) {
@@ -60,6 +63,7 @@ export async function runToolCall(call: ToolCallRequest, ctx: ToolContext): Prom
       result: null,
       success: false,
       error: message,
+      durationMs: Date.now() - startedAt,
     });
     return { id: call.id, isError: true, content: `Erro ao executar ${tool.name}: ${message}` };
   }

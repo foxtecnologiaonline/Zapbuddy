@@ -1,9 +1,11 @@
 import type { Job } from 'bullmq';
-import { findUserById, findPendingReminderById, markReminderSent } from '@zapbuddy/db';
+import { findUserById, findPendingReminderById, markReminderSent, createReminder } from '@zapbuddy/db';
 import {
   sendWhatsappTextMessage,
   hasReminderBeenDispatched,
   markReminderDispatched,
+  computeNextOccurrence,
+  getReminderDispatchQueue,
   MESSAGES,
   type ReminderDispatchJob,
 } from '@zapbuddy/core';
@@ -36,4 +38,22 @@ export async function handleReminderDispatch(job: Job<ReminderDispatchJob>): Pro
     await markReminderDispatched(reminder.id);
   }
   await markReminderSent(reminder.id);
+
+  // Lembrete recorrente: a ocorrência atual só marca 'sent' (nunca
+  // reaproveitada) — a próxima é uma linha nova, com seu próprio id/job,
+  // igual um lembrete comum (cancelável, consultável sozinha). Encadeia
+  // indefinidamente: cada disparo agenda o seguinte.
+  if (reminder.recurrence) {
+    const nextRemindAt = computeNextOccurrence(reminder.remind_at, reminder.recurrence);
+    const next = await createReminder(
+      reminder.account_id,
+      reminder.user_id,
+      reminder.message,
+      nextRemindAt,
+      reminder.task_id ?? undefined,
+      reminder.recurrence,
+    );
+    const delay = Math.max(0, new Date(nextRemindAt).getTime() - Date.now());
+    await getReminderDispatchQueue().add('dispatch', { reminderId: next.id }, { delay, jobId: next.id });
+  }
 }

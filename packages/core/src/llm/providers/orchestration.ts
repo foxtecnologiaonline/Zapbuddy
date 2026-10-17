@@ -44,13 +44,19 @@ export async function runLlmWithFallback(input: LlmProviderRunInput): Promise<Ll
       const startedAt = Date.now();
       try {
         const result = await provider.run(input);
+        const latencyMs = Date.now() - startedAt;
+        // Latência de toda chamada LLM (não só quando cai no fallback) — sem
+        // isso, uma lentidão percebida pelo usuário não dava pra distinguir
+        // entre "o Claude está lento" e "uma tool específica está lenta"
+        // (ver duration_ms em tool_call_logs, tool-runner.ts).
+        logger.info('llm_call_completed', { provider: provider.name, userId: input.toolContext.userId, latencyMs, usedFallback: index > 0 });
         if (index > 0) {
-          // Só loga explicitamente quando um fallback foi de fato usado —
-          // o caminho feliz (primeiro provider, sempre) não precisa de ruído.
+          // Só loga em warn quando um fallback foi de fato usado — o caminho
+          // feliz (primeiro provider, sempre) já foi registrado acima em info.
           logger.warn('llm_provider_fallback_used', {
             provider: provider.name,
             userId: input.toolContext.userId,
-            latencyMs: Date.now() - startedAt,
+            latencyMs,
           });
         }
         return result;

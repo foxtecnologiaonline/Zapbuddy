@@ -9,6 +9,7 @@ export interface LogToolCallInput {
   result: unknown;
   success: boolean;
   error?: string;
+  durationMs?: number;
 }
 
 /**
@@ -25,6 +26,7 @@ export async function logToolCall(input: LogToolCallInput): Promise<void> {
     result: input.result ?? null,
     success: input.success,
     error: input.error ?? null,
+    duration_ms: input.durationMs ?? null,
   });
 
   if (error) {
@@ -87,6 +89,25 @@ export async function listToolCallLogsInRange(fromIso: string, toIso: string): P
 
   if (error) throw error;
   return (data ?? []) as ToolCallLog[];
+}
+
+/**
+ * Expurgo de retenção (job semanal logs-retention, 90 dias) — tool_call_logs
+ * cresce sem teto (nenhuma coluna de TTL no Postgres, diferente do Redis) e é
+ * consultado no admin com índice por (user_id, created_at desc); sem isso, a
+ * tabela só aumenta indefinidamente sem benefício depois da janela que
+ * qualquer consumidor real usa (admin mostra hoje/7 dias;
+ * interpretation-feedback agrega só os últimos 7 dias — ver PERIOD_MS).
+ * 90 dias dá folga grande sobre os dois sem acumular pra sempre.
+ */
+export async function deleteToolCallLogsOlderThan(cutoffIso: string): Promise<number> {
+  const { error, count } = await getSupabaseClient()
+    .from('tool_call_logs')
+    .delete({ count: 'exact' })
+    .lt('created_at', cutoffIso);
+
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export async function listRecentFailedToolCallLogs(limit: number): Promise<ToolCallLog[]> {

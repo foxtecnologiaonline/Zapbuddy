@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { completeTask, createTask, listTasks } from '@zapbuddy/db';
+import { completeTask, createTask, deleteTask, listTasks } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 import { enqueueWebhookEvent } from '../../webhooks/dispatch.js';
+import { assertPlausibleTimestamp } from '../date-sanity.js';
 
 export const createTaskTool = defineTool({
   name: 'create_task',
@@ -11,6 +12,7 @@ export const createTaskTool = defineTool({
     due_at: z.string().datetime().optional(),
   }),
   execute: async (params, ctx) => {
+    if (params.due_at) assertPlausibleTimestamp(params.due_at, 'due_at');
     const task = await createTask(ctx.accountId, ctx.userId, params.title, params.due_at);
     return { task_id: task.id, created: true };
   },
@@ -38,5 +40,20 @@ export const completeTaskTool = defineTool({
     const task = await completeTask(ctx.accountId, params.task_id);
     enqueueWebhookEvent(ctx.accountId, 'task.completed', { task_id: task.id, title: task.title });
     return { task_id: task.id, completed: true };
+  },
+});
+
+export const deleteTaskTool = defineTool({
+  name: 'delete_task',
+  description:
+    'Exclui definitivamente uma tarefa do usuário, dado o task_id — use quando a pessoa disser que ' +
+    'criou por engano, duplicou, ou simplesmente não quer mais aquela tarefa (nunca para "concluir", ' +
+    'isso é complete_task). Se o task_id não existir mais nessa conta, retorna deleted: false.',
+  schema: z.object({
+    task_id: z.string().uuid(),
+  }),
+  execute: async (params, ctx) => {
+    const task = await deleteTask(ctx.accountId, params.task_id);
+    return task ? { deleted: true, task_id: task.id } : { deleted: false };
   },
 });

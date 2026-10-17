@@ -7,6 +7,7 @@ import {
   getPreviousMonthRange,
   getPriorFourWeeksRange,
   getLocalHour,
+  getLocalWeekday,
 } from './zoned-ranges.js';
 
 describe('getTodayRange', () => {
@@ -91,5 +92,19 @@ describe('getLocalHour (Fase 3 — sweep de insights proativos)', () => {
   it('converte a hora UTC pra hora local no fuso informado', () => {
     expect(getLocalHour('America/Sao_Paulo', new Date('2026-05-10T01:00:00.000Z'))).toBe(22);
     expect(getLocalHour('America/Sao_Paulo', new Date('2026-05-10T22:00:00.000Z'))).toBe(19);
+  });
+});
+
+describe('getLocalWeekday (resumo semanal proativo)', () => {
+  it('converte pro dia da semana local no fuso informado (0=domingo..6=sábado)', () => {
+    // 2026-05-15T21:00:00Z = sexta 18h em São Paulo (UTC-3).
+    const friday18h = new Date('2026-05-15T21:00:00.000Z');
+    expect(getLocalWeekday('America/Sao_Paulo', friday18h)).toBe(5);
+    expect(getLocalHour('America/Sao_Paulo', friday18h)).toBe(18);
+  });
+
+  it('cruza a virada de dia local corretamente (ainda sábado em São Paulo, já domingo em UTC)', () => {
+    // 2026-05-10T01:00:00Z = sábado 22h em São Paulo.
+    expect(getLocalWeekday('America/Sao_Paulo', new Date('2026-05-10T01:00:00.000Z'))).toBe(6);
   });
 });

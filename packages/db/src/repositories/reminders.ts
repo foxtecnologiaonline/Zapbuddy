@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '../client.js';
-import type { Reminder } from '../types.js';
+import type { Reminder, ReminderRecurrence } from '../types.js';
 
 export async function createReminder(
   accountId: string,
@@ -7,15 +7,45 @@ export async function createReminder(
   message: string,
   remindAtIso: string,
   taskId?: string,
+  recurrence?: ReminderRecurrence,
 ): Promise<Reminder> {
   const { data, error } = await getSupabaseClient()
     .from('reminders')
-    .insert({ account_id: accountId, user_id: userId, message, remind_at: remindAtIso, task_id: taskId ?? null })
+    .insert({
+      account_id: accountId,
+      user_id: userId,
+      message,
+      remind_at: remindAtIso,
+      task_id: taskId ?? null,
+      recurrence: recurrence ?? null,
+    })
     .select('*')
     .single();
 
   if (error) throw error;
   return data as Reminder;
+}
+
+/**
+ * Cancela um lembrete ainda pendente (não "concluído" — não existe conceito
+ * de lembrete concluído, só disparado/cancelado/falhado). `eq('status',
+ * 'pending')` evita cancelar um que já foi enviado ou já está cancelado —
+ * `maybeSingle()` então retorna null tanto pra id de outra conta quanto pra
+ * um que não está mais pendente, sem distinguir os dois casos (o chamador
+ * não precisa saber qual).
+ */
+export async function cancelReminder(accountId: string, reminderId: string): Promise<Reminder | null> {
+  const { data, error } = await getSupabaseClient()
+    .from('reminders')
+    .update({ status: 'cancelled' })
+    .eq('id', reminderId)
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Reminder | null) ?? null;
 }
 
 /** Reminders due now, used by the worker's scheduled sweep. */

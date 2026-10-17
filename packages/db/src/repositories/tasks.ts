@@ -45,3 +45,23 @@ export async function completeTask(accountId: string, taskId: string): Promise<T
   if (error) throw error;
   return data as Task;
 }
+
+/**
+ * Remove de verdade (não soft-delete): tarefa criada por engano/duplicada não
+ * tem valor histórico igual transação/lembrete tem — ao contrário de
+ * completeTask, não existe "desfazer" nem consulta futura sobre uma tarefa
+ * excluída. Escopado por accountId; `maybeSingle()` porque um task_id de
+ * outra conta (ou já excluído) não deve virar erro — retorna null.
+ */
+export async function deleteTask(accountId: string, taskId: string): Promise<Task | null> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .delete()
+    .eq('id', taskId)
+    .eq('account_id', accountId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Task | null) ?? null;
+}

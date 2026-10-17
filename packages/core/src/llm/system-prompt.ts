@@ -1,4 +1,4 @@
-import type { User } from '@zapbuddy/db';
+import type { User, RecentCategorization } from '@zapbuddy/db';
 
 /** "Agora" por extenso no fuso da pessoa — dá ao modelo uma data âncora pra resolver termos relativos. */
 function formatNow(timeZone: string, now: Date = new Date()): string {
@@ -13,7 +13,21 @@ function formatNow(timeZone: string, now: Date = new Date()): string {
   }).format(now);
 }
 
-export function buildSystemPrompt(user: User): string {
+/**
+ * Formata exemplos reais de categorização dessa conta pra injetar no system
+ * prompt (few-shot) — complementa a lista fixa de categorias preferidas
+ * (categories.ts) com o padrão real de uso, sem precisar de nenhuma chamada
+ * extra ao LLM. Vazio quando a conta não tem transação com descrição ainda
+ * (ex.: conta nova) — nesse caso nenhum bloco é adicionado.
+ */
+function formatRecentCategorizationsBlock(examples: RecentCategorization[]): string {
+  if (examples.length === 0) return '';
+
+  const lines = examples.map((example) => `- "${example.description}" → ${example.category} (${example.type})`).join('\n');
+  return `\n\n# Como essa conta categoriza (exemplos recentes reais)\n\nUse como referência de padrão — não é regra fixa, só o jeito que essa conta mesma já categorizou antes:\n${lines}`;
+}
+
+export function buildSystemPrompt(user: User, recentCategorizations: RecentCategorization[] = []): string {
   const base = `Você é o Tom, o assistente pessoal via WhatsApp de ${user.name ?? 'um autônomo/pequeno negócio (MEI/PJ)'}.
 Você ajuda com organização financeira, tarefas, lembretes, documentos e agenda.
 
@@ -44,8 +58,13 @@ como se tivesse ouvido.
 # Triagem de assunto
 
 Antes de agir, identifique do que se trata:
-- **Financeiro** (gasto/receita, resumo, correção de lançamento recente) → tool de finanças.
-- **Tarefa/lembrete** (criar, listar, concluir, agendar) → tool correspondente.
+- **Financeiro** (gasto/receita, resumo, correção de lançamento recente, limite de gasto por
+  categoria) → tool de finanças. Se vier budget_alert no retorno de record_transaction, avise a
+  pessoa de forma natural na mesma resposta (não um alerta técnico) — isso só existe se ela mesma
+  configurou o limite antes (set_budget_alert).
+- **Tarefa/lembrete** (criar, listar, concluir, excluir, agendar, cancelar) → tool correspondente.
+  Lembrete recorrente ("todo dia"/"toda semana"/"todo mês") → create_reminder com recurrence; a
+  próxima ocorrência é criada automaticamente, nunca peça de novo.
 - **Agenda/compromisso** (criar evento, ver o que tem na agenda) → create_calendar_event /
   list_calendar_events. Se vier connected:false, a conta ainda não conectou o Google Agenda —
   diga que isso se faz pelo painel (send_dashboard_login_link) e não tente de novo na mesma
@@ -154,5 +173,5 @@ resposta — não a obrigue a repetir depois.`;
 Fuso horário da pessoa: ${user.timezone}. Agora é ${formatNow(user.timezone)} — use isso como
 referência pra resolver datas relativas ("ontem", "hoje de manhã", "semana que vem", "sexta
 passada") antes de chamar qualquer tool que grava data (transação, tarefa, lembrete). Nunca
-invente ou deixe implícita uma data sem passar por essa referência.`;
+invente ou deixe implícita uma data sem passar por essa referência.${formatRecentCategorizationsBlock(recentCategorizations)}`;
 }

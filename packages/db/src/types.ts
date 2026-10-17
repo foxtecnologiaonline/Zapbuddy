@@ -69,6 +69,7 @@ export interface Task {
 }
 
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
+export type ReminderRecurrence = 'daily' | 'weekly' | 'monthly';
 
 export interface Reminder {
   id: string;
@@ -79,6 +80,7 @@ export interface Reminder {
   remind_at: string;
   status: ReminderStatus;
   failed_reason: string | null;
+  recurrence: ReminderRecurrence | null;
   created_at: string;
 }
 
@@ -90,6 +92,22 @@ export interface ToolCallLog {
   result: unknown;
   success: boolean;
   error: string | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+export interface WeeklyDigestLog {
+  id: string;
+  account_id: string;
+  sent_at: string;
+}
+
+export interface Budget {
+  id: string;
+  account_id: string;
+  category: string;
+  limit_cents: number;
+  period: 'monthly';
   created_at: string;
 }
 

@@ -132,6 +132,34 @@ export async function listTransactions(
   return (data ?? []) as unknown as Transaction[];
 }
 
+export interface RecentCategorization {
+  description: string;
+  category: string;
+  type: TransactionType;
+}
+
+const FEW_SHOT_EXAMPLES_LIMIT = 5;
+
+/**
+ * As últimas transações com descrição da conta — alimenta o system prompt
+ * (buildSystemPrompt) com exemplos reais de como ESSA conta categoriza, não
+ * só a lista fixa de categorias preferidas (categories.ts). Só com
+ * `description` não-nulo: sem descrição não há nada pro modelo comparar
+ * (ver suggestion #8 da revisão: few-shot de categorização por histórico).
+ */
+export async function listRecentCategorizedTransactions(accountId: string): Promise<RecentCategorization[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('transactions')
+    .select('description, category, type')
+    .eq('account_id', accountId)
+    .not('description', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(FEW_SHOT_EXAMPLES_LIMIT);
+
+  if (error) throw error;
+  return (data ?? []) as RecentCategorization[];
+}
+
 export interface TransactionSummary {
   totalIncomeCents: number;
   totalExpenseCents: number;

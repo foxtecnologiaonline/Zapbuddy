@@ -10,6 +10,8 @@ import { handleInsightsGenerate } from './handlers/insights-generate.js';
 import { handleWebhookDispatch } from './handlers/webhook-dispatch.js';
 import { handleProactiveResearch } from './handlers/proactive-research.js';
 import { handleInterpretationFeedback } from './handlers/interpretation-feedback.js';
+import { handleLogsRetention } from './handlers/logs-retention.js';
+import { handleWeeklyDigestGenerate } from './handlers/weekly-digest-generate.js';
 import { scheduleRecurringJobs } from './scheduled-jobs.js';
 
 const connection = getRedisConnection();
@@ -118,6 +120,17 @@ const QUEUE_CONFIGS: {
     name: QUEUE_NAMES.interpretationFeedback,
     handler: handleInterpretationFeedback,
     concurrency: 1,
+  },
+  {
+    // Sem onExhausted: job de manutenção interna, ninguém espera resposta.
+    name: QUEUE_NAMES.logsRetention,
+    handler: handleLogsRetention,
+    concurrency: 1,
+  },
+  {
+    name: QUEUE_NAMES.weeklyDigestGenerate,
+    handler: handleWeeklyDigestGenerate,
+    concurrency: 5,
   },
 ];
 

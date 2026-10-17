@@ -26,6 +26,8 @@ export const QUEUE_NAMES = {
   webhookDispatch: 'webhook-dispatch',
   proactiveResearch: 'proactive-research',
   interpretationFeedback: 'interpretation-feedback',
+  logsRetention: 'logs-retention',
+  weeklyDigestGenerate: 'weekly-digest-generate',
 } as const;
 
 export interface AudioTranscriptionJob {
@@ -76,6 +78,14 @@ export interface WebhookDispatchJob {
 // só pra caber no mesmo formato Queue<T>/Worker das outras filas.
 export type ProactiveResearchJob = Record<string, never>;
 export type InterpretationFeedbackJob = Record<string, never>;
+/** Expurgo semanal de tool_call_logs (ver repositories/tool-call-logs.ts) — sem payload, o handler fixa o corte de 90 dias. */
+export type LogsRetentionJob = Record<string, never>;
+
+export interface WeeklyDigestGenerateJob {
+  accountId: string;
+  ownerWhatsappNumber: string;
+  ownerTimezone: string;
+}
 
 let audioQueue: Queue<AudioTranscriptionJob> | null = null;
 let messageQueue: Queue<IncomingMessageJob> | null = null;
@@ -86,6 +96,8 @@ let insightsGenerateQueue: Queue<InsightsGenerateJob> | null = null;
 let webhookDispatchQueue: Queue<WebhookDispatchJob> | null = null;
 let proactiveResearchQueue: Queue<ProactiveResearchJob> | null = null;
 let interpretationFeedbackQueue: Queue<InterpretationFeedbackJob> | null = null;
+let logsRetentionQueue: Queue<LogsRetentionJob> | null = null;
+let weeklyDigestGenerateQueue: Queue<WeeklyDigestGenerateJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
   audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
@@ -157,4 +169,20 @@ export function getInterpretationFeedbackQueue(): Queue<InterpretationFeedbackJo
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return interpretationFeedbackQueue;
+}
+
+export function getLogsRetentionQueue(): Queue<LogsRetentionJob> {
+  logsRetentionQueue ??= new Queue(QUEUE_NAMES.logsRetention, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return logsRetentionQueue;
+}
+
+export function getWeeklyDigestGenerateQueue(): Queue<WeeklyDigestGenerateJob> {
+  weeklyDigestGenerateQueue ??= new Queue(QUEUE_NAMES.weeklyDigestGenerate, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return weeklyDigestGenerateQueue;
 }

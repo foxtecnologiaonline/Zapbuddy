@@ -18,3 +18,5 @@ export * from './repositories/api-keys.js';
 export * from './repositories/webhooks.js';
 export * from './repositories/knowledge-entries.js';
 export * from './repositories/interpretation-insights.js';
+export * from './repositories/budgets.js';
+export * from './repositories/weekly-digest.js';

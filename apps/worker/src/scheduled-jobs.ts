@@ -1,4 +1,4 @@
-import { getProactiveResearchQueue, getInterpretationFeedbackQueue } from '@zapbuddy/core';
+import { getProactiveResearchQueue, getInterpretationFeedbackQueue, getLogsRetentionQueue } from '@zapbuddy/core';
 
 /**
  * Registra os jobs recorrentes via `repeat` do BullMQ — seguro de chamar em
@@ -20,4 +20,8 @@ export async function scheduleRecurringJobs(): Promise<void> {
     {},
     { repeat: { pattern: '0 10 * * 1' }, jobId: 'interpretation-feedback-weekly' },
   );
+
+  // Horário distinto dos outros dois jobs semanais (9h/10h) de propósito —
+  // evita os três competindo por conexão com o Supabase ao mesmo tempo.
+  await getLogsRetentionQueue().add('run', {}, { repeat: { pattern: '0 11 * * 1' }, jobId: 'logs-retention-weekly' });
 }

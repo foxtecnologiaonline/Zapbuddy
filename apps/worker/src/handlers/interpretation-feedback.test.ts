@@ -11,6 +11,7 @@ function log(overrides: Partial<ToolCallLog>): ToolCallLog {
     result: null,
     success: true,
     error: null,
+    duration_ms: null,
     created_at: new Date().toISOString(),
     ...overrides,
   };

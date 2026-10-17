@@ -1,5 +1,12 @@
 import type { User } from '@zapbuddy/db';
-import { getAccountForUser, createAccountForUser, redeemAccountInvite, findAccountByReferralCode, recordReferral } from '@zapbuddy/db';
+import {
+  getAccountForUser,
+  createAccountForUser,
+  redeemAccountInvite,
+  findAccountByReferralCode,
+  recordReferral,
+  listRecentCategorizedTransactions,
+} from '@zapbuddy/db';
 import { buildSystemPrompt } from './system-prompt.js';
 import type { ToolContext } from './tool-types.js';
 import { appendTurn, getRecentTurns } from '../context/conversation-context.js';
@@ -94,8 +101,11 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     role: account.role,
   };
 
-  const history = await getRecentTurns(user.whatsapp_number);
-  const system = buildSystemPrompt(user);
+  const [history, recentCategorizations] = await Promise.all([
+    getRecentTurns(user.whatsapp_number),
+    listRecentCategorizedTransactions(account.accountId),
+  ]);
+  const system = buildSystemPrompt(user, recentCategorizations);
 
   const { replyText } = await runLlmWithFallback({
     system,
