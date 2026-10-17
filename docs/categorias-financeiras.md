@@ -1,39 +1,40 @@
-# Taxonomia de categorias financeiras (MVP)
+# Taxonomia de categorias financeiras
 
-Lista fechada de categorias usada pela classificação automática da IA e por toda agregação
-(resumo diário/semanal, dashboard). Categoria é sempre um valor desta lista — nunca uma string
-livre gerada pela IA. Toda categoria citada em `docs/conversas-tom.md` existe aqui.
+> **Reconciliado com o código real em 2026-10-17.** Esta versão substitui a anterior, que foi
+> escrita sem visibilidade de `packages/core/src/llm/categories.ts` e inventou uma lista
+> diferente da implementada. A fonte de verdade é sempre o código — este documento só o
+> descreve.
 
-Cada categoria tem: nome canônico (o que fica gravado no banco), aliases (variações de
-linguagem natural que mapeiam para ela) e exemplos de gatilho (frases que a acionam com alta
-confiança, sem precisar perguntar — ver regra de confiança em `docs/conversas-tom.md`).
+## Lista canônica (`packages/core/src/llm/categories.ts`)
 
-## Despesas
+| Tipo | Categorias |
+|---|---|
+| Despesa (`EXPENSE_CATEGORIES`) | `alimentacao`, `transporte`, `moradia`, `saude`, `lazer`, `fornecedores`, `impostos`, `educacao`, `outros` |
+| Receita (`INCOME_CATEGORIES`) | `venda`, `servico_prestado`, `salario`, `outros` |
 
-| Categoria canônica | Aliases | Exemplos de gatilho (alta confiança) |
-|---|---|---|
-| `alimentacao` | comida, almoço, jantar, lanche, restaurante, ifood | "gastei 45 no almoço", "pedi um lanche" |
-| `mercado` | supermercado, feira, compras de casa | "gastei no mercado", "fui no supermercado" |
-| `transporte` | uber, 99, combustível, gasolina, ônibus, estacionamento | "gastei 30 de uber", "abasteci o carro" |
-| `moradia` | aluguel, condomínio, IPTU | "paguei o aluguel", "condomínio desse mês" |
-| `utilidades_telecom` | luz, água, internet, telefone, celular | "paguei a internet", "conta de luz" |
-| `impostos` | DAS, INSS, imposto de renda, MEI | "paguei o DAS", "imposto de renda" |
-| `servicos_terceiros` | pagamento a freelancer, consultoria paga, mão de obra contratada | "paguei um freelancer", "contratei alguém pra..." |
-| `outros_despesa` | fallback — nunca atribuída automaticamente | usado só depois de Tom perguntar e não se encaixar em nenhuma acima |
+## Como a normalização funciona de fato
 
-## Receitas
+A IA nunca tem a categoria rejeitada por validação — o comportamento real é **soft-match com
+fallback silencioso**, não um enum fechado que recusa valor fora da lista (diferente do que uma
+versão anterior deste documento descrevia):
 
-| Categoria canônica | Aliases | Exemplos de gatilho (alta confiança) |
-|---|---|---|
-| `servicos_prestados` | projeto, freelance entregue, honorário, cliente pagou | "recebi 1200 de um projeto", "o cliente pagou" |
-| `outras_receitas` | reembolso, venda de item usado, repasse | fallback — nunca atribuída automaticamente |
+1. `record_transaction` aceita `category` como `z.string().min(1)` — qualquer string não vazia.
+2. `normalizeCategory()` remove acentos e caixa (`"Saúde"` → `"saude"`) e compara contra a lista
+   canônica.
+3. Se bater, grava a categoria canônica. Se não bater com nada, grava `'outros'` — nunca falha
+   a chamada por categoria desconhecida.
+4. O retorno da tool inclui `category_fallback: boolean` (`true` quando a categoria crua do
+   modelo não casou com nenhuma canônica) — é esse campo, visível no `tool_call_log`, que serve
+   de sinal de auditoria de precisão de categorização, não um bloqueio de escrita.
 
-## Regra de uso
+Isso é uma escolha de design deliberada: um erro de categorização nunca deve aparecer pro
+usuário como falha técnica numa conversa que deveria soar natural (ver comentário em
+`system-prompt.ts`). A pergunta ao usuário sobre categoria incerta (ver `docs/conversas-tom.md`)
+é uma decisão do **system prompt** sobre quando vale a pena perguntar antes de chamar a tool —
+não uma validação que a tool imponha.
 
-- `outros_despesa` e `outras_receitas` são categorias de **último recurso**: a IA nunca as
-  atribui sozinha. Se a descrição não casar com nenhuma categoria específica, Tom pergunta
-  (regra de confiança do roteiro) e só usa o fallback se o próprio usuário confirmar que não
-  sabe classificar melhor.
-- Toda tool que recebe `category` como parâmetro (`createTransaction`, `updateTransaction`)
-  valida contra esta lista fechada — um valor fora dela é erro de validação, não é gravado
-  (ver `docs/tools-contrato.md`).
+## Observação sobre o fuso/janela de resumo
+
+`get_financial_summary` só aceita `period: 'today' | 'last_7_days'` — não existe resumo mensal
+nem `from`/`to` livres. "Últimos 7 dias" é uma janela rolante (hoje + 6 dias anteriores) no fuso
+do usuário, não "semana de calendário" (domingo–sábado). Ver `packages/core/src/time/zoned-ranges.ts`.

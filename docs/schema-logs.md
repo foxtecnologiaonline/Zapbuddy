@@ -1,33 +1,31 @@
 # Schema — log de tool calls
 
-A regra transversal 4 do roteiro do Tom (`docs/conversas-tom.md`) exige logar toda tool call
-(nome, parâmetros, resultado) desde o primeiro turno. Este documento fixa onde e como esse log
-vive, para que seja de fato consultável como insumo de depuração de interpretação de linguagem
-natural — e não apenas uma promessa no texto.
+> **Reconciliado com o código real em 2026-10-17.** Esta versão substitui a anterior, que
+> inventou colunas (`confidence`, `latency_ms`) inexistentes na implementação. Fonte de
+> verdade: `packages/db/src/repositories/tool-call-logs.ts` e `packages/db/src/types.ts`.
 
-## Tabela `tool_call_logs`
+## Tabela `tool_call_logs` (real)
 
-| Coluna | Tipo | Obrigatório | Descrição |
-|---|---|---|---|
-| `id` | `uuid` | sim | chave primária |
-| `user_id` | `uuid` | sim | FK para `users` |
-| `tool_name` | `text` | sim | nome da tool chamada (ex.: `createTransaction`) |
-| `params` | `jsonb` | sim | parâmetros enviados à tool, como recebidos do orquestrador |
-| `result` | `jsonb` | não | resultado da execução (registro criado/atualizado, ou erro) |
-| `confidence` | `numeric` | não | confiança da classificação da IA, quando aplicável (categoria, transcrição) |
-| `latency_ms` | `integer` | sim | tempo entre a chamada da tool e o retorno |
-| `created_at` | `timestamptz` | sim | default `now()` |
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `id` | `uuid` | chave primária |
+| `user_id` | `uuid \| null` | FK para `users`; nulo quando a chamada não está associada a um usuário resolvido |
+| `tool_name` | `text` | nome da tool chamada (ex.: `record_transaction`) |
+| `parameters` | `jsonb` | parâmetros recebidos pela tool |
+| `result` | `jsonb \| null` | resultado da execução (nulo em caso de falha) |
+| `success` | `boolean` | se a execução terminou sem erro |
+| `error` | `text \| null` | mensagem de erro, quando `success = false` |
+| `created_at` | `timestamptz` | default `now()` |
 
-## Índice
-
-`CREATE INDEX ON tool_call_logs (user_id, created_at);`
-
-Cobre o uso principal: puxar o histórico de tool calls de um usuário específico em um período,
-para investigar um erro de interpretação relatado ou reproduzido.
+Não existe coluna de confiança de classificação nem de latência — uma versão anterior deste
+documento as propunha, mas elas nunca foram implementadas. A auditoria de precisão de
+categorização usa o campo `category_fallback` que `record_transaction` já devolve dentro de
+`result` (ver `docs/tools-contrato.md`), não uma coluna de confiança separada.
 
 ## Regra de escrita
 
-Toda tool — de leitura ou escrita — grava uma linha nessa tabela ao final da execução,
-sucesso ou falha. Uma falha de persistência (caso 6.4 do roteiro do Tom) também gera log, com
-`result` descrevendo o erro — é precisamente esse registro que permite diferenciar "a IA
-interpretou errado" de "o banco estava fora do ar" ao investigar uma reclamação do usuário.
+`logToolCall()` é chamado pelo `tool-runner.ts` para toda tool, sucesso ou falha,
+incondicionalmente — essa gravação é "o principal insumo de debug de erros de interpretação de
+linguagem natural" por exigência do `CLAUDE.md`, então uma falha ao gravar o log é registrada
+via `logger.error` mas nunca bloqueia a resposta ao usuário (best-effort, não é transacional
+com a ação principal da tool).

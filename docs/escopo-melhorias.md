@@ -3,11 +3,23 @@
 **Status: todas as 10 sugestões implementadas** (ver arquivos e commits referenciados em cada
 item abaixo).
 
+> **Nota histórica (2026-10-17):** este documento e os que ele referencia (`docs/conversas-tom.md`,
+> `docs/categorias-financeiras.md`, `docs/tools-contrato.md`, `docs/schema-logs.md`,
+> `docs/arquitetura-sla.md`, `docs/adr/0001-agregacao-dashboard.md`) foram escritos **sem
+> visibilidade do código de aplicação**, que já existia em outras branches/sessões neste
+> repositório na época. Depois de integrados na branch padrão, todos foram **reconciliados
+> contra o código real** (`packages/core/src/llm/*`, `packages/db/src/*`,
+> `apps/worker/src/*`) — nomes de tool, categorias, schemas e comportamento de concorrência
+> foram corrigidos para bater com a implementação, e lacunas reais (sem tool/job correspondente)
+> foram marcadas com ⚠️ em vez de removidas silenciosamente. O texto abaixo é mantido como
+> registro histórico de como a tarefa foi planejada — não é mais a fonte de verdade sobre o
+> comportamento atual do sistema.
+
 Este documento detalha o escopo de implementação das 10 sugestões levantadas na revisão do
-roteiro do Tom (`docs/conversas-tom.md`) e do `CLAUDE.md`. Como o repositório ainda não tem
-código de aplicação, todo entregável aqui é **documentação/decisão de arquitetura** — vira
-input direto para quando o código (orquestrador LLM, tools, schema do banco) começar a ser
-escrito. Nenhum item aqui adiciona escopo de produto fora do MVP travado.
+roteiro do Tom (`docs/conversas-tom.md`) e do `CLAUDE.md`. Como o repositório ainda não tinha
+código de aplicação **visível para esta sessão** no momento em que foi escrito, todo entregável
+aqui foi tratado como **documentação/decisão de arquitetura**. Nenhum item aqui adiciona escopo
+de produto fora do MVP travado.
 
 Convenção de esforço: **XS** (< 30 min), **S** (até 2h), **M** (meio dia), **L** (1+ dia).
 
