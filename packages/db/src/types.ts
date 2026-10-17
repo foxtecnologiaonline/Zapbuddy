@@ -1,4 +1,5 @@
 export type PlanStatus = 'trial' | 'active' | 'canceled';
+export type PlanIntent = 'upgrade' | 'cancel';
 
 export interface User {
   id: string;
@@ -8,6 +9,8 @@ export interface User {
   onboarding_completed_at: string | null;
   plan_status: PlanStatus;
   plan_status_updated_at: string | null;
+  plan_intent: PlanIntent | null;
+  plan_intent_requested_at: string | null;
   created_at: string;
 }
 

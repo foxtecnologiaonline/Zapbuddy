@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '../client.js';
-import type { PlanStatus, User } from '../types.js';
+import type { PlanIntent, PlanStatus, User } from '../types.js';
 
 // Números reais (com DDI+DDD) ficam nessa faixa de dígitos; um payload
 // malformado (ex.: webhook com JID de grupo mal filtrado, ou um provider
@@ -132,10 +132,45 @@ export async function listUsers(page: number, search?: string): Promise<ListUser
 export async function updateUserPlanStatus(userId: string, status: PlanStatus): Promise<void> {
   const { error } = await getSupabaseClient()
     .from('users')
-    .update({ plan_status: status, plan_status_updated_at: new Date().toISOString() })
+    // Zera plan_intent junto: o admin tratar o status manualmente é o que
+    // "resolve" qualquer intenção de assinar/cancelar pendente — sem isso o
+    // sinal ficava pra sempre na lista mesmo depois de já tratado.
+    .update({
+      plan_status: status,
+      plan_status_updated_at: new Date().toISOString(),
+      plan_intent: null,
+      plan_intent_requested_at: null,
+    })
     .eq('id', userId);
 
   if (error) throw error;
+}
+
+/**
+ * Registra que a pessoa manifestou (nessa conversa, por mensagem) intenção
+ * de assinar ou cancelar — momento de venda do Tom (ADR 0004). Não dispara
+ * cobrança nem muda plan_status sozinho: só grava o sinal estruturado que o
+ * admin vê no painel e trata manualmente, igual já funciona hoje pra
+ * plan_status (não há gateway de pagamento decidido ainda).
+ */
+export async function registerPlanIntent(userId: string, intent: PlanIntent): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('users')
+    .update({ plan_intent: intent, plan_intent_requested_at: new Date().toISOString() })
+    .eq('id', userId);
+
+  if (error) throw error;
+}
+
+/** Contagem de pedidos de assinatura aguardando contato humano, pro admin overview. */
+export async function countPendingUpgradeIntents(): Promise<number> {
+  const { count, error } = await getSupabaseClient()
+    .from('users')
+    .select('*', { count: 'exact', head: true })
+    .eq('plan_intent', 'upgrade');
+
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export const USERS_PAGE_SIZE = CONTACTS_PAGE_SIZE;

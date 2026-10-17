@@ -1,6 +1,6 @@
 import { listUsers, USERS_PAGE_SIZE } from '@zapbuddy/db';
 import type { PlanStatus } from '@zapbuddy/db';
-import { EmptyState, Pagination, Section, formatDateTime } from '../components';
+import { Badge, EmptyState, Pagination, Section, formatDateTime } from '../components';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +47,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
               <th style={{ padding: '4px 8px' }}>Onboarding</th>
               <th style={{ padding: '4px 8px' }}>Criado em</th>
               <th style={{ padding: '4px 8px' }}>Assinatura</th>
+              <th style={{ padding: '4px 8px' }}>Pedido (Tom)</th>
             </tr>
           </thead>
           <tbody>
@@ -94,6 +95,16 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
                       Salvar
                     </button>
                   </form>
+                </td>
+                <td style={{ padding: '6px 8px' }}>
+                  {user.plan_intent ? (
+                    <Badge tone={user.plan_intent === 'upgrade' ? 'ok' : 'bad'}>
+                      {user.plan_intent === 'upgrade' ? 'quer assinar' : 'quer cancelar'}
+                      {user.plan_intent_requested_at ? ` · ${formatDateTime(user.plan_intent_requested_at)}` : ''}
+                    </Badge>
+                  ) : (
+                    <span style={{ opacity: 0.4 }}>—</span>
+                  )}
                 </td>
               </tr>
             ))}

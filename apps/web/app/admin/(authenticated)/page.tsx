@@ -3,6 +3,7 @@ import {
   countAllRows,
   countErrorsSince,
   countFailedReminders,
+  countPendingUpgradeIntents,
   countToolCallLogsSince,
   countUsers,
   countUsersByPlanStatus,
@@ -26,6 +27,7 @@ export default async function AdminOverviewPage() {
     newUsersToday,
     newUsers7d,
     planStatusCounts,
+    pendingUpgradeIntents,
     webhookAcceptedToday,
     webhookAccepted7d,
     webhookRejected7d,
@@ -44,6 +46,7 @@ export default async function AdminOverviewPage() {
     countUsersSince(sinceTodayIso),
     countUsersSince(since7dIso),
     countUsersByPlanStatus(),
+    countPendingUpgradeIntents(),
     countWebhookEventsSince(sinceTodayIso, 'accepted'),
     countWebhookEventsSince(since7dIso, 'accepted'),
     countWebhookEventsSince(since7dIso, 'rejected'),
@@ -94,11 +97,16 @@ export default async function AdminOverviewPage() {
         </CardRow>
       </Section>
 
-      <Section title="Assinaturas">
+      <Section title="Assinaturas" action={<Link href="/admin/contacts" style={{ color: '#9fb0c0', fontSize: 13 }}>Ver contatos →</Link>}>
         <CardRow>
           <StatCard label="Trial" value={planStatusCounts.trial} />
           <StatCard label="Ativas" value={planStatusCounts.active} />
           <StatCard label="Canceladas" value={planStatusCounts.canceled} />
+          <StatCard
+            label="Pedidos de assinatura"
+            value={pendingUpgradeIntents}
+            hint="aguardando contato humano (register_plan_intent)"
+          />
         </CardRow>
       </Section>
 
