@@ -62,3 +62,4 @@ Explicitamente fora do MVP (não implementar até Fase 2+):
 - Sem alternativas de stack em PRs — decisões acima são definitivas até que haja motivo documentado para mudar
 - Nenhuma feature de Fase 2/3 entra em código antes do MVP validar retenção básica
 - Toda integração financeira passa por camada de abstração própria (nunca acoplar direto ao provedor de Open Finance)
+- Antes de iniciar trabalho grande (não uma correção pontual), checar branches e PRs abertos no repo — sessões/agentes diferentes já duplicaram esforço (ex.: múltiplas branches implementando a mesma rodada de melhorias em paralelo) por falta dessa checagem

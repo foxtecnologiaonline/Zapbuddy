@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { recordTransaction, summarizeTransactions } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, normalizeCategory } from '../categories.js';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, isRecognizedCategory, normalizeCategory } from '../categories.js';
+import { getLast7DaysRange, getTodayRange } from '../../time/zoned-ranges.js';
 
 export const recordTransactionTool = defineTool({
   name: 'record_transaction',
@@ -23,27 +24,41 @@ export const recordTransactionTool = defineTool({
     occurred_at: z.string().datetime().optional(),
   }),
   execute: async (params, ctx) => {
+    const category = normalizeCategory(params.category);
     const transaction = await recordTransaction({
       userId: ctx.userId,
       type: params.type,
       amountCents: params.amount_cents,
-      category: normalizeCategory(params.category),
+      category,
       description: params.description,
       source: ctx.messageSource,
       occurredAt: params.occurred_at,
     });
-    return { transaction_id: transaction.id, recorded: true };
+    return {
+      transaction_id: transaction.id,
+      recorded: true,
+      // Categoria normalizada (não a que o modelo mandou) + se caiu em
+      // fallback — vai pro tool_call_log via orchestrator.ts, que é "o
+      // principal insumo de debug de erros de interpretação" (CLAUDE.md).
+      // Sem isso, auditar precisão de categorização exigia cruzar com a
+      // tabela transactions em vez de olhar o log da tool diretamente.
+      category: transaction.category,
+      category_fallback: !isRecognizedCategory(params.category),
+    };
   },
 });
 
 export const getSummaryTool = defineTool({
   name: 'get_financial_summary',
-  description: 'Retorna o resumo financeiro (receitas, gastos, por categoria) de um período.',
+  description:
+    "Retorna o resumo financeiro (receitas, gastos, por categoria) do período pedido: 'today' " +
+    "(hoje) ou 'last_7_days' (últimos 7 dias). Os limites de data são calculados no fuso do " +
+    'usuário — nunca gere from/to manualmente.',
   schema: z.object({
-    from: z.string().datetime(),
-    to: z.string().datetime(),
+    period: z.enum(['today', 'last_7_days']),
   }),
   execute: async (params, ctx) => {
-    return summarizeTransactions(ctx.userId, params.from, params.to);
+    const range = params.period === 'today' ? getTodayRange(ctx.timezone) : getLast7DaysRange(ctx.timezone);
+    return summarizeTransactions(ctx.userId, range.startIso, range.endIso);
   },
 });

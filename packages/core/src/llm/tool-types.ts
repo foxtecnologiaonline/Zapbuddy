@@ -5,6 +5,8 @@ export interface ToolContext {
   whatsappNumber: string;
   /** Source of the message that triggered this tool call (for transactions). */
   messageSource: 'text' | 'audio';
+  /** IANA timezone do usuário — usado por tools que calculam limites de data (ex. resumo financeiro). */
+  timezone: string;
 }
 
 export interface ToolDefinition<Schema extends z.ZodTypeAny> {
