@@ -16,8 +16,17 @@ export interface OrchestrateResult {
   replyText: string;
 }
 
-const INVITE_CODE_MESSAGE_PATTERN = /^\s*entrar\s+(\d{4,8})\s*$/i;
-const REFERRAL_CODE_MESSAGE_PATTERN = /indicad[oa]\s+([a-z0-9]{6})/i;
+// Exportado pra poder ser reaproveitado por outros pontos de entrada que não
+// passam pelo loop normal de mensagem de texto (ex.: document-upload.ts, que
+// trata legenda de documento/imagem como possível tentativa de convite).
+export const INVITE_CODE_MESSAGE_PATTERN = /^\s*entrar\s+(\d{4,8})\s*$/i;
+// {6,8}: código de convite/indicação novo tem 6 chars (accounts.ts,
+// REFERRAL_CODE_LENGTH), mas contas já existentes antes da Fase 3 foram
+// migradas com código de 8 chars (migration 0009_referrals.sql, backfill a
+// partir do uuid) — um quantificador fixo de 6 truncava e nunca batia com
+// esses códigos legados, quebrando a atribuição de indicação pra toda conta
+// anterior a esta rodada.
+const REFERRAL_CODE_MESSAGE_PATTERN = /indicad[oa]\s+([a-z0-9]{6,8})/i;
 
 /**
  * Resolve a conta (ADR 0002) do usuário, incluindo o fluxo de convite —

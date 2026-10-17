@@ -187,7 +187,16 @@ export class AudioTooLongError extends Error {
 /** Implementação real do canal de transcrição — ver packages/core/src/audio/transcriber.ts para a interface. */
 export class WhisperTranscriber implements AudioTranscriber {
   async transcribe(audioBuffer: Buffer, mimeType: string): Promise<string> {
-    const format = AUDIO_FORMAT_BY_MIME[mimeType.split(';')[0]?.trim() ?? ''];
+    const normalizedMime = mimeType.split(';')[0]?.trim() ?? '';
+    // 'application/octet-stream' é o fallback genérico de downloadWhatsappMedia
+    // (packages/core/src/whatsapp/*-channel.ts) quando o provider não informa
+    // mimetype — cobre principalmente a Evolution API, que às vezes omite
+    // isso pra nota de voz. Nota de voz do WhatsApp é virtualmente sempre
+    // OGG/Opus, então assume isso só nesse caso específico (vazio/genérico);
+    // qualquer OUTRO mimetype não listado (ex.: um formato raro de verdade)
+    // continua caindo no fallback de extração por conteúdo do ffmpeg (ver
+    // convert.ts), sem esse viés.
+    const format = AUDIO_FORMAT_BY_MIME[normalizedMime] ?? (normalizedMime === '' || normalizedMime === 'application/octet-stream' ? 'ogg' : undefined);
     const mp3Buffer = await convertToMp3(audioBuffer, format);
 
     const durationSec = estimateMp3DurationSec(mp3Buffer);

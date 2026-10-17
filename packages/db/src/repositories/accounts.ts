@@ -97,30 +97,35 @@ export async function createAccountInvite(accountId: string, createdByUserId: st
   throw new Error('Não foi possível gerar um código de convite único após várias tentativas');
 }
 
-/** Válido, não expirado, não usado -> entra na conta como member e marca o convite consumido. Retorna null se inválido. */
+/**
+ * Válido, não expirado, não usado -> entra na conta como member e marca o
+ * convite consumido. Retorna null se inválido.
+ *
+ * O "claim" do convite é a própria UPDATE condicional abaixo (`used_at is
+ * null`), não um SELECT seguido de UPDATE separado — duas mensagens batendo
+ * o mesmo código quase ao mesmo tempo (ex.: código vazou ou foi encaminhado
+ * sem querer) não podiam mais ser ambas aceitas: só a UPDATE que realmente
+ * mudar a linha (retornando-a) é quem "ganha" o convite; a segunda chamada
+ * vê 0 linhas afetadas e trata como convite já usado/inválido.
+ */
 export async function redeemAccountInvite(code: string, userId: string): Promise<UserAccount | null> {
   const client = getSupabaseClient();
 
-  const { data: invite, error: findError } = await client
+  const { data: invite, error: claimError } = await client
     .from('account_invites')
-    .select('*')
+    .update({ used_at: new Date().toISOString(), used_by_user_id: userId })
     .eq('code', code)
+    .is('used_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .select('*')
     .maybeSingle();
-  if (findError) throw findError;
+  if (claimError) throw claimError;
   if (!invite) return null;
-  if (invite.used_at) return null;
-  if (new Date(invite.expires_at as string).getTime() < Date.now()) return null;
 
   const { error: memberError } = await client
     .from('account_members')
     .insert({ account_id: invite.account_id, user_id: userId, role: 'member' });
   if (memberError) throw memberError;
-
-  const { error: consumeError } = await client
-    .from('account_invites')
-    .update({ used_at: new Date().toISOString(), used_by_user_id: userId })
-    .eq('id', invite.id as string);
-  if (consumeError) throw consumeError;
 
   return { accountId: invite.account_id as string, role: 'member' };
 }

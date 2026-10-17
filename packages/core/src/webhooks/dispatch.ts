@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { listActiveSubscriptionsForEvent, logWebhookDelivery, logger, type WebhookEventTypePublic } from '@zapbuddy/db';
 import { fetchWithRetry } from '../whatsapp/http-retry.js';
 import { getWebhookDispatchQueue } from '../queues/definitions.js';
@@ -23,10 +23,18 @@ function signPayload(secret: string, rawBody: string): string {
 }
 
 /**
- * Entrega o evento pra toda assinatura ativa da conta que escuta esse tipo —
- * best-effort (nunca lança: uma assinatura externa quebrada não pode afetar
- * o resto do sistema). Chamado pelo handler da fila `webhook-dispatch`
- * (ADR 0003, decisão 5), nunca sincronamente de dentro de uma tool.
+ * Entrega o evento pra toda assinatura ativa da conta que escuta esse tipo.
+ * Uma assinatura (URL de terceiro) com erro nunca derruba as outras — por
+ * isso cada entrega tem seu próprio try/catch — mas ao final, se QUALQUER
+ * uma falhou (exceção ou resposta não-2xx), a função lança: isso é o que
+ * faz o job da fila `webhook-dispatch` ser marcado 'failed' e o BullMQ
+ * aplicar o retry com backoff já configurado (DEFAULT_JOB_OPTIONS,
+ * queues/definitions.ts) — sem lançar aqui, uma falha de entrega nunca
+ * seria retentada, apesar do ADR 0003 (decisão 5) prometer "mesmo padrão de
+ * retry das outras filas". Reentrega pode duplicar uma entrega que já
+ * tinha ido com sucesso pra outra assinatura da mesma conta — aceitável
+ * (webhook é "at-least-once" por natureza; por isso o payload carrega um
+ * `id` por evento, pro consumidor conseguir dedupe).
  */
 export async function dispatchWebhookEvent(
   accountId: string,
@@ -36,9 +44,9 @@ export async function dispatchWebhookEvent(
   const subscriptions = await listActiveSubscriptionsForEvent(accountId, eventType);
   if (subscriptions.length === 0) return;
 
-  const rawBody = JSON.stringify({ event: eventType, data: payload, sent_at: new Date().toISOString() });
+  const rawBody = JSON.stringify({ id: randomUUID(), event: eventType, data: payload, sent_at: new Date().toISOString() });
 
-  await Promise.all(
+  const results = await Promise.all(
     subscriptions.map(async (subscription) => {
       try {
         const response = await fetchWithRetry(
@@ -59,12 +67,18 @@ export async function dispatchWebhookEvent(
           success: response.ok,
           statusCode: response.status,
         });
+        return response.ok;
       } catch (error) {
         await logWebhookDelivery(subscription.id, eventType, {
           success: false,
           error: error instanceof Error ? error.message : String(error),
         });
+        return false;
       }
     }),
   );
+
+  if (results.some((ok) => !ok)) {
+    throw new Error(`Falha ao entregar webhook ${eventType} pra ${results.filter((ok) => !ok).length}/${results.length} assinatura(s) da conta ${accountId}`);
+  }
 }

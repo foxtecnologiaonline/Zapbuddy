@@ -66,12 +66,20 @@ async function detectMonthlyPace(accountId: string, timezone: string, now: Date)
   const previousMonthCents = previousMonthSummary.totalExpenseCents;
   if (previousMonthCents <= 0) return null; // sem baseline do mês anterior, não dá pra comparar ritmo
 
+  // currentMonthRange vai de 00:00:00 do dia 1 até 23:59:59 do último dia —
+  // a duração entre esses dois instantes já arredonda pro número certo de
+  // dias do mês (ex.: 30d23:59:59 ~ 30.99999d, arredonda pra 31). Um "+ 1"
+  // aqui contava um dia a mais (bug corrigido: 31 dias virava 32).
   const totalDaysInMonth = Math.round(
-    (new Date(currentMonthRange.endIso).getTime() - new Date(currentMonthRange.startIso).getTime()) / 86_400_000 + 1,
+    (new Date(currentMonthRange.endIso).getTime() - new Date(currentMonthRange.startIso).getTime()) / 86_400_000,
   );
+  // Mesma lógica: duração (em dias) do início do mês até agora já arredonda
+  // pro dia corrente (dia 5 às 19h = 4.79d, arredonda pra 5). O "+ 1" extra
+  // contava um dia a mais sempre que o sweep rodava depois do meio-dia —
+  // ou seja, todo dia, já que o sweep roda às 19h local (TARGET_LOCAL_HOUR).
   const daysElapsed = Math.max(
     1,
-    Math.round((now.getTime() - new Date(currentMonthRange.startIso).getTime()) / 86_400_000) + 1,
+    Math.round((now.getTime() - new Date(currentMonthRange.startIso).getTime()) / 86_400_000),
   );
   // Não projeta nos primeiríssimos dias do mês — amostra pequena demais pra
   // extrapolar sem virar ruído (ex.: 1 gasto grande no dia 2 não vira "mês
