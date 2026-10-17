@@ -1,0 +1,48 @@
+name: Deploy worker (VPS)
+
+# Atualiza o apps/worker na VPS Vultr a cada push em main que toque código
+# relevante (ver deploy/worker/README.md para o deploy manual equivalente).
+# Resolve a lacuna documentada: o worker não é redeployado pela Vercel, então
+# sem isto fica preso no commit do último `docker compose up` manual.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/core/**'
+      - 'packages/db/**'
+      - 'apps/worker/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.base.json'
+      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configurar SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.WORKER_VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.WORKER_VPS_PORT || '22' }}" -H "${{ secrets.WORKER_VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: git pull + rebuild do worker na VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.WORKER_VPS_PORT || '22' }}" \
+            "${{ secrets.WORKER_VPS_USER }}@${{ secrets.WORKER_VPS_HOST }}" '
+              set -euo pipefail
+              cd /opt/zapbuddy
+              git fetch origin main
+              git checkout main
+              git reset --hard origin/main
+              cd deploy/worker
+              docker compose up -d --build
+              docker compose ps
+            '
+
+      - name: Limpar chave
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

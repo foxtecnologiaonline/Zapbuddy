@@ -98,9 +98,30 @@ ZapScript já usa.
 
 ## Atualizar depois de um novo push
 
+**Automático (recomendado):** `.github/workflows/deploy-worker.yml` roda isto
+sozinho a cada push em `main` que toque `packages/core`, `packages/db` ou
+`apps/worker` — motivo: nenhum deploy da Vercel chega até aqui (ver seção
+acima), então sem isso o worker fica preso no commit do último `docker
+compose up` manual, por tempo indefinido. Requer 3-4 secrets no repo GitHub
+(Settings → Secrets and variables → Actions):
+
+- `WORKER_VPS_HOST` — IP/hostname da VPS
+- `WORKER_VPS_USER` — usuário SSH (o mesmo usado pra rodar `setup.sh`)
+- `WORKER_VPS_SSH_KEY` — chave privada de uma chave **dedicada ao deploy**
+  (gere com `ssh-keygen -t ed25519 -f deploy_key -N ""`, adicione a pública
+  em `~/.ssh/authorized_keys` do usuário acima nesta VPS, e cole o
+  conteúdo da privada neste secret — nunca reaproveite sua chave pessoal)
+- `WORKER_VPS_PORT` (opcional, default `22`)
+
+Pode disparar manualmente também, sem esperar um push: aba Actions → "Deploy
+worker (VPS)" → Run workflow.
+
+**Manual (fallback, se o workflow falhar ou a VPS estiver inacessível pra
+runners do GitHub):**
+
 ```
 cd /opt/zapbuddy
-git pull origin <branch>
+git pull origin main
 cd deploy/worker
 docker compose up -d --build
 ```
