@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { listUsers, USERS_PAGE_SIZE } from '@zapbuddy/db';
 import type { PlanStatus } from '@zapbuddy/db';
 import { Badge, EmptyState, Pagination, Section, formatDateTime } from '../components';
@@ -54,7 +55,11 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           <tbody>
             {users.map((user) => (
               <tr key={user.id} style={{ borderTop: '1px solid #1f2733' }}>
-                <td style={{ padding: '6px 8px' }}>{user.whatsapp_number}</td>
+                <td style={{ padding: '6px 8px' }}>
+                  <Link href={`/admin/contacts/${user.id}`} style={{ color: '#e6edf3' }}>
+                    {user.whatsapp_number}
+                  </Link>
+                </td>
                 <td style={{ padding: '6px 8px' }}>{user.name ?? <span style={{ opacity: 0.5 }}>—</span>}</td>
                 <td style={{ padding: '6px 8px', opacity: 0.7 }}>
                   {user.occupation ?? <span style={{ opacity: 0.5 }}>—</span>}

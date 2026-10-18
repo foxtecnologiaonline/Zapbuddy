@@ -138,17 +138,26 @@ dashboard de clientes (`apps/web/lib/admin-session.ts`).
   `plan_status` — manual, sem billing real ainda — e pedidos de
   assinatura aguardando contato, de `register_plan_intent`, ver
   `docs/adr/0004-*.md`), erros (unifica
-  `error_logs` + tool calls falhas + lembretes travados), fila
-  (contagem de jobs por status direto do BullMQ/Redis),
-  infraestrutura (conectividade do Redis, contagem de linhas por
-  tabela).
+  `error_logs` + tool calls falhas + lembretes travados, com link
+  pra lembretes travados filtrados), fila (contagem de jobs por
+  status direto do BullMQ/Redis), infraestrutura (conectividade do
+  Redis, contagem de linhas por tabela).
 - **Contatos** (`/admin/contacts`): lista paginada e buscável, com
   ocupação capturada no onboarding (quando mencionada), troca manual de
   `plan_status` por contato e o sinal de intenção (`plan_intent` —
-  "quer assinar"/"quer cancelar") que o Tom captura na conversa.
+  "quer assinar"/"quer cancelar") que o Tom captura na conversa; cada
+  linha abre o detalhe do contato.
+- **Detalhe do contato** (`/admin/contacts/[id]`): dados do usuário +
+  troca de `plan_status`, últimas transações, tarefas, lembretes e
+  chamadas da IA daquele contato específico — drill-down que a lista
+  geral não dá.
 - **Chamadas** (`/admin/calls`): log paginado de `tool_call_logs`,
-  filtrável por sucesso/falha — principal insumo de debug de
-  interpretação de linguagem natural (CLAUDE.md).
+  filtrável por sucesso/falha, `tool_name` e contato (`userId`) —
+  principal insumo de debug de interpretação de linguagem natural
+  (CLAUDE.md).
+- **Lembretes** (`/admin/reminders`): lista paginada de todos os
+  lembretes, filtrável por status; lembrete `pending`/`failed` pode
+  ser cancelado manualmente pelo admin.
 - **Erros** (`/admin/errors`): lista unificada das últimas falhas de
   cada fonte (webhook, worker, orchestrator, tool call, lembrete).
 
