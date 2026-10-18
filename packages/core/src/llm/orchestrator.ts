@@ -10,6 +10,7 @@ import {
 import { buildSystemPrompt } from './system-prompt.js';
 import type { ToolContext } from './tool-types.js';
 import { appendTurn, getRecentTurns } from '../context/conversation-context.js';
+import { getCurrentStreakDays } from '../streak/compute.js';
 import { runLlmWithFallback } from './providers/orchestration.js';
 import { MESSAGES } from '../messages.js';
 
@@ -101,11 +102,12 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     role: account.role,
   };
 
-  const [history, recentCategorizations] = await Promise.all([
+  const [history, recentCategorizations, streakDays] = await Promise.all([
     getRecentTurns(user.whatsapp_number),
     listRecentCategorizedTransactions(account.accountId),
+    getCurrentStreakDays(account.accountId, user.timezone),
   ]);
-  const system = buildSystemPrompt(user, recentCategorizations);
+  const system = buildSystemPrompt(user, recentCategorizations, streakDays);
 
   const { replyText } = await runLlmWithFallback({
     system,

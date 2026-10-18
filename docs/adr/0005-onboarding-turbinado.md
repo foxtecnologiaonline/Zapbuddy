@@ -90,7 +90,7 @@ painel (decisões 5 e 6) são iguais nas duas, de propósito, pra isolar a vari�
 
 ## Consequências
 
-- `users` ganha `occupation` e `onboarding_variant` (migration `0014_onboarding_improvements.sql`,
+- `users` ganha `occupation` e `onboarding_variant` (migration `0015_onboarding_improvements.sql`,
   default `'ask_name_first'` pra linha existente).
 - Nova fila `onboarding-nudge` no worker (sem `onExhausted` — ninguém espera essa mensagem em
   tempo real, mesmo raciocínio de `weeklyDigestGenerate`/`insightsSweep`).

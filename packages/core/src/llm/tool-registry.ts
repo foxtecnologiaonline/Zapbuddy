@@ -5,7 +5,7 @@ import type { ToolDefinition } from './tool-types.js';
 import { recordTransactionTool, correctLastTransactionTool, getSummaryTool, setBudgetAlertTool } from './tools/finance.js';
 import { createTaskTool, listTasksTool, completeTaskTool, deleteTaskTool } from './tools/tasks.js';
 import { createReminderTool, cancelReminderTool } from './tools/reminders.js';
-import { completeOnboardingTool } from './tools/onboarding.js';
+import { completeOnboardingTool, setPreferredNameTool } from './tools/onboarding.js';
 import { sendDashboardLoginLinkTool } from './tools/dashboard-access.js';
 import { inviteMemberTool, listMembersTool, getReferralInfoTool, registerPlanIntentTool } from './tools/account.js';
 import { findDocumentTool } from './tools/documents.js';
@@ -24,6 +24,7 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   createReminderTool,
   cancelReminderTool,
   completeOnboardingTool,
+  setPreferredNameTool,
   sendDashboardLoginLinkTool,
   inviteMemberTool,
   listMembersTool,

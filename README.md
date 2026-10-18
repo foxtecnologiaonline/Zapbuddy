@@ -114,12 +114,14 @@ assinar/cancelar, momento de venda do Tom, ver `docs/adr/0004-*.md`) →
 `0013_review_improvements.sql` (`tool_call_logs.duration_ms`,
 `reminders.recurrence`, `weekly_digest_logs`, `budgets` — lembrete
 recorrente, resumo semanal proativo e alerta de orçamento por categoria) →
-`0014_onboarding_improvements.sql` (`users.occupation`/`onboarding_variant`
-— ocupação opcional e variante de abertura A/B, ver `docs/adr/0005-*.md`).
-Rodar em ordem, manualmente, no SQL Editor do Supabase. Ver
-`docs/adr/0002-*.md`, `docs/adr/0003-*.md`, `docs/adr/0004-*.md` e
-`docs/adr/0005-*.md` pras decisões por trás das Fases 2, 3, do momento de
-venda/indicação e do onboarding turbinado.
+`0014_tom_persona.sql` (`users.preferred_name` — apelido/forma de chamar a
+pessoa, parte da rodada de personalidade do Tom, ver
+`docs/tools-contrato.md`) → `0015_onboarding_improvements.sql`
+(`users.occupation`/`onboarding_variant` — ocupação opcional e variante de
+abertura A/B, ver `docs/adr/0005-*.md`). Rodar em ordem, manualmente, no
+SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
+`docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das
+Fases 2, 3, do momento de venda/indicação e do onboarding turbinado.
 
 ### Admin (`/admin`)
 

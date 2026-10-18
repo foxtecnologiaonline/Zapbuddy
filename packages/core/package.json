@@ -15,9 +15,11 @@
     "zod-to-json-schema": "^3.23.3"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "persona-eval": "tsx scripts/persona-eval.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3"
   }
 }
