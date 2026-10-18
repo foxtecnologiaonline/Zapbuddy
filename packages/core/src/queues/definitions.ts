@@ -10,10 +10,22 @@ import type { WebhookEventTypePublic } from '@zapbuddy/db';
  * tentativas com backoff exponencial (5s, 10s, 20s) cobre a maioria dos
  * blips sem virar um martelo que reenvia a mesma falha permanente várias
  * vezes seguidas.
+ *
+ * `removeOnComplete`/`removeOnFail`: sem isso o BullMQ mantém todo job
+ * concluído/falhado no Redis pra sempre (comportamento default) — com 11
+ * filas, várias periódicas, isso cresce sem limite e foi a causa raiz real
+ * de um banco Upstash (plano Fixed) estourar o limite e travar até o `AUTH`
+ * (indisponibilidade total, nem webhook enfileira nem worker processa).
+ * Job concluído não tem valor de debug (o rastro real já fica em
+ * `tool_call_logs`/`error_logs` no Postgres, via `logToolCall`/`logError` —
+ * ver CLAUDE.md), então pode ser podado agressivo; falho vale manter um
+ * pouco mais pra inspeção manual via BullMQ antes de reprocessar.
  */
 const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
   attempts: 3,
   backoff: { type: 'exponential', delay: 5_000 },
+  removeOnComplete: { count: 200, age: 24 * 3600 },
+  removeOnFail: { count: 500, age: 7 * 24 * 3600 },
 };
 
 export const QUEUE_NAMES = {
