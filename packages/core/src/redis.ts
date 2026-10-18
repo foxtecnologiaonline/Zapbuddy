@@ -23,9 +23,9 @@ export async function pingRedis(): Promise<boolean> {
 }
 
 const WORKER_HEARTBEAT_KEY = 'zapbuddy:worker:heartbeat';
-// 3x o intervalo de escrita (ver apps/worker/src/worker.ts) — folga pra um
+// 3x o intervalo de escrita (ver HEARTBEAT_INTERVAL_MS em apps/worker/src/worker.ts) — folga pra um
 // ciclo atrasado não aparecer como "offline" no admin por um falso alarme.
-const WORKER_HEARTBEAT_STALE_MS = 90_000;
+const WORKER_HEARTBEAT_STALE_MS = 360_000;
 
 /** Chamado só pelo processo do worker, periodicamente — ver apps/worker/src/worker.ts. */
 export async function writeWorkerHeartbeat(): Promise<void> {
