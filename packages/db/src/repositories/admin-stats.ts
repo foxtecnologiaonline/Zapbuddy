@@ -17,6 +17,16 @@ const COUNTABLE_TABLES = [
 
 export type CountableTable = (typeof COUNTABLE_TABLES)[number];
 
+/** Usado só pelo card de status do admin — nunca lança, só diz se o banco respondeu. */
+export async function checkDatabaseConnection(): Promise<boolean> {
+  try {
+    const { error } = await getSupabaseClient().from('users').select('id', { head: true, count: 'exact' }).limit(1);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function countAllRows(): Promise<Record<CountableTable, number>> {
   const client = getSupabaseClient();
   const results = await Promise.all(
