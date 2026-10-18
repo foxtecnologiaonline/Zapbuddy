@@ -10,6 +10,15 @@ function formatAge(ms: number): string {
   return `há ${Math.round(seconds / 60)}min`;
 }
 
+/** Só dígitos (com ou sem DDI 55) → "+55 (34) 99102-0000"-like, pra bater visualmente com o número configurado. Formato inesperado: devolve como veio. */
+function formatBrazilianNumber(digits: string): string {
+  const withoutCountryCode = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+  const match = /^(\d{2})(\d{4,5})(\d{4})$/.exec(withoutCountryCode);
+  if (!match) return digits;
+  const [, ddd, prefix, suffix] = match;
+  return `+55 (${ddd}) ${prefix}-${suffix}`;
+}
+
 export default async function StatusPage() {
   const [databaseOk, redisOk, whatsapp, workerOk, workerHeartbeatAgeMs] = await Promise.all([
     checkDatabaseConnection(),
@@ -35,7 +44,12 @@ export default async function StatusPage() {
         <StatusCard
           name={`WhatsApp (${whatsapp.provider === 'evolution' ? 'Evolution' : 'Cloud API'})`}
           ok={whatsapp.ok}
-          detail={whatsapp.detail}
+          detail={
+            <>
+              {whatsapp.number ? <div style={{ fontWeight: 600, color: '#e6edf3' }}>{formatBrazilianNumber(whatsapp.number)}</div> : null}
+              {whatsapp.detail ? <div>{whatsapp.detail}</div> : null}
+            </>
+          }
         />
         <StatusCard name="Worker (filas/lembretes)" ok={workerOk} detail={workerDetail} />
       </CardRow>

@@ -78,7 +78,7 @@ export class CloudApiChannel implements WhatsappChannel {
       const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
 
       const response = await fetchWithRetry(
-        `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}?fields=verified_name`,
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}?fields=verified_name,display_phone_number`,
         { headers: { Authorization: `Bearer ${token}` } },
         8_000,
       );
@@ -86,8 +86,8 @@ export class CloudApiChannel implements WhatsappChannel {
         const body = await response.text().catch(() => response.statusText);
         return { ok: false, detail: `HTTP ${response.status}: ${body.slice(0, 200)}` };
       }
-      const data = (await response.json()) as { verified_name?: string };
-      return { ok: true, detail: data.verified_name };
+      const data = (await response.json()) as { verified_name?: string; display_phone_number?: string };
+      return { ok: true, detail: data.verified_name, number: data.display_phone_number?.replace(/\D/g, '') };
     } catch (error) {
       return { ok: false, detail: error instanceof Error ? error.message : String(error) };
     }

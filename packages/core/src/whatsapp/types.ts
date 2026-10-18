@@ -11,6 +11,8 @@ export type AudioRef =
 export interface ConnectionCheck {
   ok: boolean;
   detail?: string;
+  /** Número (só dígitos, com DDI+DDD) do WhatsApp conectado nesse canal — usado pro card de status do admin mostrar qual número é, não só se está online. */
+  number?: string;
 }
 
 export interface WhatsappChannel {

@@ -91,9 +91,42 @@ export class EvolutionChannel implements WhatsappChannel {
       }
       const data = (await response.json()) as { instance?: { state?: string } };
       const state = data.instance?.state ?? 'desconhecido';
-      return { ok: state === 'open', detail: state };
+      const number = await this.fetchConnectedNumber().catch(() => undefined);
+      return { ok: state === 'open', detail: state, number };
     } catch (error) {
       return { ok: false, detail: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  /**
+   * Essa Evolution API é compartilhada com o ZapScript (ver
+   * deploy/evolution/REUSE-ZAPSCRIPT-INSTANCE.md) — `fetchInstances` sem
+   * filtro devolveria instâncias de outros números/clientes. Filtra pelo
+   * query param E de novo no array devolvido, pra nunca exibir no admin um
+   * número que não seja o da própria instância do ZapBuddy. Formato de
+   * resposta varia por versão da Evolution API (objeto `instance` aninhado
+   * vs. campos no topo) — tenta os dois antes de desistir.
+   */
+  private async fetchConnectedNumber(): Promise<string | undefined> {
+    const response = await fetchWithRetry(
+      `${baseUrl()}/instance/fetchInstances?instanceName=${encodeURIComponent(instanceName())}`,
+      { headers: headers() },
+      8_000,
+    );
+    if (!response.ok) return undefined;
+
+    const data = (await response.json()) as unknown;
+    const list = Array.isArray(data) ? data : [data];
+    type InstanceEntry = { name?: string; instanceName?: string; ownerJid?: string; owner?: string; number?: string; instance?: { instanceName?: string; owner?: string; ownerJid?: string; number?: string } };
+    const entry = (list as InstanceEntry[]).find(
+      (item) => (item.name ?? item.instanceName ?? item.instance?.instanceName) === instanceName(),
+    );
+    if (!entry) return undefined;
+
+    const jidOrNumber = entry.ownerJid ?? entry.owner ?? entry.number ?? entry.instance?.ownerJid ?? entry.instance?.owner ?? entry.instance?.number;
+    if (!jidOrNumber) return undefined;
+
+    const digits = (jidOrNumber.split('@')[0] ?? '').replace(/\D/g, '');
+    return digits || undefined;
   }
 }
