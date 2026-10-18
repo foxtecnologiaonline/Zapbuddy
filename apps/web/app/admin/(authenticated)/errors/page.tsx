@@ -1,5 +1,5 @@
 import { listRecentErrors, listRecentFailedReminders, listRecentFailedToolCallLogs } from '@zapbuddy/db';
-import { Badge, EmptyState, Section, formatDateTime } from '../components';
+import { Badge, EmptyState, Section, TableScroll, formatDateTime } from '../components';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,10 +36,18 @@ export default async function ErrorsPage() {
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
-    <Section title={`Erros recentes (últimos ${LIST_LIMIT} de cada fonte)`}>
+    <Section
+      title={`Erros recentes (últimos ${LIST_LIMIT} de cada fonte)`}
+      action={
+        <a href="/api/admin/errors/export" style={{ color: '#9fb0c0', fontSize: 13 }}>
+          Exportar CSV →
+        </a>
+      }
+    >
       {unified.length === 0 ? (
         <EmptyState>Nenhum erro registrado.</EmptyState>
       ) : (
+        <TableScroll>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ textAlign: 'left', opacity: 0.6 }}>
@@ -60,6 +68,7 @@ export default async function ErrorsPage() {
             ))}
           </tbody>
         </table>
+        </TableScroll>
       )}
     </Section>
   );

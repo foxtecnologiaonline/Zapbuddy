@@ -1,10 +1,10 @@
-import { listToolCallLogs, TOOL_CALL_LOGS_PAGE_SIZE } from '@zapbuddy/db';
-import { Badge, EmptyState, Pagination, Section, formatDateTime } from '../components';
+import { countToolCallLogsForFilters, listToolCallLogsCursorPage } from '@zapbuddy/db';
+import { Badge, CursorPagination, EmptyState, Section, TableScroll, formatDateTime } from '../components';
 
 export const dynamic = 'force-dynamic';
 
 interface CallsPageProps {
-  searchParams: Promise<{ page?: string; success?: string; tool?: string; userId?: string }>;
+  searchParams: Promise<{ cursor?: string; history?: string; success?: string; tool?: string; userId?: string }>;
 }
 
 function truncate(value: string, max: number): string {
@@ -12,14 +12,18 @@ function truncate(value: string, max: number): string {
 }
 
 export default async function CallsPage({ searchParams }: CallsPageProps) {
-  const { page: pageParam, success, tool, userId } = await searchParams;
-  const page = Math.max(0, Number(pageParam) || 0);
+  const { cursor: cursorParam, history: historyParam, success, tool, userId } = await searchParams;
+  const cursor = cursorParam ?? '';
+  const history = historyParam ? historyParam.split(',') : [];
   const successFilter = success === 'true' ? true : success === 'false' ? false : undefined;
   const toolFilter = tool || undefined;
   const userIdFilter = userId || undefined;
+  const filters = { success: successFilter, toolName: toolFilter, userId: userIdFilter };
 
-  const { logs, total } = await listToolCallLogs(page, { success: successFilter, toolName: toolFilter, userId: userIdFilter });
-  const hasNext = (page + 1) * TOOL_CALL_LOGS_PAGE_SIZE < total;
+  const [{ logs, nextCursor }, total] = await Promise.all([
+    listToolCallLogsCursorPage(filters, cursor || undefined),
+    countToolCallLogsForFilters(filters),
+  ]);
 
   const buildHref = (overrides: { success?: string; tool?: string; userId?: string }) => {
     const params = new URLSearchParams();
@@ -31,8 +35,21 @@ export default async function CallsPage({ searchParams }: CallsPageProps) {
     return qs ? `/admin/calls?${qs}` : '/admin/calls';
   };
 
+  const exportParams = new URLSearchParams();
+  if (successFilter !== undefined) exportParams.set('success', String(successFilter));
+  if (toolFilter) exportParams.set('tool', toolFilter);
+  if (userIdFilter) exportParams.set('userId', userIdFilter);
+  const exportQs = exportParams.toString();
+
   return (
-    <Section title={`Chamadas da IA (${total})`}>
+    <Section
+      title={`Chamadas da IA (${total})`}
+      action={
+        <a href={`/api/admin/calls/export${exportQs ? `?${exportQs}` : ''}`} style={{ color: '#9fb0c0', fontSize: 13 }}>
+          Exportar CSV (últimas 5000) →
+        </a>
+      }
+    >
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, fontSize: 13 }}>
         <a href={buildHref({ success: '' })} style={{ color: successFilter === undefined ? '#e6edf3' : '#9fb0c0' }}>
           Todas
@@ -90,40 +107,43 @@ export default async function CallsPage({ searchParams }: CallsPageProps) {
       {logs.length === 0 ? (
         <EmptyState>Nenhuma chamada registrada.</EmptyState>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', opacity: 0.6 }}>
-              <th style={{ padding: '4px 8px' }}>Quando</th>
-              <th style={{ padding: '4px 8px' }}>Tool</th>
-              <th style={{ padding: '4px 8px' }}>Status</th>
-              <th style={{ padding: '4px 8px' }}>Parâmetros</th>
-              <th style={{ padding: '4px 8px' }}>Erro</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map((log) => (
-              <tr key={log.id} style={{ borderTop: '1px solid #1f2733' }}>
-                <td style={{ padding: '6px 8px', opacity: 0.7, whiteSpace: 'nowrap' }}>{formatDateTime(log.created_at)}</td>
-                <td style={{ padding: '6px 8px' }}>{log.tool_name}</td>
-                <td style={{ padding: '6px 8px' }}>
-                  {log.success ? <Badge tone="ok">ok</Badge> : <Badge tone="bad">falhou</Badge>}
-                </td>
-                <td style={{ padding: '6px 8px', opacity: 0.7, fontFamily: 'monospace', fontSize: 12 }}>
-                  {truncate(JSON.stringify(log.parameters), 80)}
-                </td>
-                <td style={{ padding: '6px 8px', color: '#f87171', fontSize: 12 }}>
-                  {log.error ? truncate(log.error, 80) : ''}
-                </td>
+        <TableScroll>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', opacity: 0.6 }}>
+                <th style={{ padding: '4px 8px' }}>Quando</th>
+                <th style={{ padding: '4px 8px' }}>Tool</th>
+                <th style={{ padding: '4px 8px' }}>Status</th>
+                <th style={{ padding: '4px 8px' }}>Parâmetros</th>
+                <th style={{ padding: '4px 8px' }}>Erro</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {logs.map((log) => (
+                <tr key={log.id} style={{ borderTop: '1px solid #1f2733' }}>
+                  <td style={{ padding: '6px 8px', opacity: 0.7, whiteSpace: 'nowrap' }}>{formatDateTime(log.created_at)}</td>
+                  <td style={{ padding: '6px 8px' }}>{log.tool_name}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    {log.success ? <Badge tone="ok">ok</Badge> : <Badge tone="bad">falhou</Badge>}
+                  </td>
+                  <td style={{ padding: '6px 8px', opacity: 0.7, fontFamily: 'monospace', fontSize: 12 }}>
+                    {truncate(JSON.stringify(log.parameters), 80)}
+                  </td>
+                  <td style={{ padding: '6px 8px', color: '#f87171', fontSize: 12 }}>
+                    {log.error ? truncate(log.error, 80) : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
       )}
 
-      <Pagination
+      <CursorPagination
         basePath="/admin/calls"
-        page={page}
-        hasNext={hasNext}
+        cursor={cursor}
+        history={history}
+        nextCursor={nextCursor}
         extraParams={{ success: successFilter === undefined ? undefined : String(successFilter), tool: toolFilter, userId: userIdFilter }}
       />
     </Section>

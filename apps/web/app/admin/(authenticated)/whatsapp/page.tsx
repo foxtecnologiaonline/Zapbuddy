@@ -1,5 +1,5 @@
 import { checkWhatsappConnection, evolutionConfiguredInstanceName, evolutionGetInstanceStatus } from '@zapbuddy/core';
-import { Badge, EmptyState, Section } from '../components';
+import { Badge, EmptyState, Section, TableScroll } from '../components';
 import { QrCodeButton } from './qr-code-button';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +35,7 @@ export default async function WhatsappPage({ searchParams }: WhatsappPageProps) 
         </p>
       ) : null}
       <Section title="WhatsApp — gestão de instância (Evolution)">
+        <TableScroll>
         <table style={{ fontSize: 13, marginBottom: 8 }}>
           <tbody>
             <tr>
@@ -63,6 +64,7 @@ export default async function WhatsappPage({ searchParams }: WhatsappPageProps) 
             ) : null}
           </tbody>
         </table>
+        </TableScroll>
         <p style={{ fontSize: 12, opacity: 0.5 }}>
           Essa Evolution API é compartilhada com o ZapScript — toda ação aqui opera só na instância{' '}
           <code>{instanceName}</code>, nunca em outra.

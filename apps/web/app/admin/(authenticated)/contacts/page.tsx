@@ -1,24 +1,34 @@
 import Link from 'next/link';
-import { listUsers, USERS_PAGE_SIZE } from '@zapbuddy/db';
-import type { PlanStatus } from '@zapbuddy/db';
-import { EmptyState, Pagination, Section, formatDateTime } from '../components';
+import { isUsersSortColumn, listUsers, USERS_PAGE_SIZE } from '@zapbuddy/db';
+import type { PlanStatus, UsersSortColumn } from '@zapbuddy/db';
+import { EmptyState, Pagination, Section, SortableHeader, TableScroll, formatDateTime } from '../components';
 
 export const dynamic = 'force-dynamic';
 
 const PLAN_STATUSES: PlanStatus[] = ['trial', 'active', 'canceled'];
 
 interface ContactsPageProps {
-  searchParams: Promise<{ page?: string; q?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; sort?: string; dir?: string }>;
 }
 
 export default async function ContactsPage({ searchParams }: ContactsPageProps) {
-  const { page: pageParam, q } = await searchParams;
+  const { page: pageParam, q, sort, dir } = await searchParams;
   const page = Math.max(0, Number(pageParam) || 0);
-  const { users, total } = await listUsers(page, q);
+  const sortColumn: UsersSortColumn = isUsersSortColumn(sort) ? sort : 'created_at';
+  const ascending = dir === 'asc';
+  const { users, total } = await listUsers(page, q, sortColumn, ascending);
   const hasNext = (page + 1) * USERS_PAGE_SIZE < total;
+  const sortParams = { q };
 
   return (
-    <Section title={`Contatos (${total})`}>
+    <Section
+      title={`Contatos (${total})`}
+      action={
+        <a href={`/api/admin/contacts/export${q ? `?q=${encodeURIComponent(q)}` : ''}`} style={{ color: '#9fb0c0', fontSize: 13 }}>
+          Exportar CSV →
+        </a>
+      }
+    >
       <form method="GET" style={{ marginBottom: 16 }}>
         <input
           type="text"
@@ -40,14 +50,15 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
       {users.length === 0 ? (
         <EmptyState>Nenhum contato encontrado.</EmptyState>
       ) : (
+        <TableScroll>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ textAlign: 'left', opacity: 0.6 }}>
               <th style={{ padding: '4px 8px' }}>WhatsApp</th>
-              <th style={{ padding: '4px 8px' }}>Nome</th>
+              <SortableHeader label="Nome" column="name" currentSort={sortColumn} currentDir={ascending ? 'asc' : 'desc'} basePath="/admin/contacts" extraParams={sortParams} />
               <th style={{ padding: '4px 8px' }}>Onboarding</th>
-              <th style={{ padding: '4px 8px' }}>Criado em</th>
-              <th style={{ padding: '4px 8px' }}>Assinatura</th>
+              <SortableHeader label="Criado em" column="created_at" currentSort={sortColumn} currentDir={ascending ? 'asc' : 'desc'} basePath="/admin/contacts" extraParams={sortParams} />
+              <SortableHeader label="Assinatura" column="plan_status" currentSort={sortColumn} currentDir={ascending ? 'asc' : 'desc'} basePath="/admin/contacts" extraParams={sortParams} />
             </tr>
           </thead>
           <tbody>
@@ -104,9 +115,10 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
             ))}
           </tbody>
         </table>
+        </TableScroll>
       )}
 
-      <Pagination basePath="/admin/contacts" page={page} hasNext={hasNext} extraParams={{ q }} />
+      <Pagination basePath="/admin/contacts" page={page} hasNext={hasNext} extraParams={{ q, sort: sortColumn, dir: ascending ? 'asc' : undefined }} />
     </Section>
   );
 }
