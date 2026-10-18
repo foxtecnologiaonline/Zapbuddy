@@ -24,6 +24,15 @@ responsabilidade de cada tool individual logar.
   onboarding_completed_at, created_at`). Uma versão anterior deste roteiro descrevia esses dois
   passos — **não têm tool nem coluna correspondente hoje**.
 
+## `set_preferred_name` (`tools/onboarding.ts`)
+
+- **Schema:** `{ preferred_name: string (min 1) | null }`
+- **Execução:** grava `users.preferred_name` (migration 0014) — separado de `name` (dado formal
+  do cadastro). `null` limpa a preferência, volta a usar `name`.
+- **Retorno:** `{ set: true, preferred_name }`
+- `buildSystemPrompt` usa `preferred_name ?? name` pra se referir à pessoa — chamar essa tool
+  muda como o Tom trata a pessoa a partir da resposta seguinte, não precisa de mais nada.
+
 ## `record_transaction` (`tools/finance.ts`)
 
 - **Schema:** `{ type: 'expense'|'income', amount_cents: int > 0, category: string (livre, min 1), description?: string, occurred_at?: string (datetime) }`
@@ -237,6 +246,55 @@ não só quando usa o fallback. Fila semanal `logs-retention` expurga `tool_call
 — cacheia as ~16 definições de tool (idênticas em toda chamada) e o system prompt dentro do
 mesmo turno (reenviado idêntico nas até 6 iterações do loop + wrap-up). Reduz latência/custo sem
 mudar comportamento.
+
+---
+
+# Melhorias de persona (2026-10-18) — não são tools
+
+## Streak de constância
+
+`getCurrentStreakDays`/`computeStreakDays` (`packages/core/src/streak/compute.ts`) — dias
+consecutivos com transação registrada, no fuso da conta, calculado em `orchestrator.ts` a cada
+turno e injetado no system prompt só quando ≥3 dias (abaixo disso não é "constância", é normal).
+Instrução deliberadamente frouxa: "pode mencionar quando fizer sentido", nunca forçado toda
+resposta.
+
+## Dica de "momento" (hora/dia/mês)
+
+`describeMoment` (`packages/core/src/time/moment-hint.ts`) — retorna `null` na maioria do tempo
+de propósito (fim de mês, sexta à tarde, começo da manhã ou altas horas, nessa prioridade; fora
+disso, nada). Vira um parênteses solto ao lado do "Agora é..." do system prompt, explicitamente
+marcado como "não force", pra não virar saudação mecânica repetida.
+
+## Voz do Tom (few-shot estático) + tom emocional
+
+Bloco fixo de exemplos de conversa real no system prompt (confirmação variada, resumo, resposta
+a frustração) — ao contrário do few-shot de categorização (que usa dado real da conta), este é
+estático e igual pra toda conta, pensado pra ancorar o MESMO estilo independente de qual provider
+de LLM respondeu (Claude ou o fallback OpenAI). Tom emocional (reconhecer frustração/comemoração
+antes de resolver a tarefa) é instrução de prompt, sem tool nem dado novo — pura leitura de
+linguagem natural pelo modelo.
+
+## Interesse genuíno pelo negócio
+
+Seção nova no system prompt (análoga a `buildReferralSection`/`buildCancellationSection`) —
+pergunta ocasional sobre como o negócio da pessoa está indo, sempre opcional/não-bloqueante,
+nunca interrompendo um pedido.
+
+## Variação de confirmação e de lembrete
+
+Exemplos de confirmação no system prompt passaram de 1 para 3+ variações com instrução explícita
+de não repetir a mesma estrutura. `MESSAGES.reminder` (único texto que sai direto do worker, sem
+passar pelo LLM — `reminder-dispatch.ts`) ganhou `pickTemplate` com 3 variações, mesmo padrão já
+usado em `insights/message.ts`.
+
+## Script de eval manual de persona
+
+`packages/core/scripts/persona-eval.ts` (`npm run persona-eval --workspace=@zapbuddy/core`) —
+roda a API real da Anthropic contra um conjunto fixo de cenários pensados pra exercitar as
+melhorias acima (frustração, comemoração, streak, apelido, momento, cancelamento, venda) e
+imprime a resposta pra julgamento humano. Não entra em CI/vitest — custa chamada real à API e o
+julgamento é qualitativo.
 
 ## Comportamento padrão em falha
 

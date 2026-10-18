@@ -17,6 +17,7 @@ function baseUser(overrides: Partial<User> = {}): User {
     id: 'user-1',
     whatsapp_number: '5511999999999',
     name: 'Marina',
+    preferred_name: null,
     timezone: 'America/Sao_Paulo',
     onboarding_completed_at: '2026-01-01T00:00:00.000Z',
     plan_status: 'trial',

@@ -5,6 +5,8 @@ export interface User {
   id: string;
   whatsapp_number: string;
   name: string | null;
+  /** Como a pessoa pediu pra ser chamada (ex.: "Mari" em vez do nome completo "Marina") — separado de `name`, que é o dado formal do cadastro/dashboard. */
+  preferred_name: string | null;
   timezone: string;
   onboarding_completed_at: string | null;
   plan_status: PlanStatus;

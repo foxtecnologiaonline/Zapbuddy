@@ -162,6 +162,24 @@ export async function registerPlanIntent(userId: string, intent: PlanIntent): Pr
   if (error) throw error;
 }
 
+/**
+ * A pessoa pede explicitamente pra ser chamada de outro jeito (ex.: "pode me
+ * chamar de Mari") — separado de `name` (completeOnboarding acima), que é o
+ * dado formal do cadastro/dashboard. `null` limpa a preferência (volta a
+ * usar `name`).
+ */
+export async function setPreferredName(userId: string, preferredName: string | null): Promise<User> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .update({ preferred_name: preferredName })
+    .eq('id', userId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as User;
+}
+
 /** Contagem de pedidos de assinatura aguardando contato humano, pro admin overview. */
 export async function countPendingUpgradeIntents(): Promise<number> {
   const { count, error } = await getSupabaseClient()
