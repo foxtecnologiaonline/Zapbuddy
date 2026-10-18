@@ -55,42 +55,40 @@ async function notifyUserOfExhaustedJob(whatsappNumber: string): Promise<void> {
 // BullMQ checa job "travado" a cada `stalledInterval` (default 30s) POR
 // Worker, pra sempre, mesmo sem nenhum job ativo — com 11 filas isso sozinho
 // já gerava ~60 mil comandos/Redis em 2 dias (foi a causa real de estourar o
-// limite do plano Fixed da Upstash em menos de 48h, ver investigação 2026-10:
-// nada a ver com volume de mensagem real, é overhead de infra ocioso). Só as
-// duas filas onde isso importa de verdade (usuário esperando resposta em
-// tempo real) ficam no default de 30s; as outras — periódicas/batch, quase
-// nunca com job ativo — esticam pra 10min, 20x menos chamada, sem perda real
-// (um job "travado" nelas só seria notado até 10min depois em vez de 30s, e
-// nenhuma é latência-sensível).
-const STALLED_INTERVAL_REALTIME_MS = undefined; // default do BullMQ (30s)
-const STALLED_INTERVAL_BATCH_MS = 10 * 60_000;
+// limite do plano Fixed da Upstash em menos de 48h, ver investigação
+// 2026-10: nada a ver com volume de mensagem real, é overhead de infra
+// ocioso). 1h em todas as 11 filas, inclusive incoming-message/
+// audio-transcription — decisão explícita do dono do produto: aceita que,
+// no caso raro de o worker cair bem no meio de processar uma mensagem real,
+// o usuário pode ficar sem resposta por até 1h (em vez de até 30s) até o
+// BullMQ perceber e reprocessar, em troca de ~96% menos comando de Redis
+// (ver análise de custo 2026-10). Isso não afeta a velocidade normal de
+// processamento (orientado a evento, não polling) — só o tempo de
+// recuperação depois de um crash.
+const STALLED_INTERVAL_MS = 60 * 60_000;
 
 const QUEUE_CONFIGS: {
   name: string;
   handler: (job: Job) => Promise<void>;
   concurrency: number;
-  stalledInterval?: number;
   onExhausted?: (job: Job, error: Error) => Promise<void>;
 }[] = [
   {
     name: QUEUE_NAMES.incomingMessage,
     handler: handleIncomingMessage,
     concurrency: 5,
-    stalledInterval: STALLED_INTERVAL_REALTIME_MS,
     onExhausted: (job) => notifyUserOfExhaustedJob(job.data.whatsappNumber),
   },
   {
     name: QUEUE_NAMES.audioTranscription,
     handler: handleAudioTranscription,
     concurrency: 3,
-    stalledInterval: STALLED_INTERVAL_REALTIME_MS,
     onExhausted: (job) => notifyUserOfExhaustedJob(job.data.whatsappNumber),
   },
   {
     name: QUEUE_NAMES.reminderDispatch,
     handler: handleReminderDispatch,
     concurrency: 5,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
     // Sem notificação de fallback ao usuário aqui: se o próprio envio ao
     // WhatsApp é o que está falhando (ex.: fora da janela de 24h da Cloud
     // API, que exige template aprovado pra mensagem livre nesse caso —
@@ -109,7 +107,6 @@ const QUEUE_CONFIGS: {
     name: QUEUE_NAMES.documentUpload,
     handler: handleDocumentUpload,
     concurrency: 3,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
     onExhausted: (job) => notifyUserOfExhaustedJob(job.data.whatsappNumber),
   },
   {
@@ -119,44 +116,37 @@ const QUEUE_CONFIGS: {
     name: QUEUE_NAMES.insightsSweep,
     handler: handleInsightsSweep,
     concurrency: 1,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
   {
     name: QUEUE_NAMES.insightsGenerate,
     handler: handleInsightsGenerate,
     concurrency: 5,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
   {
     name: QUEUE_NAMES.webhookDispatch,
     handler: handleWebhookDispatch,
     concurrency: 5,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
   {
     name: QUEUE_NAMES.proactiveResearch,
     handler: handleProactiveResearch,
     concurrency: 1,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
   {
     name: QUEUE_NAMES.interpretationFeedback,
     handler: handleInterpretationFeedback,
     concurrency: 1,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
   {
     // Sem onExhausted: job de manutenção interna, ninguém espera resposta.
     name: QUEUE_NAMES.logsRetention,
     handler: handleLogsRetention,
     concurrency: 1,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
   {
     name: QUEUE_NAMES.weeklyDigestGenerate,
     handler: handleWeeklyDigestGenerate,
     concurrency: 5,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
   {
     // Sem onExhausted: é um empurrão opcional, ninguém está esperando essa
@@ -165,12 +155,11 @@ const QUEUE_CONFIGS: {
     name: QUEUE_NAMES.onboardingNudge,
     handler: handleOnboardingNudge,
     concurrency: 5,
-    stalledInterval: STALLED_INTERVAL_BATCH_MS,
   },
 ];
 
-const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, stalledInterval, onExhausted }) => {
-  const worker = new Worker(name, handler, { connection, concurrency, stalledInterval });
+const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, onExhausted }) => {
+  const worker = new Worker(name, handler, { connection, concurrency, stalledInterval: STALLED_INTERVAL_MS });
   worker.on('failed', (job, error) => {
     logger.error('job_failed', { queue: name, jobId: job?.id, error: error.message, attemptsMade: job?.attemptsMade });
     if (!job || !isExhausted(job)) return;
@@ -198,12 +187,13 @@ void scheduleRecurringJobs().catch((error) => {
 // Sinal de vida pro card de status do admin — sem isso não há como distinguir
 // "worker rodando mas ocioso" de "worker caiu" a partir do processo da web (que
 // não compartilha memória/processo com o worker, só o Redis entre os dois).
-// 2min (não 30s): ninguém precisa saber que o worker caiu em tempo real — é
+// 2h (não 30s): ninguém precisa saber que o worker caiu em tempo real — é
 // um indicador de admin, não um alerta de produção — e o comando de Redis
-// repetido pra sempre é puro overhead (ver STALLED_INTERVAL_* acima pro
-// mesmo raciocínio, parte da causa real do estouro de limite da Upstash em
-// 2026-10). WORKER_HEARTBEAT_STALE_MS em redis.ts mantém a mesma folga de 3x.
-const HEARTBEAT_INTERVAL_MS = 120_000;
+// repetido pra sempre é puro overhead (mesmo raciocínio do
+// STALLED_INTERVAL_MS acima, parte da causa real do estouro de limite da
+// Upstash em 2026-10). WORKER_HEARTBEAT_STALE_MS em redis.ts mantém a
+// mesma folga de 3x.
+const HEARTBEAT_INTERVAL_MS = 2 * 60 * 60_000;
 void writeWorkerHeartbeat();
 const heartbeatInterval = setInterval(() => void writeWorkerHeartbeat(), HEARTBEAT_INTERVAL_MS);
 
