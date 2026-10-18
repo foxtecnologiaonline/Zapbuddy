@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: '/admin/calls', label: 'Chamadas' },
   { href: '/admin/reminders', label: 'Lembretes' },
   { href: '/admin/errors', label: 'Erros' },
+  { href: '/admin/audit', label: 'Auditoria' },
 ];
 
 /**

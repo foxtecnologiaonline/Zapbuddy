@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { evolutionConfiguredInstanceName, evolutionDeleteInstance } from '@zapbuddy/core';
+import { logAdminAction } from '@zapbuddy/db';
 import { isAdminRequest } from '@/lib/admin-auth';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     await evolutionDeleteInstance();
+    void logAdminAction({ action: 'evolution_instance_deleted', targetType: 'evolution_instance', targetId: instanceName });
     return NextResponse.redirect(new URL('/admin/whatsapp', request.url), { status: 303 });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

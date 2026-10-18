@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cancelReminder } from '@zapbuddy/db';
+import { cancelReminder, logAdminAction } from '@zapbuddy/db';
 import { isAdminRequest } from '@/lib/admin-auth';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +11,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const { id } = await params;
-  await cancelReminder(id);
+  const cancelled = await cancelReminder(id);
+  if (cancelled) {
+    void logAdminAction({
+      action: 'reminder_cancelled',
+      targetType: 'reminder',
+      targetId: id,
+      detail: { message: cancelled.message, userId: cancelled.user_id },
+    });
+  }
 
   const referer = request.headers.get('referer');
   const redirectTarget = referer && referer.startsWith(new URL('/', request.url).origin) ? referer : '/admin/reminders';

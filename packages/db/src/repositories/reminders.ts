@@ -170,13 +170,18 @@ export async function listAllRemindersForExport(status?: ReminderStatus): Promis
 /**
  * Cancelamento manual pelo admin — só permitido a partir de 'pending' ou
  * 'failed'; cancelar um já 'sent' não faz sentido (mensagem já saiu).
+ * Devolve a linha cancelada (ou null se não bateu o filtro) pro caller
+ * conseguir logar a ação de auditoria sem precisar de uma segunda query.
  */
-export async function cancelReminder(reminderId: string): Promise<void> {
-  const { error } = await getSupabaseClient()
+export async function cancelReminder(reminderId: string): Promise<Reminder | null> {
+  const { data, error } = await getSupabaseClient()
     .from('reminders')
     .update({ status: 'cancelled' })
     .eq('id', reminderId)
-    .in('status', ['pending', 'failed']);
+    .in('status', ['pending', 'failed'])
+    .select('*')
+    .maybeSingle();
 
   if (error) throw error;
+  return data as Reminder | null;
 }
