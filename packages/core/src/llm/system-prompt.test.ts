@@ -17,8 +17,10 @@ function baseUser(overrides: Partial<User> = {}): User {
     id: 'user-1',
     whatsapp_number: '5511999999999',
     name: 'Marina',
+    occupation: null,
     timezone: 'America/Sao_Paulo',
     onboarding_completed_at: '2026-01-01T00:00:00.000Z',
+    onboarding_variant: 'ask_name_first',
     plan_status: 'trial',
     plan_status_updated_at: null,
     plan_intent: null,
@@ -144,5 +146,54 @@ describe('buildSystemPrompt', () => {
 
     expect(prompt).toMatch(/nunca diga "anotei"\/"vou providenciar" sem/i);
     expect(prompt).toContain('register_plan_intent');
+  });
+
+  it('variante ask_name_first (controle) abre pedindo o nome, sem convidar ação direto', () => {
+    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_name_first' }));
+
+    expect(prompt).toMatch(/explique em 1-2 frases o que você faz, e pergunte o nome dela/);
+    expect(prompt).not.toMatch(/já convide a pessoa a contar um gasto/);
+  });
+
+  it('variante ask_action_first convida uma ação concreta já na abertura', () => {
+    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_action_first' }));
+
+    expect(prompt).toMatch(/já convide a pessoa a contar um gasto, tarefa ou lembrete/);
+    expect(prompt).not.toMatch(/explique em 1-2 frases o que você faz, e pergunte o nome dela/);
+  });
+
+  it('onboarding instrui capturar ocupação como bônus e mandar o link do painel proativamente', () => {
+    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
+
+    expect(prompt).toMatch(/nunca pergunte isso separado nem insista/i);
+    expect(prompt).toMatch(/passe occupation só se ela tiver\s+mencionado o que faz/i);
+    expect(prompt).toMatch(/chame\s+send_dashboard_login_link e inclua o link na mesma mensagem/i);
+  });
+
+  it('inclui a ocupação da pessoa como contexto quando já capturada, sem pedir de novo', () => {
+    const prompt = buildSystemPrompt(baseUser({ occupation: 'cabeleireira autônoma' }));
+
+    expect(prompt).toContain('cabeleireira autônoma');
+    expect(prompt).toMatch(/nunca pergunte de novo/i);
+  });
+
+  it('não menciona ocupação quando ainda não foi capturada', () => {
+    const prompt = buildSystemPrompt(baseUser({ occupation: null }));
+
+    expect(prompt).not.toMatch(/O que ela faz\/ocupação/);
+  });
+
+  it('inclui o reforço do primeiro dia só no dia da criação da conta', () => {
+    const today = new Date().toISOString();
+    const prompt = buildSystemPrompt(baseUser({ created_at: today }));
+
+    expect(prompt).toContain('Primeiro dia');
+    expect(prompt).toMatch(/Só uma vez por conversa/);
+  });
+
+  it('não inclui o reforço do primeiro dia depois do dia da criação', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(1) }));
+
+    expect(prompt).not.toContain('Primeiro dia');
   });
 });

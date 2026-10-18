@@ -1,5 +1,7 @@
 import { getSupabaseClient } from '../client.js';
-import type { PlanIntent, PlanStatus, User } from '../types.js';
+import type { OnboardingVariant, PlanIntent, PlanStatus, User } from '../types.js';
+import { inferTimezoneFromWhatsappNumber } from '../timezone-from-ddd.js';
+import { assignOnboardingVariant } from '../onboarding-variant.js';
 
 // Números reais (com DDI+DDD) ficam nessa faixa de dígitos; um payload
 // malformado (ex.: webhook com JID de grupo mal filtrado, ou um provider
@@ -35,10 +37,20 @@ export async function findUserById(userId: string): Promise<User | null> {
   return data as User | null;
 }
 
+/**
+ * Fuso e variante de onboarding são calculados aqui, na criação — não dá
+ * pra confiar só no default da coluna (sempre 'America/Sao_Paulo') nem num
+ * split aleatório feito depois: precisam ser decididos uma vez, no exato
+ * momento em que o número de WhatsApp é conhecido (ver ADR 0005).
+ */
 export async function createUser(whatsappNumber: string): Promise<User> {
   const { data, error } = await getSupabaseClient()
     .from('users')
-    .insert({ whatsapp_number: whatsappNumber })
+    .insert({
+      whatsapp_number: whatsappNumber,
+      timezone: inferTimezoneFromWhatsappNumber(whatsappNumber),
+      onboarding_variant: assignOnboardingVariant(whatsappNumber),
+    })
     .select('*')
     .single();
 
@@ -60,10 +72,15 @@ export async function getOrCreateUser(whatsappNumber: string): Promise<User> {
   return createUser(whatsappNumber);
 }
 
-export async function completeOnboarding(userId: string, name: string): Promise<User> {
+export async function completeOnboarding(userId: string, name: string, occupation?: string): Promise<User> {
+  const update: Record<string, unknown> = { name, onboarding_completed_at: new Date().toISOString() };
+  // Só sobrescreve occupation se foi informado nesta chamada — omitir não
+  // deve apagar um valor já capturado em uma tentativa anterior.
+  if (occupation !== undefined) update.occupation = occupation;
+
   const { data, error } = await getSupabaseClient()
     .from('users')
-    .update({ name, onboarding_completed_at: new Date().toISOString() })
+    .update(update)
     .eq('id', userId)
     .select('*')
     .single();
@@ -174,3 +191,58 @@ export async function countPendingUpgradeIntents(): Promise<number> {
 }
 
 export const USERS_PAGE_SIZE = CONTACTS_PAGE_SIZE;
+
+export interface OnboardingFunnelVariantStats {
+  variant: OnboardingVariant;
+  total: number;
+  completed: number;
+  /** Onboarding incompleto e cadastro feito há mais de 24h — candidato a reengajamento manual. */
+  stalledOver24h: number;
+  /** null quando essa variante ainda não tem nenhum onboarding completo. */
+  avgCompletionMinutes: number | null;
+}
+
+const STALLED_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Funil de onboarding por variante (ADR 0005) — não é feature de produto,
+ * é a mesma observabilidade operacional do resto do admin (ver
+ * 0004_admin.sql), só que medindo conversão em vez de volume. Lê a tabela
+ * inteira e agrega em JS (sem RPC/SQL agregado) — aceitável no tamanho atual
+ * da base, mesmo raciocínio de `countAllRows`.
+ */
+export async function getOnboardingFunnel(): Promise<OnboardingFunnelVariantStats[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .select('onboarding_variant, created_at, onboarding_completed_at');
+  if (error) throw error;
+
+  const now = Date.now();
+  const byVariant = new Map<OnboardingVariant, { total: number; completed: number; stalledOver24h: number; completionMinutesSum: number }>();
+
+  for (const row of (data ?? []) as Pick<User, 'onboarding_variant' | 'created_at' | 'onboarding_completed_at'>[]) {
+    const bucket = byVariant.get(row.onboarding_variant) ?? {
+      total: 0,
+      completed: 0,
+      stalledOver24h: 0,
+      completionMinutesSum: 0,
+    };
+    bucket.total += 1;
+    if (row.onboarding_completed_at) {
+      bucket.completed += 1;
+      bucket.completionMinutesSum +=
+        (new Date(row.onboarding_completed_at).getTime() - new Date(row.created_at).getTime()) / 60_000;
+    } else if (now - new Date(row.created_at).getTime() > STALLED_THRESHOLD_MS) {
+      bucket.stalledOver24h += 1;
+    }
+    byVariant.set(row.onboarding_variant, bucket);
+  }
+
+  return Array.from(byVariant.entries()).map(([variant, bucket]) => ({
+    variant,
+    total: bucket.total,
+    completed: bucket.completed,
+    stalledOver24h: bucket.stalledOver24h,
+    avgCompletionMinutes: bucket.completed > 0 ? Math.round(bucket.completionMinutesSum / bucket.completed) : null,
+  }));
+}

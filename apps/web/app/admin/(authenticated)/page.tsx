@@ -9,6 +9,7 @@ import {
   countUsersByPlanStatus,
   countUsersSince,
   countWebhookEventsSince,
+  getOnboardingFunnel,
 } from '@zapbuddy/db';
 import { getAllQueueCounts, pingRedis } from '@zapbuddy/core';
 import { Badge, CardRow, Section, StatCard } from './components';
@@ -26,6 +27,7 @@ export default async function AdminOverviewPage() {
     totalUsers,
     newUsersToday,
     newUsers7d,
+    onboardingFunnel,
     planStatusCounts,
     pendingUpgradeIntents,
     webhookAcceptedToday,
@@ -45,6 +47,7 @@ export default async function AdminOverviewPage() {
     countUsers(),
     countUsersSince(sinceTodayIso),
     countUsersSince(since7dIso),
+    getOnboardingFunnel(),
     countUsersByPlanStatus(),
     countPendingUpgradeIntents(),
     countWebhookEventsSince(sinceTodayIso, 'accepted'),
@@ -64,6 +67,11 @@ export default async function AdminOverviewPage() {
 
   const errorsTotalToday = errorsToday + toolCallsFailedToday;
   const errorsTotal7d = errors7d + toolCallsFailed7d;
+
+  const VARIANT_LABELS: Record<string, string> = {
+    ask_name_first: 'Nome primeiro (controle)',
+    ask_action_first: 'Ação primeiro',
+  };
 
   return (
     <>
@@ -95,6 +103,43 @@ export default async function AdminOverviewPage() {
           <StatCard label="Novos hoje" value={newUsersToday} />
           <StatCard label="Novos (7 dias)" value={newUsers7d} />
         </CardRow>
+      </Section>
+
+      <Section title="Funil de onboarding" action={<Link href="/admin/contacts" style={{ color: '#9fb0c0', fontSize: 13 }}>Ver contatos →</Link>}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', opacity: 0.6 }}>
+              <th style={{ padding: '4px 8px' }}>Variante</th>
+              <th style={{ padding: '4px 8px' }}>Cadastros</th>
+              <th style={{ padding: '4px 8px' }}>Completos</th>
+              <th style={{ padding: '4px 8px' }}>Taxa</th>
+              <th style={{ padding: '4px 8px' }}>Tempo médio até completar</th>
+              <th style={{ padding: '4px 8px' }}>Travados (&gt;24h)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {onboardingFunnel.map((row) => (
+              <tr key={row.variant} style={{ borderTop: '1px solid #1f2733' }}>
+                <td style={{ padding: '6px 8px' }}>{VARIANT_LABELS[row.variant] ?? row.variant}</td>
+                <td style={{ padding: '6px 8px' }}>{row.total}</td>
+                <td style={{ padding: '6px 8px' }}>{row.completed}</td>
+                <td style={{ padding: '6px 8px' }}>
+                  {row.total > 0 ? `${((row.completed / row.total) * 100).toFixed(1)}%` : '—'}
+                </td>
+                <td style={{ padding: '6px 8px' }}>
+                  {row.avgCompletionMinutes !== null ? `${row.avgCompletionMinutes} min` : '—'}
+                </td>
+                <td style={{ padding: '6px 8px', color: row.stalledOver24h > 0 ? '#f87171' : undefined }}>
+                  {row.stalledOver24h}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p style={{ fontSize: 12, opacity: 0.5, marginTop: 8 }}>
+          Split determinístico por número de WhatsApp (ADR 0005) — leitura manual, sem teste de
+          significância estatística automático.
+        </p>
       </Section>
 
       <Section title="Assinaturas" action={<Link href="/admin/contacts" style={{ color: '#9fb0c0', fontSize: 13 }}>Ver contatos →</Link>}>

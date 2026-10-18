@@ -44,6 +44,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
             <tr style={{ textAlign: 'left', opacity: 0.6 }}>
               <th style={{ padding: '4px 8px' }}>WhatsApp</th>
               <th style={{ padding: '4px 8px' }}>Nome</th>
+              <th style={{ padding: '4px 8px' }}>Ocupação</th>
               <th style={{ padding: '4px 8px' }}>Onboarding</th>
               <th style={{ padding: '4px 8px' }}>Criado em</th>
               <th style={{ padding: '4px 8px' }}>Assinatura</th>
@@ -55,6 +56,9 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
               <tr key={user.id} style={{ borderTop: '1px solid #1f2733' }}>
                 <td style={{ padding: '6px 8px' }}>{user.whatsapp_number}</td>
                 <td style={{ padding: '6px 8px' }}>{user.name ?? <span style={{ opacity: 0.5 }}>—</span>}</td>
+                <td style={{ padding: '6px 8px', opacity: 0.7 }}>
+                  {user.occupation ?? <span style={{ opacity: 0.5 }}>—</span>}
+                </td>
                 <td style={{ padding: '6px 8px', opacity: 0.7 }}>
                   {user.onboarding_completed_at ? 'completo' : 'pendente'}
                 </td>

@@ -138,6 +138,29 @@ venda). Detalhe completo em `docs/adr/0004-vendas-onboarding-indicacao.md` — r
 - **Cancelamento**: uma tentativa de retenção genuína, nunca duas — simetria com a regra do
   convite de venda.
 
+## Onboarding turbinado (2026-10, motivo documentado)
+
+Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboarding (sugestões 3, 4,
+5, 6, 7, 9 e 10 — 1, 2 e 8 ficaram de fora, não implementadas). Detalhe completo em
+`docs/adr/0005-onboarding-turbinado.md` — resumo:
+
+- **Fuso por DDD** (`timezone-from-ddd.ts`), não mais default fixo `America/Sao_Paulo` pra todo
+  mundo — cobre as exceções conhecidas (AC, AM, MT, MS, RO, RR); Fernando de Noronha e a região de
+  Eirunepe (AM) ficam como aproximação documentada, não há como distinguir só pelo DDD.
+- **Reengajamento automático** (fila `onboarding-nudge`, 2h e 24h) pra quem trava no meio do
+  onboarding — revalida `onboarding_completed_at` antes de mandar, nunca manda se já completou.
+- **Ocupação opcional** (`users.occupation`) capturada só se mencionada espontaneamente — nunca
+  perguntada separado, nunca repetida de volta pra pessoa sem necessidade.
+- **Link do painel proativo**: `send_dashboard_login_link` chamado pelo próprio Tom logo depois do
+  `complete_onboarding`, não só quando perguntado.
+- **Reforço de "primeiro dia"**: uma frase de fechamento de valor na primeira confirmação do dia
+  da criação da conta, nunca repetida na mesma conversa.
+- **Funil de onboarding no admin**, por variante — leitura manual, sem teste de significância
+  estatística automático (mesma honestidade de não inventar confiança do ADR 0004).
+- **Variante de abertura A/B** (`onboarding_variant`): split determinístico por número de WhatsApp
+  (par/ímpar do último dígito, nunca aleatório) entre "nome primeiro" (controle) e "ação primeiro"
+  — decisão de qual vence fica pra quando a amostra crescer, lida manualmente no funil.
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

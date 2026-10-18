@@ -28,6 +28,7 @@ export const QUEUE_NAMES = {
   interpretationFeedback: 'interpretation-feedback',
   logsRetention: 'logs-retention',
   weeklyDigestGenerate: 'weekly-digest-generate',
+  onboardingNudge: 'onboarding-nudge',
 } as const;
 
 export interface AudioTranscriptionJob {
@@ -87,6 +88,21 @@ export interface WeeklyDigestGenerateJob {
   ownerTimezone: string;
 }
 
+export type OnboardingNudgeStage = '2h' | '24h';
+
+/**
+ * Reengajamento de onboarding travado (ADR 0005). whatsappNumber vai no job
+ * (não só userId) pra mandar a mensagem sem precisar reconsultar o usuário
+ * quando ele ainda está incompleto — o handler ainda revalida
+ * onboarding_completed_at antes de mandar, pra não disparar se a pessoa já
+ * terminou entre o agendamento e a execução.
+ */
+export interface OnboardingNudgeJob {
+  userId: string;
+  whatsappNumber: string;
+  stage: OnboardingNudgeStage;
+}
+
 let audioQueue: Queue<AudioTranscriptionJob> | null = null;
 let messageQueue: Queue<IncomingMessageJob> | null = null;
 let reminderQueue: Queue<ReminderDispatchJob> | null = null;
@@ -98,6 +114,7 @@ let proactiveResearchQueue: Queue<ProactiveResearchJob> | null = null;
 let interpretationFeedbackQueue: Queue<InterpretationFeedbackJob> | null = null;
 let logsRetentionQueue: Queue<LogsRetentionJob> | null = null;
 let weeklyDigestGenerateQueue: Queue<WeeklyDigestGenerateJob> | null = null;
+let onboardingNudgeQueue: Queue<OnboardingNudgeJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
   audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
@@ -185,4 +202,12 @@ export function getWeeklyDigestGenerateQueue(): Queue<WeeklyDigestGenerateJob> {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return weeklyDigestGenerateQueue;
+}
+
+export function getOnboardingNudgeQueue(): Queue<OnboardingNudgeJob> {
+  onboardingNudgeQueue ??= new Queue(QUEUE_NAMES.onboardingNudge, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return onboardingNudgeQueue;
 }

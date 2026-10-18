@@ -19,3 +19,4 @@ export * from './insights/signals.js';
 export * from './insights/message.js';
 export * from './digest/message.js';
 export * from './webhooks/dispatch.js';
+export * from './onboarding/nudge-message.js';

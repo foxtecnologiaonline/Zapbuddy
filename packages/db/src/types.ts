@@ -1,12 +1,15 @@
 export type PlanStatus = 'trial' | 'active' | 'canceled';
 export type PlanIntent = 'upgrade' | 'cancel';
+export type OnboardingVariant = 'ask_name_first' | 'ask_action_first';
 
 export interface User {
   id: string;
   whatsapp_number: string;
   name: string | null;
+  occupation: string | null;
   timezone: string;
   onboarding_completed_at: string | null;
+  onboarding_variant: OnboardingVariant;
   plan_status: PlanStatus;
   plan_status_updated_at: string | null;
   plan_intent: PlanIntent | null;

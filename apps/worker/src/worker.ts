@@ -12,6 +12,7 @@ import { handleProactiveResearch } from './handlers/proactive-research.js';
 import { handleInterpretationFeedback } from './handlers/interpretation-feedback.js';
 import { handleLogsRetention } from './handlers/logs-retention.js';
 import { handleWeeklyDigestGenerate } from './handlers/weekly-digest-generate.js';
+import { handleOnboardingNudge } from './handlers/onboarding-nudge.js';
 import { scheduleRecurringJobs } from './scheduled-jobs.js';
 
 const connection = getRedisConnection();
@@ -130,6 +131,14 @@ const QUEUE_CONFIGS: {
   {
     name: QUEUE_NAMES.weeklyDigestGenerate,
     handler: handleWeeklyDigestGenerate,
+    concurrency: 5,
+  },
+  {
+    // Sem onExhausted: é um empurrão opcional, ninguém está esperando essa
+    // mensagem especificamente — uma falha esgotada só fica no log genérico
+    // de erro acima, mesmo raciocínio do insightsSweep/weeklyDigestGenerate.
+    name: QUEUE_NAMES.onboardingNudge,
+    handler: handleOnboardingNudge,
     concurrency: 5,
   },
 ];

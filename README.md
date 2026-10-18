@@ -110,10 +110,16 @@ transactions/tasks/reminders de `user_id` pra `account_id` como escopo)
 `knowledge_entries`, `interpretation_insights` — pesquisa autônoma e loop
 de feedback, ver `CLAUDE.md`) → `0012_plan_intent.sql`
 (`users.plan_intent`/`plan_intent_requested_at` — captura de intenção de
-assinar/cancelar, momento de venda do Tom, ver `docs/adr/0004-*.md`).
+assinar/cancelar, momento de venda do Tom, ver `docs/adr/0004-*.md`) →
+`0013_review_improvements.sql` (`tool_call_logs.duration_ms`,
+`reminders.recurrence`, `weekly_digest_logs`, `budgets` — lembrete
+recorrente, resumo semanal proativo e alerta de orçamento por categoria) →
+`0014_onboarding_improvements.sql` (`users.occupation`/`onboarding_variant`
+— ocupação opcional e variante de abertura A/B, ver `docs/adr/0005-*.md`).
 Rodar em ordem, manualmente, no SQL Editor do Supabase. Ver
-`docs/adr/0002-*.md`, `docs/adr/0003-*.md` e `docs/adr/0004-*.md` pras
-decisões por trás das Fases 2, 3 e do momento de venda/indicação.
+`docs/adr/0002-*.md`, `docs/adr/0003-*.md`, `docs/adr/0004-*.md` e
+`docs/adr/0005-*.md` pras decisões por trás das Fases 2, 3, do momento de
+venda/indicação e do onboarding turbinado.
 
 ### Admin (`/admin`)
 
@@ -124,7 +130,9 @@ dashboard de clientes (`apps/web/lib/admin-session.ts`).
 
 - **Visão geral** (`/admin`): visitas (hits nos webhooks, aceitos vs.
   rejeitados), chamadas (tool calls da IA, hoje/7 dias, taxa de
-  falha), contatos (total, novos), assinaturas (contagem por
+  falha), contatos (total, novos), funil de onboarding por variante
+  (cadastros, completos, taxa, estagnados há mais de 24h, tempo médio
+  até completar — ver `docs/adr/0005-*.md`), assinaturas (contagem por
   `plan_status` — manual, sem billing real ainda — e pedidos de
   assinatura aguardando contato, de `register_plan_intent`, ver
   `docs/adr/0004-*.md`), erros (unifica
@@ -133,9 +141,9 @@ dashboard de clientes (`apps/web/lib/admin-session.ts`).
   infraestrutura (conectividade do Redis, contagem de linhas por
   tabela).
 - **Contatos** (`/admin/contacts`): lista paginada e buscável, com
-  troca manual de `plan_status` por contato e o sinal de intenção
-  (`plan_intent` — "quer assinar"/"quer cancelar") que o Tom captura na
-  conversa.
+  ocupação capturada no onboarding (quando mencionada), troca manual de
+  `plan_status` por contato e o sinal de intenção (`plan_intent` —
+  "quer assinar"/"quer cancelar") que o Tom captura na conversa.
 - **Chamadas** (`/admin/calls`): log paginado de `tool_call_logs`,
   filtrável por sucesso/falha — principal insumo de debug de
   interpretação de linguagem natural (CLAUDE.md).
