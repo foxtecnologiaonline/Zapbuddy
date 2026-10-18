@@ -1,5 +1,5 @@
 import { Worker, type Job } from 'bullmq';
-import { getRedisConnection, QUEUE_NAMES, sendWhatsappTextMessage, MESSAGES, getInsightsSweepQueue } from '@zapbuddy/core';
+import { getRedisConnection, QUEUE_NAMES, sendWhatsappTextMessage, MESSAGES, getInsightsSweepQueue, writeWorkerHeartbeat } from '@zapbuddy/core';
 import { logError, markReminderFailed, logger } from '@zapbuddy/db';
 import { handleIncomingMessage } from './handlers/incoming-message.js';
 import { handleAudioTranscription } from './handlers/audio-transcription.js';
@@ -169,7 +169,15 @@ void scheduleRecurringJobs().catch((error) => {
   logger.error('schedule_recurring_jobs_failed', { error: error instanceof Error ? error.message : String(error) });
 });
 
+// Sinal de vida pro card de status do admin — sem isso não há como distinguir
+// "worker rodando mas ocioso" de "worker caiu" a partir do processo da web (que
+// não compartilha memória/processo com o worker, só o Redis entre os dois).
+const HEARTBEAT_INTERVAL_MS = 30_000;
+void writeWorkerHeartbeat();
+const heartbeatInterval = setInterval(() => void writeWorkerHeartbeat(), HEARTBEAT_INTERVAL_MS);
+
 async function shutdown(): Promise<void> {
+  clearInterval(heartbeatInterval);
   await Promise.all(workers.map((worker) => worker.close()));
   process.exit(0);
 }

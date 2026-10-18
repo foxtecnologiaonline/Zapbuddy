@@ -118,7 +118,9 @@ recorrente, resumo semanal proativo e alerta de orçamento por categoria) →
 pessoa, parte da rodada de personalidade do Tom, ver
 `docs/tools-contrato.md`) → `0015_onboarding_improvements.sql`
 (`users.occupation`/`onboarding_variant` — ocupação opcional e variante de
-abertura A/B, ver `docs/adr/0005-*.md`). Rodar em ordem, manualmente, no
+abertura A/B, ver `docs/adr/0005-*.md`) → `0016_admin_action_logs.sql`
+(`admin_action_logs` — auditoria de escrita feita a partir do painel
+admin, ver seção Admin abaixo). Rodar em ordem, manualmente, no
 SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das
 Fases 2, 3, do momento de venda/indicação e do onboarding turbinado.
@@ -151,15 +153,36 @@ dashboard de clientes (`apps/web/lib/admin-session.ts`).
   troca de `plan_status`, últimas transações, tarefas, lembretes e
   chamadas da IA daquele contato específico — drill-down que a lista
   geral não dá.
-- **Chamadas** (`/admin/calls`): log paginado de `tool_call_logs`,
-  filtrável por sucesso/falha, `tool_name` e contato (`userId`) —
-  principal insumo de debug de interpretação de linguagem natural
-  (CLAUDE.md).
-- **Lembretes** (`/admin/reminders`): lista paginada de todos os
-  lembretes, filtrável por status; lembrete `pending`/`failed` pode
-  ser cancelado manualmente pelo admin.
+- **Chamadas** (`/admin/calls`): log paginado por cursor (não por
+  número de página — ver `listToolCallLogsCursorPage`) de
+  `tool_call_logs`, filtrável por sucesso/falha, `tool_name` e contato
+  (`userId`); exporta CSV (até 5000 linhas mais recentes do filtro).
+- **Lembretes** (`/admin/reminders`): lista paginada e ordenável (por
+  disparo ou status) de todos os lembretes, filtrável por status;
+  lembrete `pending`/`failed` pode ser cancelado manualmente pelo
+  admin (com confirmação); exporta CSV.
 - **Erros** (`/admin/errors`): lista unificada das últimas falhas de
-  cada fonte (webhook, worker, orchestrator, tool call, lembrete).
+  cada fonte (webhook, worker, orchestrator, tool call, lembrete);
+  exporta CSV.
+- **Status** (`/admin/status`): card visual (online/indisponível) de
+  cada serviço que o Tom depende — banco (Supabase), fila
+  (Redis/BullMQ), WhatsApp (número conectado no canal ativo) e worker
+  (via heartbeat no Redis, já que roda em processo separado da web).
+- **WhatsApp** (`/admin/whatsapp`): gestão da instância Evolution
+  (só quando `WHATSAPP_CHANNEL_PROVIDER=evolution`) — criar, gerar QR
+  code de pareamento e excluir, sempre restrito à instância configurada
+  em `EVOLUTION_INSTANCE_NAME` (nunca aceita nome de instância vindo de
+  fora, já que essa Evolution é compartilhada com o ZapScript).
+- **Auditoria** (`/admin/audit`): log de toda escrita feita a partir do
+  admin (`admin_action_logs`) — plan_status, cancelamento de lembrete,
+  criação/exclusão de instância Evolution. Sem conta por admin ainda
+  (login é senha única): registra o quê e quando, não ainda quem.
+
+Visão geral e contatos ganham sparkline dos últimos 14 dias (chamadas,
+novos contatos, chamadas falhas); as estatísticas agregadas da visão
+geral são cacheadas por 30s (`unstable_cache`) e renderizadas em
+`<Suspense>` separado da seção de fila/Redis, pra uma falha ali não
+travar o resto da página.
 
 ### API pública (Fase 3, `docs/adr/0003-*.md`)
 

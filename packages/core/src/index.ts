@@ -14,6 +14,14 @@ export * from './llm/tool-registry.js';
 export * from './llm/web-search/client.js';
 export * from './audio/transcriber.js';
 export * from './whatsapp/channel.js';
+export {
+  evolutionConfiguredInstanceName,
+  evolutionCreateInstance,
+  evolutionDeleteInstance,
+  evolutionGetInstanceStatus,
+  evolutionGetQrCode,
+} from './whatsapp/evolution-channel.js';
+export type { EvolutionInstanceStatus } from './whatsapp/evolution-channel.js';
 export * from './security/crypto.js';
 export * from './google/oauth.js';
 export * from './google/calendar.js';

@@ -153,6 +153,15 @@ export interface ErrorLog {
   created_at: string;
 }
 
+export interface AdminActionLog {
+  id: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  detail: unknown;
+  created_at: string;
+}
+
 export interface Document {
   id: string;
   account_id: string;

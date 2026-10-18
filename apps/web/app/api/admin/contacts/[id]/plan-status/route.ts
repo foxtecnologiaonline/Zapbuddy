@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateUserPlanStatus } from '@zapbuddy/db';
+import { findUserById, logAdminAction, updateUserPlanStatus } from '@zapbuddy/db';
 import type { PlanStatus } from '@zapbuddy/db';
 import { isAdminRequest } from '@/lib/admin-auth';
 
@@ -21,7 +21,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'invalid status' }, { status: 400 });
   }
 
+  const previousUser = await findUserById(id);
   await updateUserPlanStatus(id, status as PlanStatus);
+  void logAdminAction({
+    action: 'plan_status_updated',
+    targetType: 'user',
+    targetId: id,
+    detail: { from: previousUser?.plan_status ?? null, to: status },
+  });
 
   // Volta pra página de origem (lista ou detalhe do contato) quando o form a informa;
   // sem isso, salvar no detalhe do contato te chutava de volta pra lista.

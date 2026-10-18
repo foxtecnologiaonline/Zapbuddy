@@ -125,14 +125,31 @@ export interface ListUsersResult {
   total: number;
 }
 
-/** Lista paginada de contatos pro admin, com busca opcional por número/nome. */
-export async function listUsers(page: number, search?: string): Promise<ListUsersResult> {
+export type UsersSortColumn = 'created_at' | 'plan_status' | 'name';
+
+const USERS_SORT_COLUMNS: UsersSortColumn[] = ['created_at', 'plan_status', 'name'];
+
+export function isUsersSortColumn(value: string | undefined): value is UsersSortColumn {
+  return USERS_SORT_COLUMNS.includes(value as UsersSortColumn);
+}
+
+/** Lista paginada de contatos pro admin, com busca opcional por número/nome e ordenação por coluna. */
+export async function listUsers(
+  page: number,
+  search?: string,
+  sort: UsersSortColumn = 'created_at',
+  ascending = false,
+): Promise<ListUsersResult> {
   const from = page * CONTACTS_PAGE_SIZE;
   const to = from + CONTACTS_PAGE_SIZE - 1;
 
   let query = getSupabaseClient()
     .from('users')
     .select('*', { count: 'exact' })
+    // Critério secundário fixo em created_at: `name` pode ter duplicatas/nulls
+    // e `plan_status` só tem 3 valores — sem um desempate estável a ordem
+    // dentro do mesmo valor fica arbitrária entre loads.
+    .order(sort, { ascending })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -144,6 +161,25 @@ export async function listUsers(page: number, search?: string): Promise<ListUser
   const { data, error, count } = await query;
   if (error) throw error;
   return { users: (data ?? []) as User[], total: count ?? 0 };
+}
+
+/** Todos os contatos (sem paginação) pro export CSV — mesmo filtro de busca da listagem. */
+export async function listAllUsersForExport(search?: string): Promise<User[]> {
+  let query = getSupabaseClient().from('users').select('*').order('created_at', { ascending: false });
+  if (search) {
+    const term = search.replace(/[%,()]/g, '');
+    query = query.or(`whatsapp_number.ilike.%${term}%,name.ilike.%${term}%`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as User[];
+}
+
+/** Só o created_at (sem o resto da linha) — uso: balde diário do sparkline "novos contatos" no admin. */
+export async function listUserCreatedAtSince(sinceIso: string): Promise<string[]> {
+  const { data, error } = await getSupabaseClient().from('users').select('created_at').gte('created_at', sinceIso);
+  if (error) throw error;
+  return (data ?? []).map((row) => (row as { created_at: string }).created_at);
 }
 
 export async function updateUserPlanStatus(userId: string, status: PlanStatus): Promise<void> {

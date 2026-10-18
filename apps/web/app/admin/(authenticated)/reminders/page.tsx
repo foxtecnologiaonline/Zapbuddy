@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { listReminders, REMINDERS_PAGE_SIZE } from '@zapbuddy/db';
-import type { ReminderStatus } from '@zapbuddy/db';
-import { Badge, EmptyState, Pagination, Section, formatDateTime } from '../components';
+import { isRemindersSortColumn, listReminders, REMINDERS_PAGE_SIZE } from '@zapbuddy/db';
+import type { ReminderStatus, RemindersSortColumn } from '@zapbuddy/db';
+import { Badge, EmptyState, Pagination, Section, SortableHeader, TableScroll, formatDateTime } from '../components';
+import { ConfirmSubmitButton } from '../confirm-submit-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,19 +15,29 @@ function badgeTone(status: ReminderStatus): 'ok' | 'bad' | 'neutral' {
 }
 
 interface RemindersPageProps {
-  searchParams: Promise<{ page?: string; status?: string }>;
+  searchParams: Promise<{ page?: string; status?: string; sort?: string; dir?: string }>;
 }
 
 export default async function RemindersPage({ searchParams }: RemindersPageProps) {
-  const { page: pageParam, status } = await searchParams;
+  const { page: pageParam, status, sort, dir } = await searchParams;
   const page = Math.max(0, Number(pageParam) || 0);
   const statusFilter = STATUSES.includes(status as ReminderStatus) ? (status as ReminderStatus) : undefined;
+  const sortColumn: RemindersSortColumn = isRemindersSortColumn(sort) ? sort : 'remind_at';
+  const ascending = dir === 'asc';
 
-  const { reminders, total } = await listReminders(page, statusFilter);
+  const { reminders, total } = await listReminders(page, statusFilter, sortColumn, ascending);
   const hasNext = (page + 1) * REMINDERS_PAGE_SIZE < total;
+  const sortParams = { status: statusFilter };
 
   return (
-    <Section title={`Lembretes (${total})`}>
+    <Section
+      title={`Lembretes (${total})`}
+      action={
+        <a href={`/api/admin/reminders/export${statusFilter ? `?status=${statusFilter}` : ''}`} style={{ color: '#9fb0c0', fontSize: 13 }}>
+          Exportar CSV →
+        </a>
+      }
+    >
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, fontSize: 13 }}>
         <Link href="/admin/reminders" style={{ color: statusFilter === undefined ? '#e6edf3' : '#9fb0c0' }}>
           Todos
@@ -41,13 +52,14 @@ export default async function RemindersPage({ searchParams }: RemindersPageProps
       {reminders.length === 0 ? (
         <EmptyState>Nenhum lembrete encontrado.</EmptyState>
       ) : (
+        <TableScroll>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ textAlign: 'left', opacity: 0.6 }}>
-              <th style={{ padding: '4px 8px' }}>Disparo em</th>
+              <SortableHeader label="Disparo em" column="remind_at" currentSort={sortColumn} currentDir={ascending ? 'asc' : 'desc'} basePath="/admin/reminders" extraParams={sortParams} />
               <th style={{ padding: '4px 8px' }}>Contato</th>
               <th style={{ padding: '4px 8px' }}>Mensagem</th>
-              <th style={{ padding: '4px 8px' }}>Status</th>
+              <SortableHeader label="Status" column="status" currentSort={sortColumn} currentDir={ascending ? 'asc' : 'desc'} basePath="/admin/reminders" extraParams={sortParams} />
               <th style={{ padding: '4px 8px' }}>Ação</th>
             </tr>
           </thead>
@@ -67,12 +79,12 @@ export default async function RemindersPage({ searchParams }: RemindersPageProps
                 <td style={{ padding: '6px 8px' }}>
                   {reminder.status === 'pending' || reminder.status === 'failed' ? (
                     <form action={`/api/admin/reminders/${reminder.id}/cancel`} method="POST" style={{ display: 'inline' }}>
-                      <button
-                        type="submit"
+                      <ConfirmSubmitButton
+                        confirmMessage={`Cancelar o lembrete "${reminder.message}"? Essa ação não pode ser desfeita.`}
                         style={{ background: 'transparent', border: '1px solid #2a3340', color: '#f87171', borderRadius: 4, padding: '2px 8px', fontSize: 12, cursor: 'pointer' }}
                       >
                         Cancelar
-                      </button>
+                      </ConfirmSubmitButton>
                     </form>
                   ) : (
                     <span style={{ opacity: 0.4 }}>—</span>
@@ -82,9 +94,15 @@ export default async function RemindersPage({ searchParams }: RemindersPageProps
             ))}
           </tbody>
         </table>
+        </TableScroll>
       )}
 
-      <Pagination basePath="/admin/reminders" page={page} hasNext={hasNext} extraParams={{ status: statusFilter }} />
+      <Pagination
+        basePath="/admin/reminders"
+        page={page}
+        hasNext={hasNext}
+        extraParams={{ status: statusFilter, sort: sortColumn, dir: ascending ? 'asc' : undefined }}
+      />
     </Section>
   );
 }

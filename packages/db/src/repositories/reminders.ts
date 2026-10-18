@@ -155,15 +155,28 @@ export interface ListRemindersResult {
   total: number;
 }
 
-/** Lista paginada de lembretes pro admin, com filtro opcional por status e nome/número do contato. */
-export async function listReminders(page: number, status?: ReminderStatus): Promise<ListRemindersResult> {
+export type RemindersSortColumn = 'remind_at' | 'status' | 'created_at';
+
+const REMINDERS_SORT_COLUMNS: RemindersSortColumn[] = ['remind_at', 'status', 'created_at'];
+
+export function isRemindersSortColumn(value: string | undefined): value is RemindersSortColumn {
+  return REMINDERS_SORT_COLUMNS.includes(value as RemindersSortColumn);
+}
+
+/** Lista paginada de lembretes pro admin, com filtro opcional por status, nome/número do contato e ordenação por coluna. */
+export async function listReminders(
+  page: number,
+  status?: ReminderStatus,
+  sort: RemindersSortColumn = 'remind_at',
+  ascending = false,
+): Promise<ListRemindersResult> {
   const from = page * REMINDERS_PAGE_SIZE;
   const to = from + REMINDERS_PAGE_SIZE - 1;
 
   let query = getSupabaseClient()
     .from('reminders')
     .select('*, users(whatsapp_number, name)', { count: 'exact' })
-    .order('remind_at', { ascending: false })
+    .order(sort, { ascending })
     .range(from, to);
   if (status) query = query.eq('status', status);
 
@@ -172,19 +185,37 @@ export async function listReminders(page: number, status?: ReminderStatus): Prom
   return { reminders: (data ?? []) as unknown as ReminderWithUser[], total: count ?? 0 };
 }
 
+/** Todos os lembretes do filtro (sem paginação) pro export CSV. */
+export async function listAllRemindersForExport(status?: ReminderStatus): Promise<ReminderWithUser[]> {
+  let query = getSupabaseClient()
+    .from('reminders')
+    .select('*, users(whatsapp_number, name)')
+    .order('remind_at', { ascending: false });
+  if (status) query = query.eq('status', status);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as unknown as ReminderWithUser[];
+}
+
 /**
  * Cancelamento manual pelo admin — sem escopo de account_id (o admin opera
  * sobre qualquer conta) e nome distinto de `cancelReminder` acima (essa é a
  * versão usada pela tool do usuário, escopada por account_id) pra não
  * colidir. Só permitido a partir de 'pending' ou 'failed'; cancelar um já
- * 'sent' não faz sentido (mensagem já saiu).
+ * 'sent' não faz sentido (mensagem já saiu). Devolve a linha cancelada (ou
+ * null se não bateu o filtro) pro caller conseguir logar a ação de
+ * auditoria sem precisar de uma segunda query.
  */
-export async function adminCancelReminder(reminderId: string): Promise<void> {
-  const { error } = await getSupabaseClient()
+export async function adminCancelReminder(reminderId: string): Promise<Reminder | null> {
+  const { data, error } = await getSupabaseClient()
     .from('reminders')
     .update({ status: 'cancelled' })
     .eq('id', reminderId)
-    .in('status', ['pending', 'failed']);
+    .in('status', ['pending', 'failed'])
+    .select('*')
+    .maybeSingle();
 
   if (error) throw error;
+  return data as Reminder | null;
 }

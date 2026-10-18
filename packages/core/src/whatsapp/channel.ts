@@ -32,4 +32,11 @@ export async function downloadWhatsappMedia(ref: MediaRef): Promise<{ buffer: Bu
   return getWhatsappChannel().downloadMedia(ref);
 }
 
-export type { MediaRef, WhatsappChannel } from './types.js';
+/** Usado pelo card de status do admin — nome do provider ativo + checagem de conexão dele (incluindo número conectado, quando disponível). */
+export async function checkWhatsappConnection(): Promise<{ provider: MediaRef['provider']; ok: boolean; detail?: string; number?: string }> {
+  const channel = getWhatsappChannel();
+  const result = await channel.checkConnection();
+  return { provider: channel.provider, ...result };
+}
+
+export type { ConnectionCheck, MediaRef, WhatsappChannel } from './types.js';

@@ -8,7 +8,7 @@ import {
   listTransactions,
 } from '@zapbuddy/db';
 import type { PlanStatus } from '@zapbuddy/db';
-import { Badge, EmptyState, Section, formatDateTime } from '../../components';
+import { Badge, EmptyState, Section, TableScroll, formatDateTime } from '../../components';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,6 +88,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         {transactions.length === 0 ? (
           <EmptyState>Nenhuma transação registrada.</EmptyState>
         ) : (
+          <TableScroll>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: 'left', opacity: 0.6 }}>
@@ -112,6 +113,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
       </Section>
 
@@ -119,6 +121,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         {tasks.length === 0 ? (
           <EmptyState>Nenhuma tarefa registrada.</EmptyState>
         ) : (
+          <TableScroll>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: 'left', opacity: 0.6 }}>
@@ -141,6 +144,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
       </Section>
 
@@ -148,6 +152,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         {reminders.length === 0 ? (
           <EmptyState>Nenhum lembrete registrado.</EmptyState>
         ) : (
+          <TableScroll>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: 'left', opacity: 0.6 }}>
@@ -170,6 +175,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
       </Section>
 
@@ -184,6 +190,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         {toolCalls.length === 0 ? (
           <EmptyState>Nenhuma chamada registrada.</EmptyState>
         ) : (
+          <TableScroll>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: 'left', opacity: 0.6 }}>
@@ -204,6 +211,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
               ))}
             </tbody>
           </table>
+          </TableScroll>
         )}
       </Section>
     </>

@@ -15,6 +15,7 @@ export * from './repositories/magic-links.js';
 export * from './repositories/webhook-events.js';
 export * from './repositories/error-logs.js';
 export * from './repositories/admin-stats.js';
+export * from './repositories/admin-action-logs.js';
 export * from './repositories/insights.js';
 export * from './repositories/api-keys.js';
 export * from './repositories/webhooks.js';
