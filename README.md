@@ -244,7 +244,16 @@ obrigatório:
 
 - **`apps/web`**: Vercel, Root Directory = `apps/web`, Framework =
   Next.js. SSO Protection da Vercel precisa estar desligado (bloqueia
-  webhook e magic link).
+  webhook e magic link). **Production Branch do projeto precisa ser
+  `main`** (Settings → Git) — já aconteceu de ficar apontando pra uma
+  branch de sessão antiga, e nesse caso push em `main` nunca promove pro
+  domínio real (fica só como preview `zapbuddy-git-main-*.vercel.app`),
+  quebrando a premissa do CLAUDE.md de `main` ser o único ponto de
+  integração. Depois de corrigir o Production Branch, um commit genuíno
+  novo em `main` é necessário pra promover — o "Ignored Build Step"
+  (`apps/web/vercel.json`) compara contra o SHA anterior, então
+  reempurrar o mesmo commit (redeploy/force) é visto como "sem
+  diferença" e fica `CANCELED` em vez de promover.
 - **`apps/worker`**: não roda na Vercel (processo contínuo). Ver
   `deploy/worker/README.md` — Docker, 1 container, sem Redis próprio
   (usa o mesmo Redis gerenciado do webhook).
