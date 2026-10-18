@@ -10,3 +10,11 @@ export * from './llm/orchestrator.js';
 export * from './llm/tool-registry.js';
 export * from './audio/transcriber.js';
 export * from './whatsapp/channel.js';
+export {
+  evolutionConfiguredInstanceName,
+  evolutionCreateInstance,
+  evolutionDeleteInstance,
+  evolutionGetInstanceStatus,
+  evolutionGetQrCode,
+} from './whatsapp/evolution-channel.js';
+export type { EvolutionInstanceStatus } from './whatsapp/evolution-channel.js';

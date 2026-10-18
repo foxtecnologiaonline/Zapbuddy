@@ -130,3 +130,99 @@ export class EvolutionChannel implements WhatsappChannel {
     return digits || undefined;
   }
 }
+
+export interface EvolutionInstanceStatus {
+  /** false só quando a Evolution confirma que a instância não existe (404) — qualquer outra resposta assume que existe. */
+  exists: boolean;
+  state?: string;
+  detail?: string;
+}
+
+/**
+ * Diferencia "instância não existe" (precisa criar) de "existe mas
+ * desconectada" (precisa reconectar) — connectionState devolve 404 só no
+ * primeiro caso. Usado pela página de gestão do WhatsApp no admin pra
+ * decidir se mostra "Criar instância" ou "Gerar QR code"/"Excluir".
+ */
+export async function evolutionGetInstanceStatus(): Promise<EvolutionInstanceStatus> {
+  try {
+    const response = await fetchWithRetry(`${baseUrl()}/instance/connectionState/${instanceName()}`, { headers: headers() }, 8_000);
+    if (response.status === 404) return { exists: false };
+    if (!response.ok) {
+      const body = await response.text().catch(() => response.statusText);
+      return { exists: true, detail: `HTTP ${response.status}: ${body.slice(0, 200)}` };
+    }
+    const data = (await response.json()) as { instance?: { state?: string } };
+    return { exists: true, state: data.instance?.state };
+  } catch (error) {
+    return { exists: true, detail: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Cria a instância de EVOLUTION_INSTANCE_NAME com o mesmo payload de
+ * deploy/evolution/create-instance.sh, webhook já registrado apontando pro
+ * endpoint do ZapBuddy. Lança em erro (nunca chamado em caminho silencioso,
+ * diferente dos checks de status) — quem chama decide como mostrar.
+ */
+export async function evolutionCreateInstance(): Promise<{ qrCodeBase64?: string }> {
+  const webhookUrl = `${requireEnv('WEB_APP_URL').replace(/\/$/, '')}/api/whatsapp/webhook-evolution?secret=${requireEnv('EVOLUTION_WEBHOOK_SECRET')}`;
+
+  const response = await fetchWithRetry(
+    `${baseUrl()}/instance/create`,
+    {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        instanceName: instanceName(),
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+        rejectCall: false,
+        groupsIgnore: true,
+        alwaysOnline: false,
+        readMessages: false,
+        readStatus: false,
+        syncFullHistory: false,
+        webhook: { url: webhookUrl, byEvents: false, base64: false, events: ['MESSAGES_UPSERT'] },
+      }),
+    },
+    15_000,
+  );
+  if (!response.ok) {
+    const body = await response.text().catch(() => response.statusText);
+    throw new Error(`Evolution instance/create falhou (${response.status}): ${body.slice(0, 300)}`);
+  }
+  const data = (await response.json()) as { qrcode?: { base64?: string } };
+  return { qrCodeBase64: data.qrcode?.base64 };
+}
+
+/** QR code pra pareamento — vida curta (segundos), renderizar e escanear imediatamente após chamar. */
+export async function evolutionGetQrCode(): Promise<string | undefined> {
+  const response = await fetchWithRetry(`${baseUrl()}/instance/connect/${instanceName()}`, { headers: headers() }, 10_000);
+  if (!response.ok) {
+    const body = await response.text().catch(() => response.statusText);
+    throw new Error(`Evolution instance/connect falhou (${response.status}): ${body.slice(0, 300)}`);
+  }
+  const data = (await response.json()) as { base64?: string };
+  return data.base64;
+}
+
+/**
+ * Apaga a instância — sempre a de EVOLUTION_INSTANCE_NAME, nunca um nome
+ * vindo de fora. Essa Evolution é compartilhada com o ZapScript (ver
+ * deploy/evolution/REUSE-ZAPSCRIPT-INSTANCE.md); não aceitar instanceName
+ * como parâmetro é o que garante que esta função nunca possa apagar a
+ * instância de outro número/cliente.
+ */
+export async function evolutionDeleteInstance(): Promise<void> {
+  const response = await fetchWithRetry(`${baseUrl()}/instance/delete/${instanceName()}`, { method: 'DELETE', headers: headers() }, 10_000);
+  if (!response.ok) {
+    const body = await response.text().catch(() => response.statusText);
+    throw new Error(`Evolution instance/delete falhou (${response.status}): ${body.slice(0, 300)}`);
+  }
+}
+
+/** Nome da instância configurada — só leitura, pra admin confirmar antes de excluir. */
+export function evolutionConfiguredInstanceName(): string | undefined {
+  return process.env.EVOLUTION_INSTANCE_NAME;
+}
