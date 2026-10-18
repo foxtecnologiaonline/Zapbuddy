@@ -5,6 +5,7 @@ import { isAdminRequest } from '@/lib/admin-auth';
 
 const NAV_LINKS = [
   { href: '/admin', label: 'Visão geral' },
+  { href: '/admin/status', label: 'Status' },
   { href: '/admin/contacts', label: 'Contatos' },
   { href: '/admin/calls', label: 'Chamadas' },
   { href: '/admin/reminders', label: 'Lembretes' },

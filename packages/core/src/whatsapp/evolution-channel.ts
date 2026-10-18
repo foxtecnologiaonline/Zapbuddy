@@ -1,5 +1,5 @@
 import { fetchWithRetry } from './http-retry.js';
-import type { AudioRef, WhatsappChannel } from './types.js';
+import type { AudioRef, ConnectionCheck, WhatsappChannel } from './types.js';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -70,5 +70,30 @@ export class EvolutionChannel implements WhatsappChannel {
     if (!base64) throw new Error('Evolution não retornou base64 do áudio');
 
     return { buffer: Buffer.from(base64, 'base64'), mimeType: data.mimetype ?? 'audio/ogg' };
+  }
+
+  /**
+   * Evolution (Baileys) é uma sessão de WhatsApp real — pode cair sem avisar
+   * (desconexão do celular, ban, etc.), diferente da Cloud API. `state ===
+   * 'open'` é o único estado em que a instância está de fato conectada e
+   * capaz de enviar/receber mensagem.
+   */
+  async checkConnection(): Promise<ConnectionCheck> {
+    try {
+      const response = await fetchWithRetry(
+        `${baseUrl()}/instance/connectionState/${instanceName()}`,
+        { headers: headers() },
+        8_000,
+      );
+      if (!response.ok) {
+        const body = await response.text().catch(() => response.statusText);
+        return { ok: false, detail: `HTTP ${response.status}: ${body.slice(0, 200)}` };
+      }
+      const data = (await response.json()) as { instance?: { state?: string } };
+      const state = data.instance?.state ?? 'desconhecido';
+      return { ok: state === 'open', detail: state };
+    } catch (error) {
+      return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+    }
   }
 }

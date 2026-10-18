@@ -40,6 +40,24 @@ export function Badge({ tone, children }: { tone: 'ok' | 'bad' | 'neutral'; chil
   return <span style={{ color: colors[tone], fontSize: 13 }}>{children}</span>;
 }
 
+/** Card visual de status on-line/indisponível pra serviço externo (worker, WhatsApp, banco, fila). */
+export function StatusCard({ name, ok, detail }: { name: string; ok: boolean; detail?: ReactNode }) {
+  const dotColor = ok ? '#4ade80' : '#f87171';
+  return (
+    <div style={{ flex: '1 1 200px', background: '#121821', borderRadius: 8, padding: 16, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <span
+        aria-hidden
+        style={{ width: 10, height: 10, borderRadius: '50%', background: dotColor, marginTop: 4, flexShrink: 0, boxShadow: `0 0 8px ${dotColor}` }}
+      />
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>{name}</div>
+        <div style={{ fontSize: 13, color: dotColor, marginTop: 2 }}>{ok ? 'online' : 'indisponível'}</div>
+        {detail ? <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>{detail}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 export function Pagination({
   basePath,
   page,

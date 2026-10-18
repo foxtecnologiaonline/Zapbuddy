@@ -32,4 +32,11 @@ export async function downloadWhatsappAudio(ref: AudioRef): Promise<{ buffer: Bu
   return getWhatsappChannel().downloadAudio(ref);
 }
 
-export type { AudioRef, WhatsappChannel } from './types.js';
+/** Usado pelo card de status do admin — nome do provider ativo + checagem de conexão dele. */
+export async function checkWhatsappConnection(): Promise<{ provider: AudioRef['provider']; ok: boolean; detail?: string }> {
+  const channel = getWhatsappChannel();
+  const result = await channel.checkConnection();
+  return { provider: channel.provider, ...result };
+}
+
+export type { AudioRef, ConnectionCheck, WhatsappChannel } from './types.js';
