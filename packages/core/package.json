@@ -16,7 +16,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "persona-eval": "tsx scripts/persona-eval.ts"
+    "persona-eval": "tsx scripts/persona-eval.ts",
+    "clean-queues": "tsx scripts/clean-queues.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
