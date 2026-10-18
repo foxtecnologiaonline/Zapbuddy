@@ -6,7 +6,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
  * Próxima ocorrência de um lembrete recorrente, a partir do remind_at que
  * acabou de disparar — usado por reminder-dispatch.ts pra criar a próxima
  * linha em `reminders` (cada ocorrência é sua própria linha/job, não um
- * `repeat` nativo do BullMQ — ver migration 0012). Pura (sem I/O), testável
+ * `repeat` nativo do BullMQ — ver migration 0013). Pura (sem I/O), testável
  * sem mock de banco.
  *
  * Limitação conhecida e aceita: 'monthly' soma 1 mês via Date.setUTCMonth,

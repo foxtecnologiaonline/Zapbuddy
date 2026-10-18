@@ -108,9 +108,12 @@ transactions/tasks/reminders de `user_id` pra `account_id` como escopo)
 + `referrals`) → `0010_public_api.sql` (`api_keys`, `webhook_subscriptions`,
 `webhook_delivery_logs`) → `0011_knowledge_base.sql` (`pgvector`,
 `knowledge_entries`, `interpretation_insights` — pesquisa autônoma e loop
-de feedback, ver `CLAUDE.md`). Rodar em ordem, manualmente, no SQL Editor
-do Supabase. Ver `docs/adr/0002-*.md` e `docs/adr/0003-*.md` pras decisões
-por trás das Fases 2 e 3.
+de feedback, ver `CLAUDE.md`) → `0012_plan_intent.sql`
+(`users.plan_intent`/`plan_intent_requested_at` — captura de intenção de
+assinar/cancelar, momento de venda do Tom, ver `docs/adr/0004-*.md`).
+Rodar em ordem, manualmente, no SQL Editor do Supabase. Ver
+`docs/adr/0002-*.md`, `docs/adr/0003-*.md` e `docs/adr/0004-*.md` pras
+decisões por trás das Fases 2, 3 e do momento de venda/indicação.
 
 ### Admin (`/admin`)
 
@@ -122,13 +125,17 @@ dashboard de clientes (`apps/web/lib/admin-session.ts`).
 - **Visão geral** (`/admin`): visitas (hits nos webhooks, aceitos vs.
   rejeitados), chamadas (tool calls da IA, hoje/7 dias, taxa de
   falha), contatos (total, novos), assinaturas (contagem por
-  `plan_status` — manual, sem billing real ainda), erros (unifica
+  `plan_status` — manual, sem billing real ainda — e pedidos de
+  assinatura aguardando contato, de `register_plan_intent`, ver
+  `docs/adr/0004-*.md`), erros (unifica
   `error_logs` + tool calls falhas + lembretes travados), fila
   (contagem de jobs por status direto do BullMQ/Redis),
   infraestrutura (conectividade do Redis, contagem de linhas por
   tabela).
 - **Contatos** (`/admin/contacts`): lista paginada e buscável, com
-  troca manual de `plan_status` por contato.
+  troca manual de `plan_status` por contato e o sinal de intenção
+  (`plan_intent` — "quer assinar"/"quer cancelar") que o Tom captura na
+  conversa.
 - **Chamadas** (`/admin/calls`): log paginado de `tool_call_logs`,
   filtrável por sucesso/falha — principal insumo de debug de
   interpretação de linguagem natural (CLAUDE.md).

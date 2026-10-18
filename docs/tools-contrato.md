@@ -84,7 +84,7 @@ responsabilidade de cada tool individual logar.
 - **Status possíveis do lembrete:** `pending`, `sent`, `cancelled`, `failed` — **não existe
   `snoozed`.** O cenário "ainda não, me lembra depois" do roteiro de conversa não tem tool nem
   status que o suporte hoje.
-- **Recorrência (migration 0012):** quando `recurrence` é informado, `reminder-dispatch.ts`, ao
+- **Recorrência (migration 0013):** quando `recurrence` é informado, `reminder-dispatch.ts`, ao
   disparar a ocorrência atual, cria automaticamente a PRÓXIMA como uma linha/job novos (via
   `computeNextOccurrence`, `packages/core/src/time/recurrence.ts`) — não é um `repeat` nativo do
   BullMQ, de propósito: cada ocorrência fica individualmente cancelável/consultável, igual um
@@ -102,7 +102,7 @@ responsabilidade de cada tool individual logar.
 ## `set_budget_alert` (`tools/finance.ts`)
 
 - **Schema:** `{ category: string (min 1), limit_cents: int > 0 }` — upsert por `(account_id,
-  category)` (migration 0012); pedir de novo pra mesma categoria substitui o limite anterior.
+  category)` (migration 0013); pedir de novo pra mesma categoria substitui o limite anterior.
 - **Retorno:** `{ set: true, category, limit_cents }`
 - **Efeito:** a partir daí, toda chamada de `record_transaction` com `type: 'expense'` nessa
   categoria recalcula o total do mês corrente (mesma agregação de `get_financial_summary`) e, se
@@ -226,7 +226,7 @@ pergunta a data certa (nunca insiste) por regra do system prompt.
 
 ## Observabilidade: duração + retenção
 
-`tool_call_logs.duration_ms` (migration 0012) registra quanto cada tool call levou —
+`tool_call_logs.duration_ms` (migration 0013) registra quanto cada tool call levou —
 `tool-runner.ts` mede com `Date.now()`. `orchestration.ts` loga `latencyMs` de toda chamada LLM,
 não só quando usa o fallback. Fila semanal `logs-retention` expurga `tool_call_logs` com mais de
 90 dias (bem acima da janela de 7 dias que `interpretation-feedback` e o admin usam).

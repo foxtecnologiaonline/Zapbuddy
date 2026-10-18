@@ -115,6 +115,29 @@ Config nova: `WEB_SEARCH_API_KEY` (Tavily) — opcional; sem ela, a tool
 `web_search` falha de forma controlada (tool loga erro, Tom explica que
 não conseguiu buscar agora, sem inventar resposta).
 
+## Vendas, onboarding e indicação proativa (2026-10, motivo documentado)
+
+Decisão do usuário: o Tom passa a vender a continuidade da assinatura e pedir indicação de forma
+proativa (antes, `get_referral_info` só respondia se perguntado, e não havia nenhum momento de
+venda). Detalhe completo em `docs/adr/0004-vendas-onboarding-indicacao.md` — resumo:
+
+- **Sem preço fechado e sem cobrança real nesta rodada** — nenhum provedor de pagamento decidido.
+  O Tom captura intenção ("quero continuar"/"quero cancelar") via tool `register_plan_intent`,
+  nunca cobra nem cancela nada sozinho; um humano trata manualmente pelo admin (mesmo padrão já
+  usado por `plan_status`). Não revisitar preço/provedor sem decisão explícita do usuário.
+- **Trial de 7 dias**, calculado a partir de `users.created_at` — sem convite de venda antes do
+  5º dia, "prepara o terreno" entre o 5º e o 7º, convite direto a partir do 7º (só pra quem
+  continua em `plan_status = 'trial'`).
+- **Straight Line System (Jordan Belfort) adaptado, não copiado**: aproveita certeza construída em
+  fato real + convite único + loop de objeção limitado a uma volta; descarta de propósito urgência
+  fabricada, prova social inventada e insistência além da segunda recusa — isso violaria a regra
+  de nunca inventar dado/contexto e o tom de "parceiro caloroso" já fixado.
+- **Indicação proativa, sem recompensa concreta** — decisão explícita de deixar a recompensa pra
+  decidir depois; o Tom pode sugerir indicar alguém num momento positivo da conversa, mas nunca
+  promete prêmio/desconto que não existe.
+- **Cancelamento**: uma tentativa de retenção genuína, nunca duas — simetria com a regra do
+  convite de venda.
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

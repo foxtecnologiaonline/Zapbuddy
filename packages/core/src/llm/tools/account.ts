@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createAccountInvite, listAccountMembers, getReferralStats } from '@zapbuddy/db';
+import { createAccountInvite, listAccountMembers, getReferralStats, registerPlanIntent } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 
 export const inviteMemberTool = defineTool({
@@ -38,5 +38,21 @@ export const getReferralInfoTool = defineTool({
   execute: async (_params, ctx) => {
     const stats = await getReferralStats(ctx.accountId);
     return { referral_code: stats.code, total_referred: stats.totalReferred };
+  },
+});
+
+export const registerPlanIntentTool = defineTool({
+  name: 'register_plan_intent',
+  description:
+    'Registra que a pessoa disse, nesta conversa, que quer assinar (continuar pagando depois do ' +
+    'teste) ou cancelar. Chame ANTES de confirmar "anotei"/"vou providenciar" — nunca diga isso sem ' +
+    'ter chamado a tool, igual vale pra dado financeiro. Não cobra nada nem cancela nada sozinho: só ' +
+    'avisa um humano, que trata manualmente (ainda não existe cobrança automática).',
+  schema: z.object({
+    intent: z.enum(['upgrade', 'cancel']),
+  }),
+  execute: async (params, ctx) => {
+    await registerPlanIntent(ctx.userId, params.intent);
+    return { registered: true };
   },
 });

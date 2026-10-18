@@ -21,9 +21,16 @@ function baseUser(overrides: Partial<User> = {}): User {
     onboarding_completed_at: '2026-01-01T00:00:00.000Z',
     plan_status: 'trial',
     plan_status_updated_at: null,
+    plan_intent: null,
+    plan_intent_requested_at: null,
     created_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+function createdDaysAgo(days: number): string {
+  return new Date(Date.now() - days * DAY_MS).toISOString();
 }
 
 describe('buildSystemPrompt', () => {
@@ -81,5 +88,61 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(baseUser());
 
     expect(prompt).not.toMatch(/primeira interação/i);
+  });
+
+  it('não inclui nada de venda nos primeiros dias de teste', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
+
+    expect(prompt).not.toContain('Teste quase no fim');
+    expect(prompt).not.toContain('Momento de venda');
+  });
+
+  it('só prepara o terreno (sem convite direto) perto do fim do teste', () => {
+    const prompt = baseUser({ created_at: createdDaysAgo(6) });
+    const result = buildSystemPrompt(prompt);
+
+    expect(result).toContain('Teste quase no fim');
+    expect(result).not.toContain('Momento de venda');
+    expect(result).not.toMatch(/chame register_plan_intent\(intent: "upgrade"\)/);
+  });
+
+  it('abre o convite direto de assinatura depois de 7 dias de teste', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(10) }));
+
+    expect(prompt).toContain('Momento de venda');
+    expect(prompt).toContain('register_plan_intent');
+    expect(prompt).toMatch(/UMA volta/);
+  });
+
+  it('nunca pede pra inventar preço, urgência falsa ou prova social no convite de venda', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(10) }));
+
+    expect(prompt).toMatch(/não existe\s+preço de assinatura fechado/i);
+    expect(prompt).toMatch(/nunca invente preço, promoção, prazo/i);
+  });
+
+  it('não dispara convite de venda pra quem já é assinante ativo', () => {
+    const prompt = buildSystemPrompt(baseUser({ plan_status: 'active', created_at: createdDaysAgo(30) }));
+
+    expect(prompt).not.toContain('Momento de venda');
+    expect(prompt).not.toContain('Teste quase no fim');
+  });
+
+  it('inclui a indicação proativa e o pedido de cancelamento pra qualquer usuário já cadastrado', () => {
+    const prompt = buildSystemPrompt(baseUser({ plan_status: 'active', created_at: createdDaysAgo(30) }));
+
+    expect(prompt).toContain('Indicação proativa');
+    expect(prompt).toContain('get_referral_info');
+    expect(prompt).toMatch(/não prometa recompensa/i);
+
+    expect(prompt).toContain('Pedido de cancelamento');
+    expect(prompt).toMatch(/UMA pergunta genuína/);
+  });
+
+  it('exige register_plan_intent antes de confirmar intenção de assinar ou cancelar', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/nunca diga "anotei"\/"vou providenciar" sem/i);
+    expect(prompt).toContain('register_plan_intent');
   });
 });
