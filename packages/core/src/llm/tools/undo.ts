@@ -3,7 +3,9 @@ import {
   cancelGoal,
   cancelReminder,
   deactivateRecurringBill,
+  deleteImportantDate,
   deleteNote,
+  deletePersonalGoal,
   deleteTask,
   deleteTransaction,
   findLastSuccessfulToolCall,
@@ -23,6 +25,8 @@ const UNDOABLE_ACTIONS: Record<string, string> = {
   create_recurring_bill: 'bill_id',
   create_goal: 'goal_id',
   create_calendar_event: 'event_id',
+  remember_important_date: 'important_date_id',
+  create_personal_goal: 'goal_id',
 };
 
 async function revertAction(toolName: string, resultId: string, ctx: ToolContext): Promise<boolean> {
@@ -45,6 +49,10 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
       await deleteGoogleCalendarEvent(access.accessToken, access.calendarId, resultId);
       return true;
     }
+    case 'remember_important_date':
+      return (await deleteImportantDate(ctx.accountId, resultId)) !== null;
+    case 'create_personal_goal':
+      return (await deletePersonalGoal(ctx.accountId, resultId)) !== null;
     default:
       return false;
   }
@@ -52,16 +60,18 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
 
 /**
  * Desfaz a última criação feita pela própria pessoa nos últimos 10 minutos
- * (lançamento, tarefa, lembrete, nota, conta, meta ou evento). Usa o log de
- * tool calls como fonte: nada novo é guardado. Só volta uma ação por vez, e
- * nunca desfaz a mesma duas vezes.
+ * (lançamento, tarefa, lembrete, nota, conta recorrente, meta com valor,
+ * meta pessoal, data importante ou evento). Usa o log de tool calls como
+ * fonte: nada novo é guardado. Só volta uma ação por vez, e nunca desfaz a
+ * mesma duas vezes.
  */
 export const undoLastActionTool = defineTool({
   name: 'undo_last_action',
   description:
     'Desfaz a última coisa que a pessoa acabou de criar (lançamento, tarefa, lembrete, nota, conta recorrente, meta ' +
-    'ou evento), se for dos últimos 10 minutos. Use quando ela disser "desfaz", "cancela isso", "foi engano". ' +
-    'Nunca desfaz algo mais antigo e não desfaz duas vezes seguidas — se não houver nada, diga isso.',
+    'com valor, meta pessoal, data importante ou evento), se for dos últimos 10 minutos. Use quando ela disser ' +
+    '"desfaz", "cancela isso", "foi engano". Nunca desfaz algo mais antigo e não desfaz duas vezes seguidas — se ' +
+    'não houver nada, diga isso.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const sinceIso = new Date(Date.now() - UNDO_WINDOW_MINUTES * 60 * 1000).toISOString();

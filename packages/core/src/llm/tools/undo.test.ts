@@ -8,6 +8,8 @@ const db = vi.hoisted(() => ({
   cancelReminder: vi.fn(),
   deactivateRecurringBill: vi.fn(),
   cancelGoal: vi.fn(),
+  deleteImportantDate: vi.fn(),
+  deletePersonalGoal: vi.fn(),
 }));
 
 vi.mock('@zapbuddy/db', () => db);
@@ -68,6 +70,30 @@ describe('undo_last_action', () => {
 
     expect(db.deleteTask).toHaveBeenCalledWith('account-1', 'task-9');
     expect(result).toEqual({ undone: true, undone_action: 'create_task' });
+  });
+
+  it('desfaz uma data importante pelo important_date_id', async () => {
+    db.findLastSuccessfulToolCall
+      .mockResolvedValueOnce(toolCall('remember_important_date', { important_date_id: 'date-1', remembered: true }, minutesAgo(2)))
+      .mockResolvedValueOnce(null);
+    db.deleteImportantDate.mockResolvedValueOnce({ id: 'date-1' });
+
+    const result = await undoLastActionTool.execute({}, ctx);
+
+    expect(db.deleteImportantDate).toHaveBeenCalledWith('account-1', 'date-1');
+    expect(result).toEqual({ undone: true, undone_action: 'remember_important_date' });
+  });
+
+  it('desfaz uma meta pessoal pelo goal_id', async () => {
+    db.findLastSuccessfulToolCall
+      .mockResolvedValueOnce(toolCall('create_personal_goal', { goal_id: 'pgoal-1', created: true }, minutesAgo(1)))
+      .mockResolvedValueOnce(null);
+    db.deletePersonalGoal.mockResolvedValueOnce({ id: 'pgoal-1' });
+
+    const result = await undoLastActionTool.execute({}, ctx);
+
+    expect(db.deletePersonalGoal).toHaveBeenCalledWith('account-1', 'pgoal-1');
+    expect(result).toEqual({ undone: true, undone_action: 'create_personal_goal' });
   });
 
   it('informa quando o item já não existe mais', async () => {

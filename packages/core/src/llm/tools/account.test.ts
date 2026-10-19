@@ -55,17 +55,27 @@ describe('register_plan_intent', () => {
     expect(asaas.createAsaasCustomer).not.toHaveBeenCalled();
   });
 
-  it('upgrade com cpf_cnpj novo salva o CPF, cria cliente+assinatura na Asaas e devolve o checkout_url', async () => {
+  it('upgrade com cpf_cnpj novo normaliza (só dígitos), salva, cria cliente+assinatura na Asaas e devolve o checkout_url', async () => {
     db.findUserById.mockResolvedValueOnce(baseUser());
     asaas.createAsaasCustomer.mockResolvedValueOnce({ id: 'cus_123' });
     asaas.createAsaasSubscription.mockResolvedValueOnce({ id: 'sub_456', status: 'ACTIVE', paymentLink: 'https://asaas.com/pay/abc' });
 
     const result = await registerPlanIntentTool.execute({ intent: 'upgrade', cpf_cnpj: '123.456.789-00' }, ctx);
 
-    expect(db.saveUserCpfCnpj).toHaveBeenCalledWith('user-1', '123.456.789-00');
-    expect(asaas.createAsaasCustomer).toHaveBeenCalledWith({ name: 'Marina', cpfCnpj: '123.456.789-00', externalReference: 'user-1' });
+    expect(db.saveUserCpfCnpj).toHaveBeenCalledWith('user-1', '12345678900');
+    expect(asaas.createAsaasCustomer).toHaveBeenCalledWith({ name: 'Marina', cpfCnpj: '12345678900', externalReference: 'user-1' });
     expect(db.saveAsaasSubscription).toHaveBeenCalledWith('user-1', 'cus_123', 'sub_456', 'https://asaas.com/pay/abc');
     expect(result).toEqual({ registered: true, checkout_url: 'https://asaas.com/pay/abc' });
+  });
+
+  it('upgrade com CPF/CNPJ sem a quantidade certa de dígitos devolve invalid_cpf, sem chamar a Asaas', async () => {
+    db.findUserById.mockResolvedValueOnce(baseUser());
+
+    const result = await registerPlanIntentTool.execute({ intent: 'upgrade', cpf_cnpj: '123' }, ctx);
+
+    expect(result).toEqual({ registered: true, invalid_cpf: true });
+    expect(db.saveUserCpfCnpj).not.toHaveBeenCalled();
+    expect(asaas.createAsaasCustomer).not.toHaveBeenCalled();
   });
 
   it('upgrade reusa a assinatura já existente, sem chamar a Asaas de novo', async () => {

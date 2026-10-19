@@ -330,4 +330,12 @@ describe('buildSystemPrompt persona B2C', () => {
     expect(prompt).toContain('set_quiet_hours');
     expect(prompt).toContain('undo_last_action');
   });
+
+  it('distingue explicitamente meta com valor (create_goal) de meta qualitativa (create_personal_goal), nos dois sentidos', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/Diferente\s+da meta pessoal qualitativa abaixo \(create_personal_goal\)/);
+    expect(prompt).toMatch(/SEM valor em dinheiro/);
+    expect(prompt).toMatch(/isso é create_goal/);
+  });
 });

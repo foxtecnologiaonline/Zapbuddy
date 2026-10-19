@@ -14,6 +14,8 @@ import {
   listNotes,
   listImportantDates,
   listPersonalGoals,
+  listActiveRecurringBills,
+  listGoals,
 } from '@zapbuddy/db';
 import { getCurrentUserId, getCurrentAccount } from '@/lib/auth';
 import { getCurrentMonthRange } from '@/lib/timezone';
@@ -79,6 +81,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     notes,
     importantDates,
     personalGoals,
+    recurringBills,
+    savingsGoals,
   ] = await Promise.all([
     summarizeTransactions(account.accountId, startIso, endIso),
     listTransactions(account.accountId, startIso, endIso, {
@@ -99,6 +103,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listNotes(account.accountId),
     listImportantDates(account.accountId),
     listPersonalGoals(account.accountId, 'pending'),
+    listActiveRecurringBills(account.accountId),
+    listGoals(account.accountId, 'active'),
   ]);
 
   const dailyExpenseTrend = bucketSumsByDay(
@@ -131,6 +137,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <p style={{ opacity: 0.7, margin: 0 }}>
             Resumo do mês atual.
             {members.length > 1 && ` Conta compartilhada com ${members.length - 1} pessoa(s).`}
+          </p>
+          <p style={{ opacity: 0.6, margin: 0, fontSize: 13 }}>
+            Horário de silêncio: {user.quiet_hours_start}h–{user.quiet_hours_end}h (sem resumo/insight proativo
+            nessa janela — pra mudar, peça pro Tom no WhatsApp).
           </p>
         </div>
         <form action="/api/auth/logout" method="POST">
@@ -199,6 +209,37 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <ul>
             {pendingTasks.map((task) => (
               <li key={task.id}>{task.title}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>Contas recorrentes</h2>
+        {recurringBills.length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nenhuma conta recorrente cadastrada ainda.</p>
+        ) : (
+          <ul>
+            {recurringBills.map((bill) => (
+              <li key={bill.id}>
+                {bill.name} — {formatCents(bill.amount_cents)} (todo dia {bill.due_day})
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>Metas com valor</h2>
+        {savingsGoals.length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nenhuma meta com valor em andamento.</p>
+        ) : (
+          <ul>
+            {savingsGoals.map((goal) => (
+              <li key={goal.id}>
+                {goal.title} — {formatCents(goal.saved_cents)} de {formatCents(goal.target_cents)}
+                {goal.deadline && ` até ${new Date(goal.deadline).toLocaleDateString('pt-BR')}`}
+              </li>
             ))}
           </ul>
         )}

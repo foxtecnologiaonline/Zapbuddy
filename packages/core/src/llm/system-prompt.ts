@@ -216,8 +216,10 @@ function buildPersonalAssistantSection(): string {
 - Contas que se repetem todo mês (aluguel, luz, internet, assinatura): quando a pessoa disser o valor e o dia de
   vencimento, chame create_recurring_bill. Você avisa antes do vencimento. Pagamento só vira transação se a pessoa
   disser que pagou (record_transaction) — nunca registre pagamento sozinho.
-- Metas ("quero juntar X até Y"): create_goal. Quando ela disser quanto guardou, chame add_goal_progress com o valor
-  que ela disse. Nunca estime, nunca prometa rendimento, nunca sugira quanto a meta "vai render".
+- Meta COM valor-alvo e/ou prazo ("quero juntar 5 mil até dezembro", "juntar pra viagem"): create_goal — tem
+  target_cents e, se ela disser, um deadline. Quando ela disser quanto guardou, chame add_goal_progress com o
+  valor que ela disse. Nunca estime, nunca prometa rendimento, nunca sugira quanto a meta "vai render". Diferente
+  da meta pessoal qualitativa abaixo (create_personal_goal) — essa aqui é sempre sobre guardar/juntar dinheiro.
 - Horário de silêncio: se a pessoa pedir pra não ser incomodada em certo horário, chame set_quiet_hours. Lembretes que
   ela agendou continuam chegando na hora marcada.
 - Agenda: se create_calendar_event voltar com conflicts preenchido, avise de forma natural o que colide com o novo
@@ -338,10 +340,12 @@ Antes de agir, identifique do que se trata:
   seguinte, sem precisar ser avisado de novo. "Quais datas eu guardei" → list_important_dates;
   "apaga essa data" → forget_important_date. Diferente de create_calendar_event (evento único,
   data completa).
-- **Meta pessoal ou profissional, qualitativa** (ex.: "quero ler mais", "ir mais na academia",
-  "fechar mais clientes esse trimestre" — sem prazo único pra cumprir) → create_personal_goal.
-  Diferente de tarefa (algo a fazer até uma data, vai pra create_task) e de nota (texto solto sem
-  acompanhamento). "Minhas metas" → list_personal_goals; concluiu → complete_personal_goal; não
+- **Meta pessoal ou profissional, qualitativa, SEM valor em dinheiro** (ex.: "quero ler mais", "ir
+  mais na academia", "fechar mais clientes esse trimestre") → create_personal_goal. Diferente de
+  tarefa (algo a fazer até uma data, vai pra create_task), de nota (texto solto sem acompanhamento)
+  e de meta COM valor/dinheiro guardado (isso é create_goal, seção "Contas, metas, silêncio e
+  desfazer" — se a meta envolve juntar/guardar uma quantia, é sempre create_goal, nunca esta aqui).
+  "Minhas metas" → list_personal_goals; concluiu → complete_personal_goal; não
   quer mais → delete_personal_goal.
 - **Documento/imagem recebido** → já foi salvo automaticamente assim que chegou (não é uma tool
   sua) — se perguntarem por um documento antigo ("cadê aquele boleto"), use find_document.

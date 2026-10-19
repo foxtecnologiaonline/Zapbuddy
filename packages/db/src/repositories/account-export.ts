@@ -6,7 +6,17 @@ import { getSupabaseClient } from '../client.js';
  */
 export async function exportAccountData(accountId: string): Promise<Record<string, unknown[]>> {
   const client = getSupabaseClient();
-  const tables = ['transactions', 'tasks', 'notes', 'recurring_bills', 'goals', 'memory_facts'] as const;
+  const tables = [
+    'transactions',
+    'tasks',
+    'reminders',
+    'notes',
+    'memory_facts',
+    'important_dates',
+    'personal_goals',
+    'recurring_bills',
+    'goals',
+  ] as const;
 
   const results = await Promise.all(
     tables.map(async (table) => {
