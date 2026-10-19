@@ -246,6 +246,13 @@ Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboard
 - **Variante de abertura A/B** (`onboarding_variant`): split determinístico por número de WhatsApp
   (par/ímpar do último dígito, nunca aleatório) entre "nome primeiro" (controle) e "ação primeiro"
   — decisão de qual vence fica pra quando a amostra crescer, lida manualmente no funil.
+  **Amendamento 2026-10 (motivo documentado, decisão do dono do produto): este teste A/B foi
+  encerrado antes de ter amostra** — a abertura do onboarding virou um script fixo em 2 frases
+  (ver seção "Cadastro progressivo" abaixo): 1) o Tom se apresenta, 2) pergunta nome E e-mail
+  juntos, numa frase só (`buildOnboardingSection`, sem mais ramificação por `onboarding_variant`).
+  A coluna `onboarding_variant` e a atribuição determinística continuam existindo (não apagadas) só
+  pra manter o dado histórico do funil do admin legível — a partir desta decisão ela não influencia
+  mais o texto que o Tom manda, então os números das duas variantes devem convergir pra frente.
 
 ## Expansão B2C — datas importantes, metas, carreira e timeline (2026-10, motivo documentado)
 
@@ -362,7 +369,12 @@ abrir espaço natural pra isso. Campos cobertos (`migration 0021_cadastro_progre
   via `set_quiet_hours` (diferente de `quiet_hours_start/end`, que sempre têm um valor default
   22/7 mesmo sem confirmação nenhuma) — sem essa coluna não dava pra saber se "ainda falta
   perguntar" ou se o default já é o que ela queria.
-- **E-mail** — nova tool `set_email`, só quando a própria pessoa informa.
+- **E-mail** — nova tool `set_email`. **Amendamento 2026-10 (motivo documentado, decisão do dono
+  do produto): e-mail passou a ser pedido já na abertura do onboarding**, junto do nome, na mesma
+  frase (ver amendamento da seção "Onboarding turbinado" acima) — não é mais exclusivamente
+  cadastro progressivo dos dias seguintes. `buildProgressiveSignupSection` continua cobrindo e-mail
+  como rede de segurança: se a pessoa não informar no onboarding, o Tom pode perguntar de novo,
+  no máximo uma vez por conversa, nos dias seguintes — nunca interrompe nem repete à toa.
 - **CPF/CNPJ** — já existia (migration 0020), continua pedido só no momento de fechar a assinatura
   (`buildUpgradeSection`), nunca nos primeiros dias.
 - **Número de WhatsApp** — não entra no cadastro progressivo: já é capturado automaticamente na

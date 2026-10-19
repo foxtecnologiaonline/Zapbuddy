@@ -161,25 +161,30 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('register_plan_intent');
   });
 
-  it('variante ask_name_first (controle) abre pedindo o nome, sem convidar ação direto', () => {
-    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_name_first' }));
+  it('abertura é um script fixo em 2 frases (apresentação, depois nome+e-mail) — não varia mais por onboarding_variant', () => {
+    const promptA = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_name_first' }));
+    const promptB = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_action_first' }));
 
-    expect(prompt).toMatch(/explique em 1-2 frases o que você faz, e pergunte o nome dela/);
-    expect(prompt).not.toMatch(/já convide a pessoa a contar um gasto/);
+    for (const prompt of [promptA, promptB]) {
+      expect(prompt).toMatch(/Se apresente como o Tom/);
+      expect(prompt).toMatch(/Pergunte o nome E o e-mail dela juntos/);
+    }
+    expect(promptA).toBe(promptB);
   });
 
-  it('variante ask_action_first convida uma ação concreta já na abertura', () => {
-    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_action_first' }));
+  it('se o e-mail vier junto do nome, chama set_email; se não vier, não insiste', () => {
+    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
 
-    expect(prompt).toMatch(/já convide a pessoa a contar um gasto, tarefa ou lembrete/);
-    expect(prompt).not.toMatch(/explique em 1-2 frases o que você faz, e pergunte o nome dela/);
+    expect(prompt).toContain('complete_onboarding');
+    expect(prompt).toMatch(/tiver dado o e-mail nessa resposta, chame set_email/);
+    expect(prompt).toMatch(/não der o e-mail agora, sem problema — não insista/);
   });
 
   it('onboarding instrui capturar ocupação como bônus e mandar o link do painel proativamente', () => {
     const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
 
-    expect(prompt).toMatch(/nunca pergunte isso separado nem insista/i);
-    expect(prompt).toMatch(/passe occupation só se ela tiver\s+mencionado o que faz/i);
+    expect(prompt).toMatch(/nunca pergunte isso\s+separado nem insista/i);
+    expect(prompt).toMatch(/occupation só se ela\s+tiver mencionado o que faz/i);
     expect(prompt).toMatch(/chame\s+send_dashboard_login_link e inclua o link na mesma mensagem/i);
   });
 
