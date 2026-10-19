@@ -1,8 +1,19 @@
 # ZapBuddy
 
-Assistente pessoal via WhatsApp com IA para organização financeira, agenda, tarefas e documentos. Nicho inicial: autônomos e pequenos negócios (MEI/PJ). Diferencial central: IA **proativa** (antecipa e sugere), não só reativa a comandos.
+Parceiro pessoal 24 horas via WhatsApp com IA para gestão do tempo (agenda e compromissos pessoais), organização de tarefas e notas pessoais, e gestão financeira. Público: consumidores finais (B2C), pessoas físicas. Diferencial central: IA **proativa** (antecipa e sugere), não só reativa a comandos.
 
-Referência de mercado estudada: meuassessor.com (6 "assessores" especializados, Open Finance, R$29,90/mês). ZapBuddy compete por nicho + proatividade de IA, não por paridade de feature.
+Referência de mercado estudada: meuassessor.com (6 "assessores" especializados, Open Finance, R$29,90/mês) e Pierre (app de finanças pessoais da CloudWalk). ZapBuddy compete por proatividade de IA e pela cobertura da rotina pessoal num só canal, não por paridade de feature.
+
+## Público e escopo (2026-10, motivo documentado)
+
+Decisão do usuário: o público é B2C, não MEI/PJ. O foco do Tom é:
+
+- Gestão do tempo: agenda e compromissos pessoais
+- Organização de tarefas e notas pessoais
+- Gestão financeira pessoal
+- Parceiro disponível 24 horas por dia, sempre pelo WhatsApp
+
+Itens de negócio (fluxo de caixa de MEI/PJ, DAS, nota fiscal) não são nicho do produto. Não revisitar esse recorte sem pedido explícito do usuário.
 
 ## Stack (decidida — não revisitar sem motivo forte)
 
@@ -89,8 +100,8 @@ explícito.
 Escopo do que entra:
 1. **Tool `web_search`** (`packages/core/src/llm/tools/web-search.ts`): dá
    ao Tom capacidade de buscar na web durante a conversa — pra responder
-   dúvida geral fora do domínio financeiro/tarefas (ex.: "o que é o MEI",
-   "taxa do Simples esse ano") e pra identificar um estabelecimento
+   dúvida geral fora do domínio financeiro/tarefas (ex.: "o que é Tesouro
+   Selic", "como funciona o FGTS") e pra identificar um estabelecimento
    desconhecido antes de escolher categoria de gasto (reaproveita a mesma
    tool, não é um pipeline separado). Passa por `runToolCall()` igual
    qualquer outra tool — logada, nunca usada pra inventar/confirmar dado
@@ -104,7 +115,7 @@ Escopo do que entra:
    padrão de reúso dos amendamentos anteriores).
 3. **Job periódico de pesquisa proativa** (fila BullMQ
    `proactive-research`, semanal): pesquisa uma lista fixa de temas do
-   nicho (MEI, Simples Nacional, organização financeira pra autônomo) e
+   nicho (organização financeira pessoal, gestão do tempo e rotina) e
    alimenta a base de conhecimento — não envia nada ao usuário sozinho,
    só amplia repertório pra uso futuro em conversa.
 4. **Loop de feedback sobre interpretação** (fila BullMQ
