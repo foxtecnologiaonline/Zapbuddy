@@ -2,10 +2,20 @@
 
 Assistente pessoal via WhatsApp com IA. Nicho inicial: autônomos e pequenos negócios (MEI/PJ). Diferencial central: IA **proativa** (antecipa e sugere), não só reativa a comandos.
 
-**Posicionamento (2026-10, reafirmado pelo dono do produto):** o foco do Tom é apoiar a gestão do
-tempo (agenda e compromissos pessoais), a organização de tarefas e notas pessoais, e a gestão
-financeira — ajudando e sendo parceiro do usuário todo dia, 24h. Documentos entram como suporte a
-esses três pilares (ex.: comprovante de um gasto), não como um quarto pilar independente.
+**Posicionamento (2026-10, reafirmado pelo dono do produto — B2C, consumidor final, não B2B):**
+
+Visão informal: *"o Tom é seu amigo que te ouve 24hs por dia, te responde, te ajuda a lembrar do
+que você falou, seja pessoal, profissional, notas, agenda, compromisso ou financeiro."*
+
+Formal: *"O foco do Tom é de apoiar na gestão do tempo, como agenda e compromissos pessoais,
+organização de tarefas e notas pessoais, e gestão financeira, ajudando em parceria com você todo
+dia 24hs."*
+
+"Nicho inicial: autônomos e pequenos negócios (MEI/PJ)" (acima) é o perfil de quem adota primeiro,
+não uma venda B2B — quem paga e usa é a pessoa física, no pessoal e no profissional dela, o que já
+inclui o MEI/PJ como só mais um aspecto da vida de quem usa, não um produto de gestão empresarial.
+Documentos entram como suporte aos três pilares (ex.: comprovante de um gasto), não como um quarto
+pilar independente.
 
 Referência de mercado estudada: meuassessor.com (6 "assessores" especializados, Open Finance, R$29,90/mês). ZapBuddy compete por nicho + proatividade de IA, não por paridade de feature.
 
