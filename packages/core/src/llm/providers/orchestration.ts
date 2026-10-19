@@ -48,8 +48,21 @@ export async function runLlmWithFallback(input: LlmProviderRunInput): Promise<Ll
         // Latência de toda chamada LLM (não só quando cai no fallback) — sem
         // isso, uma lentidão percebida pelo usuário não dava pra distinguir
         // entre "o Claude está lento" e "uma tool específica está lenta"
-        // (ver duration_ms em tool_call_logs, tool-runner.ts).
-        logger.info('llm_call_completed', { provider: provider.name, userId: input.toolContext.userId, latencyMs, usedFallback: index > 0 });
+        // (ver duration_ms em tool_call_logs, tool-runner.ts). `usage` (ver
+        // sugestão #2 da revisão de performance 2026-10) é o único jeito de
+        // provar se o cache em camadas (sugestão #1) está funcionando de
+        // verdade — sem logar isso, cache_read_input_tokens nunca aparece
+        // em lugar nenhum pra verificar.
+        logger.info('llm_call_completed', {
+          provider: provider.name,
+          userId: input.toolContext.userId,
+          latencyMs,
+          usedFallback: index > 0,
+          inputTokens: result.usage?.inputTokens,
+          outputTokens: result.usage?.outputTokens,
+          cacheReadInputTokens: result.usage?.cacheReadInputTokens,
+          cacheCreationInputTokens: result.usage?.cacheCreationInputTokens,
+        });
         if (index > 0) {
           // Só loga em warn quando um fallback foi de fato usado — o caminho
           // feliz (primeiro provider, sempre) já foi registrado acima em info.

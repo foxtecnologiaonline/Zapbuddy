@@ -27,7 +27,7 @@ function fakeProvider(name: string, run: LlmProvider['run']): LlmProvider {
 }
 
 const baseInput: Omit<LlmProviderRunInput, 'toolContext'> & { toolContext: LlmProviderRunInput['toolContext'] } = {
-  system: 'system prompt',
+  system: { stable: 'system prompt', semiStable: '', volatile: '' },
   history: [],
   userMessage: 'oi',
   toolContext: {

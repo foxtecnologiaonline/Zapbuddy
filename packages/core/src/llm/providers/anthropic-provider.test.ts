@@ -48,7 +48,7 @@ describe('anthropicProvider.run', () => {
     });
 
     const result = await anthropicProvider.run({
-      system: 'system prompt',
+      system: { stable: 'system prompt', semiStable: '', volatile: '' },
       history: [],
       userMessage: 'gastei 30 no mercado',
       toolContext,
@@ -73,7 +73,7 @@ describe('anthropicProvider.run', () => {
     });
 
     const result = await anthropicProvider.run({
-      system: 'system prompt',
+      system: { stable: 'system prompt', semiStable: '', volatile: '' },
       history: [],
       userMessage: 'oi',
       toolContext,

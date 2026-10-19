@@ -8,7 +8,7 @@ import {
   listRecentCategorizedTransactions,
   listMemoryFacts,
 } from '@zapbuddy/db';
-import { buildSystemPrompt } from './system-prompt.js';
+import { buildSystemPromptBlocks } from './system-prompt.js';
 import type { ToolContext } from './tool-types.js';
 import { appendTurn, getRecentTurns } from '../context/conversation-context.js';
 import { getCurrentStreakDays } from '../streak/compute.js';
@@ -109,7 +109,7 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     getCurrentStreakDays(account.accountId, user.timezone),
     listMemoryFacts(account.accountId),
   ]);
-  const system = buildSystemPrompt(user, recentCategorizations, streakDays, memoryFacts);
+  const system = buildSystemPromptBlocks(user, recentCategorizations, streakDays, memoryFacts);
 
   const { replyText } = await runLlmWithFallback({
     system,

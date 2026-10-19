@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { User } from '@zapbuddy/db';
-import { buildSystemPrompt } from './system-prompt.js';
+import { buildSystemPrompt, buildSystemPromptBlocks } from './system-prompt.js';
 
 /**
  * Teste de regressão, não de comportamento do modelo: não chama a API da
@@ -227,12 +227,20 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('O que você já sabe sobre essa pessoa');
   });
 
-  it('instrui quebrar linha a cada frase e nunca usar negrito markdown/lista pra conversa do dia a dia', () => {
+  it('instrui quebrar linha de verdade a cada frase (não só formatação do prompt) e nunca usar negrito markdown/lista pra conversa do dia a dia', () => {
     const prompt = buildSystemPrompt(baseUser());
 
-    expect(prompt).toMatch(/pule para a linha seguinte depois de cada frase/i);
+    expect(prompt).toMatch(/quebra de linha DE VERDADE/);
+    expect(prompt).toMatch(/não sobre\s+como este prompt que você está lendo agora está quebrado em linhas/i);
     expect(prompt).toMatch(/negrito em markdown de dois asteriscos/i);
     expect(prompt).toMatch(/nem renderiza como negrito no whatsapp/i);
+  });
+
+  it('instrui variar o emoji por assunto, nunca repetir sempre o mesmo', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/nunca o mesmo emoji toda vez\s+independente do assunto/i);
+    expect(prompt).toMatch(/cada exemplo acima usa um emoji diferente, de propósito/i);
   });
 
   it('cobre a amplitude atual (agenda, meta, nota, financeiro) ao descrever o que o Tom faz, sem parar só no financeiro', () => {
@@ -255,6 +263,50 @@ describe('buildSystemPrompt', () => {
 
     expect(prompt).toContain('O que você já sabe sobre essa pessoa');
     expect(prompt).toContain('trabalha de terça a sábado');
+  });
+});
+
+describe('buildSystemPromptBlocks (cache em camadas — sugestão #1 da revisão de performance 2026-10)', () => {
+  it('só a camada volátil muda entre duas chamadas seguidas da mesma pessoa (resto fica byte-idêntico pro cache)', () => {
+    const a = buildSystemPromptBlocks(baseUser());
+    const b = buildSystemPromptBlocks(baseUser());
+
+    expect(a.stable).toBe(b.stable);
+    expect(a.semiStable).toBe(b.semiStable);
+    // volatile pode diferir (tem o "Agora é..." com hora/minuto) — não é o
+    // que este teste garante; os dois blocos cacheáveis sim precisam ser
+    // byte-idênticos entre mensagens seguidas, senão o cache nunca reaproveita.
+  });
+
+  it('a hora atual só aparece na camada volátil, nunca na estável', () => {
+    const blocks = buildSystemPromptBlocks(baseUser());
+
+    expect(blocks.volatile).toMatch(/Agora é/);
+    expect(blocks.stable).not.toMatch(/Agora é/);
+  });
+
+  it('fatos de memória e categorização recente ficam na camada semi-estável, não na estável', () => {
+    const blocks = buildSystemPromptBlocks(baseUser(), [], null, [
+      { id: 'fact-1', account_id: 'account-1', fact: 'trabalha de terça a sábado', created_by_user_id: 'user-1', created_at: '2026-01-01T00:00:00.000Z' },
+    ]);
+
+    expect(blocks.semiStable).toContain('trabalha de terça a sábado');
+    expect(blocks.stable).not.toContain('trabalha de terça a sábado');
+  });
+
+  it('buildSystemPrompt (wrapper) concatena as 3 camadas na mesma ordem', () => {
+    const blocks = buildSystemPromptBlocks(baseUser());
+    const flat = buildSystemPrompt(baseUser());
+
+    expect(flat).toBe(`${blocks.stable}${blocks.semiStable}${blocks.volatile}`);
+  });
+
+  it('no fluxo de onboarding, semi-estável e volátil ficam vazios (nada a cachear em camada separada)', () => {
+    const blocks = buildSystemPromptBlocks(baseUser({ onboarding_completed_at: null }));
+
+    expect(blocks.semiStable).toBe('');
+    expect(blocks.volatile).toBe('');
+    expect(blocks.stable).toContain('complete_onboarding');
   });
 });
 

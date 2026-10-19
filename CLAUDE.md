@@ -286,6 +286,60 @@ pra não inflar isto além do que dá pra validar de uma vez):
   auto-injetar todas infla token de toda mensagem por pouco ganho — o sweep proativo já cobre o
   caso que importa (avisar no dia certo).
 
+## Cadeia de IA — cache em camadas, effort e correções de estilo (2026-10, motivo documentado)
+
+Decisão do usuário: executar as 5 sugestões de performance/custo levantadas numa revisão da cadeia
+de modelos, mais dois bugs reportados a partir de print real de conversa no WhatsApp (mensagem sem
+quebra de linha, mesmo emoji repetido sempre). Resumo do que entrou:
+
+1. **Cache em camadas no system prompt** (`system-prompt.ts`: `buildSystemPromptBlocks`,
+   `anthropic-provider.ts`) — antes, a hora atual ("Agora é...") ficava interpolada no meio do
+   prompt, mudando a cada mensagem e invalidando o cache inteiro mesmo entre mensagens seguidas da
+   MESMA conversa (só reaproveitava dentro do mesmo turno, nas até 6 iterações do loop). Agora o
+   prompt é montado em 3 blocos — `stable` (igual pra essa pessoa em qualquer mensagem),
+   `semiStable` (fatos de memória/categorização recente/streak/trial — muda no máximo algumas
+   vezes por dia) e `volatile` (só a hora, nunca cacheado, sempre por último) — com 2
+   `cache_control` próprios (+ 1 já existente nas tools = 3 de 4 breakpoints permitidos por
+   request). `buildSystemPrompt` (string única) continua existindo como wrapper pros testes e pro
+   provider OpenAI (que cacheia prefixo automaticamente no servidor, sem marcação explícita).
+2. **Log de `usage`/cache** (`providers/types.ts`, `orchestration.ts`) — antes só `latencyMs` era
+   logado; agora `llm_call_completed` também loga `inputTokens`/`outputTokens`/
+   `cacheReadInputTokens`/`cacheCreationInputTokens` (Anthropic devolve os 4; a Chat Completions da
+   OpenAI só devolve input/output, sem detalhe de cache) — é o jeito de provar, com o tempo, se a
+   sugestão 1 está de fato reaproveitando cache entre mensagens.
+3. **`effort: "low"` explícito no Haiku 5.5** (`anthropic-provider.ts`, `output_config`) — default
+   do modelo é `medium`; conversa curta de WhatsApp com poucas tool calls por turno é o perfil que
+   tende a ir bem com `low` (chat/triagem, não coding/raciocínio longo). **Não validado contra um
+   eval** (não existe um neste projeto ainda) — monitorar qualidade de resposta real depois do
+   deploy (triagem errada entre ferramenta parecida, confirmação confusa) e reverter pra `medium`
+   se piorar.
+4. **Few-shot de categorização movido pra camada semi-estável** — consequência direta do item 1:
+   `formatRecentCategorizationsBlock` já estava cacheável, só não tinha onde (agora cabe no bloco
+   `semiStable`).
+5. **Schema de tools monitorado, não alterado ainda** — medição feita nesta rodada: 41 tools
+   registradas (`tool-registry.ts`), ~18KB de JSON Schema serializado, ~4.500 tokens estimados
+   (chars/4) — abaixo do patamar (~10K tokens) onde `tool_search`/`defer_loading` compensaria o
+   próprio custo da busca. Watch item: remedir quando crescer mais (o número já quase dobrou numa
+   única rodada de merge em paralelo — ver nota de duplicação de esforço abaixo).
+6. **Correções de estilo de mensagem** (bugs reais, reportados em produção):
+   - Quebra de linha: a instrução original dependia de um exemplo com `\n` embutido no meio de um
+     prompt que já é inteiro quebrado em linhas por formatação de código-fonte — o modelo não tinha
+     como distinguir "esta quebra é a instrução" de "isto é só como o arquivo está formatado".
+     Reescrita pra ser explícita ("isto é sobre o TEXTO QUE VOCÊ MANDA, não sobre como este prompt
+     está escrito aqui") com contraste ERRADO/CERTO.
+   - Emoji único repetido: só havia um emoji de exemplo (🛒) na seção "Voz do Tom", e o modelo
+     parecia ancorar nele pra qualquer assunto. Adicionada instrução explícita de variar por
+     contexto + exemplos com 4 emojis diferentes (🛒 ✅ 📊 🎉), reforçando "nunca o mesmo emoji toda
+     vez independente do assunto".
+
+**Achado não relacionado às 5 sugestões, mas descoberto no processo**: outra sessão trabalhou em
+paralelo nesta mesma janela de tempo e já deu merge direto em `main` (commits `a946a03`/`a3c5430`)
+— datas importantes/metas pessoais duplicadas em parte, reconciliado pela própria sessão (migration
+renumerada pra `0019`, `personal_goals` convivendo com `goals`/metas de economia separadas) antes
+do merge chegar aqui. Sincronizado (`git merge --ff-only`), typecheck/teste/build confirmados
+limpos depois — nenhuma ação adicional necessária, só reforça a importância da convenção já
+documentada acima ("checar branches e PRs abertos antes de trabalho grande").
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

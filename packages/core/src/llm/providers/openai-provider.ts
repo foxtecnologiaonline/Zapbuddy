@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionToolMessageParam } from 'openai/resources/chat/completions';
+import type { CompletionUsage } from 'openai/resources/completions';
 import { MESSAGES } from '../../messages.js';
 import { toOpenAiToolSpecs } from '../tool-registry.js';
 import { runToolCall, type ToolCallRequest } from '../tool-runner.js';
@@ -31,8 +32,13 @@ export const openaiProvider: LlmProvider = {
   async run(input: LlmProviderRunInput): Promise<LlmProviderRunResult> {
     const { system, history, userMessage, toolContext } = input;
 
+    // OpenAI cacheia prefixo automaticamente no servidor (sem cache_control
+    // explícito) — concatenar as 3 camadas na ordem estável→semi-estável→
+    // volátil (mesma ordem usada pelos breakpoints do provider Anthropic)
+    // já aproveita isso, sem precisar de nada específico desta API.
+    const systemText = `${system.stable}${system.semiStable}${system.volatile}`;
     const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: system },
+      { role: 'system', content: systemText },
       ...history.map((turn) => ({ role: turn.role, content: turn.content }) as ChatCompletionMessageParam),
       { role: 'user', content: userMessage },
     ];
@@ -43,9 +49,11 @@ export const openaiProvider: LlmProvider = {
 
     let finalText = '';
     let pendingToolResult = false;
+    let lastUsage: CompletionUsage | undefined;
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
       const response = await openai.chat.completions.create({ model, messages, tools, tool_choice: 'auto' });
+      lastUsage = response.usage;
       const choice = response.choices[0];
       if (!choice) throw new Error('OpenAI não retornou nenhum choice');
       const toolCalls = choice.message.tool_calls?.filter((call) => call.type === 'function') ?? [];
@@ -84,10 +92,16 @@ export const openaiProvider: LlmProvider = {
       // executar uma tool — pede resumo em texto, sem tools, em vez de
       // devolver vazio.
       const wrapUp = await openai.chat.completions.create({ model, messages });
+      lastUsage = wrapUp.usage;
       finalText = wrapUp.choices[0]?.message.content?.trim() ?? '';
     }
 
-    return { replyText: finalText || MESSAGES.noReplyGenerated };
+    return {
+      replyText: finalText || MESSAGES.noReplyGenerated,
+      // Chat Completions não devolve cache_read/cache_creation separado
+      // (caching da OpenAI é automático e opaco) — só input/output mesmo.
+      usage: lastUsage && { inputTokens: lastUsage.prompt_tokens, outputTokens: lastUsage.completion_tokens },
+    };
   },
 };
 
