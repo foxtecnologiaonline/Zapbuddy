@@ -10,7 +10,7 @@ import {
 } from '@zapbuddy/db';
 import { buildSystemPromptBlocks } from './system-prompt.js';
 import type { ToolContext } from './tool-types.js';
-import { appendTurn, getRecentTurns } from '../context/conversation-context.js';
+import { appendTurns, getRecentTurns } from '../context/conversation-context.js';
 import { getCurrentStreakDays } from '../streak/compute.js';
 import { runLlmWithFallback } from './providers/orchestration.js';
 import { MESSAGES } from '../messages.js';
@@ -118,8 +118,10 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     toolContext,
   });
 
-  await appendTurn(user.whatsapp_number, { role: 'user', content: messageText, at: new Date().toISOString() });
-  await appendTurn(user.whatsapp_number, { role: 'assistant', content: replyText, at: new Date().toISOString() });
+  await appendTurns(user.whatsapp_number, [
+    { role: 'user', content: messageText, at: new Date().toISOString() },
+    { role: 'assistant', content: replyText, at: new Date().toISOString() },
+  ]);
 
   return { replyText };
 }

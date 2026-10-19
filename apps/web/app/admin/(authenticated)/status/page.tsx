@@ -1,5 +1,5 @@
 import { checkDatabaseConnection } from '@zapbuddy/db';
-import { checkWhatsappConnection, getWorkerHeartbeatAgeMs, isWorkerHealthy, pingRedis } from '@zapbuddy/core';
+import { checkWhatsappConnection, getWorkerHeartbeatAgeMs, isHeartbeatFresh, pingRedis } from '@zapbuddy/core';
 import { CardRow, Section, StatusCard } from '../components';
 
 export const dynamic = 'force-dynamic';
@@ -20,13 +20,13 @@ function formatBrazilianNumber(digits: string): string {
 }
 
 export default async function StatusPage() {
-  const [databaseOk, redisOk, whatsapp, workerOk, workerHeartbeatAgeMs] = await Promise.all([
+  const [databaseOk, redisOk, whatsapp, workerHeartbeatAgeMs] = await Promise.all([
     checkDatabaseConnection(),
     pingRedis(),
     checkWhatsappConnection(),
-    isWorkerHealthy(),
     getWorkerHeartbeatAgeMs(),
   ]);
+  const workerOk = isHeartbeatFresh(workerHeartbeatAgeMs);
 
   const workerDetail =
     workerHeartbeatAgeMs === null

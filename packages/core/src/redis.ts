@@ -52,7 +52,13 @@ export async function getWorkerHeartbeatAgeMs(): Promise<number | null> {
   }
 }
 
-export async function isWorkerHealthy(): Promise<boolean> {
-  const age = await getWorkerHeartbeatAgeMs();
-  return age !== null && age <= WORKER_HEARTBEAT_STALE_MS;
+/**
+ * Pura por design (recebe a idade em vez de buscar sozinha) — o card de
+ * status do admin já precisa de `getWorkerHeartbeatAgeMs()` pra exibir "há
+ * Xmin", então calcular a saúde a partir desse mesmo valor evita um segundo
+ * GET no Redis pra responder a mesma pergunta duas vezes (ver análise de
+ * consumo de Redis 2026-10, CLAUDE.md).
+ */
+export function isHeartbeatFresh(ageMs: number | null): boolean {
+  return ageMs !== null && ageMs <= WORKER_HEARTBEAT_STALE_MS;
 }

@@ -33,15 +33,29 @@ function truncate(content: string): string {
  * Contexto de conversa de curto prazo — camada separada dos dados estruturados
  * de longo prazo (Postgres). Vive em Redis com TTL; nunca é a fonte de verdade
  * para transações/tarefas, só dá ao LLM memória recente da conversa.
+ *
+ * Recebe uma ou mais turnos (o orquestrador sempre manda o par usuário+Tom
+ * junto, ver orchestrator.ts) num ÚNICO round-trip — análise de consumo de
+ * Redis 2026-10 (ver CLAUDE.md, incidente de cota do Upstash): isto roda em
+ * TODA mensagem, sem exceção, então é a operação de maior frequência do
+ * sistema; mandar os dois turnos separados dobrava à toa o número de comandos
+ * dessa chamada específica.
  */
-export async function appendTurn(whatsappNumber: string, turn: ConversationTurn): Promise<void> {
+export async function appendTurns(whatsappNumber: string, turns: ConversationTurn[]): Promise<void> {
+  if (turns.length === 0) return;
+
   const redis = getRedisConnection();
   const k = key(whatsappNumber);
-  const toStore: ConversationTurn = { ...turn, content: truncate(turn.content) };
-  // multi() faz as 3 operações num round-trip atômico — separadas, um crash
-  // entre elas podia deixar a chave sem TTL (vazamento no Redis) ou perder um
-  // ltrim em appendTurn concorrente para o mesmo número.
-  await redis.multi().rpush(k, JSON.stringify(toStore)).ltrim(k, -MAX_TURNS, -1).expire(k, TTL_SECONDS).exec();
+  let pipeline = redis.multi();
+  for (const turn of turns) {
+    const toStore: ConversationTurn = { ...turn, content: truncate(turn.content) };
+    pipeline = pipeline.rpush(k, JSON.stringify(toStore));
+  }
+  // ltrim/expire uma vez só, depois de todos os rpush — mesmo raciocínio do
+  // multi() original: separados, um crash no meio podia deixar a chave sem
+  // TTL (vazamento no Redis) ou perder um ltrim em escrita concorrente para
+  // o mesmo número.
+  await pipeline.ltrim(k, -MAX_TURNS, -1).expire(k, TTL_SECONDS).exec();
 }
 
 export async function getRecentTurns(whatsappNumber: string): Promise<ConversationTurn[]> {

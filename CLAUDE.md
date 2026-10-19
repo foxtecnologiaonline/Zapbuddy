@@ -69,6 +69,23 @@ Migration `0019_personal_assistant.sql` precisa ser aplicada no Supabase antes d
     1h pra recuperar um job travado por crash em troca de ~99% menos comando/dia). `REDIS_URL`
     migrada pra uma instância Upstash nova (`allowing-chow-82780.upstash.io`) depois do banco
     anterior ficar inacessível mesmo após as correções de código.
+  - **Amendamento 2026-10 (motivo documentado, incidente recorrente):** o banco novo também
+    estourou a cota mensal do plano Fixed (500.000 requests), causando falha intermitente de
+    processamento de mensagem (`webhook_message_failed`, "max requests limit exceeded") — Tom
+    parava de responder pra uma fração das mensagens, de forma aleatória. **Diagnóstico: causa
+    raiz diferente da de 2026-10 acima** — `stalledInterval`/heartbeat (já esticados pra 1h/2h)
+    seguem responsáveis por um volume hoje desprezível (~336 comandos/dia mesmo com 14 filas, vs.
+    os ~30 mil/dia do incidente original); o consumo atual é dominado por **tráfego real de
+    mensagem**, que cresceu desde a correção original. Dois cortes de código aplicados nesta
+    rodada (sem mudar arquitetura nem resolver o estouro por si só, só reduzem o piso):
+    `appendTurns` (`context/conversation-context.ts`) agora grava os dois turnos de uma mensagem
+    (pessoa + Tom) num único round-trip em vez de dois separados — essa chamada roda em TODA
+    mensagem, então era o maior "dobrador" de comando evitável; e o card de status do admin
+    (`admin/status/page.tsx`) parou de chamar `getWorkerHeartbeatAgeMs()` duas vezes (uma direta,
+    uma dentro do extinto `isWorkerHealthy()` — agora `isHeartbeatFresh(ageMs)`, puro). Correção
+    de fato pro estouro de cota é decisão de plano/provedor (Upstash pay-as-you-go, outro
+    provedor, ou auto-upgrade), não cabe em código — decisão do dono do produto, não tomada por
+    uma sessão sozinha.
 - **Canal:** WhatsApp Cloud API oficial (Meta) é o canal **padrão e obrigatório** para qualquer usuário real/dados financeiros.
   - **Amendamento 2026-10 (motivo documentado):** suporte opcional à Evolution API (gateway Baileys self-hosted, mesma usada pelo ZapScript em `deploy/evolution-oci`) como canal alternativo via `WHATSAPP_CHANNEL_PROVIDER=evolution`, só para ambientes de teste/staging ou contingência operacional (ex.: aprovação do número oficial atrasada). Risco de ban e fragilidade para dado financeiro continuam valendo para esse caminho — por isso ele nunca é o default (`WHATSAPP_CHANNEL_PROVIDER` default é `cloud-api`) e qualquer deploy de produção com usuários reais deve permanecer em `cloud-api`. Não é dual-send automático: é uma troca manual de canal via env var.
 - **LLM:** Claude (Anthropic), via tool use/function calling — cada "assessor" é um conjunto de tools, não um serviço separado.
