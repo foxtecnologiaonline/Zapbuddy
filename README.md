@@ -86,15 +86,17 @@ deploy/
   e aprendizado contínuo" no `CLAUDE.md`
 
 ### `apps/worker/src`
-- `worker.ts` — os 9 workers BullMQ (mensagem recebida, transcrição de
+- `worker.ts` — os 11 workers BullMQ (mensagem recebida, transcrição de
   áudio, disparo de lembrete, upload de documento, sweep + geração de
-  insight proativo, disparo de webhook, pesquisa proativa semanal, loop
-  de feedback de interpretação semanal) — registra também os jobs
-  repetíveis (sweep de insights 1x/hora, pesquisa proativa e feedback
-  de interpretação semanais) no boot
-- `handlers/` — lógica de cada fila
-- `scheduled-jobs.ts` — registra os jobs recorrentes (pesquisa proativa,
-  feedback de interpretação) via `repeat` do BullMQ no boot do worker
+  insight proativo, disparo de webhook, resumo semanal/matinal,
+  reengajamento de onboarding, lembrete de data importante) — registra
+  também o job repetível de sweep de insights (1x/hora) no boot
+- `handlers/` — lógica de cada fila. `insights-sweep.ts` também roda a
+  manutenção semanal (pesquisa proativa, feedback de interpretação,
+  expurgo de logs) direto, gated por dia/hora UTC — **sem fila/Worker
+  própria pra cada uma** (2026-10, análise de consumo de Redis: uma fila
+  `repeat` do BullMQ fica presa 24/7 num teto de bloqueio de 10s mesmo
+  rodando 1x/semana — ver `CLAUDE.md`)
 - `audio/` — pipeline Whisper (Groq → Groq full → OpenAI, com detector
   de alucinação) e conversão de áudio via ffmpeg
 

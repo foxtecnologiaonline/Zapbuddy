@@ -28,6 +28,13 @@ const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
   removeOnFail: { count: 500, age: 7 * 24 * 3600 },
 };
 
+// proactive-research/interpretation-feedback/logs-retention não têm fila
+// própria (2026-10, análise de consumo de Redis — ver CLAUDE.md): eram 3
+// filas `repeat` rodando 1x/semana, mas qualquer fila com job atrasado
+// pendente fica presa 24/7 no teto de 10s de bloqueio do BullMQ — um
+// desperdício enorme de comando Redis pra uma execução semanal. As três
+// agora rodam direto dentro do sweep horário já existente
+// (apps/worker/src/handlers/insights-sweep.ts), gated por dia/hora UTC.
 export const QUEUE_NAMES = {
   audioTranscription: 'audio-transcription',
   incomingMessage: 'incoming-message',
@@ -36,9 +43,6 @@ export const QUEUE_NAMES = {
   insightsSweep: 'insights-sweep',
   insightsGenerate: 'insights-generate',
   webhookDispatch: 'webhook-dispatch',
-  proactiveResearch: 'proactive-research',
-  interpretationFeedback: 'interpretation-feedback',
-  logsRetention: 'logs-retention',
   weeklyDigestGenerate: 'weekly-digest-generate',
   onboardingNudge: 'onboarding-nudge',
   morningDigestGenerate: 'morning-digest-generate',
@@ -88,14 +92,6 @@ export interface WebhookDispatchJob {
   payload: Record<string, unknown>;
 }
 
-// Jobs sem payload — cada handler decide seu próprio escopo (lista fixa de
-// tópicos, período fixo de 7 dias — ver apps/worker/src/handlers/). Existem
-// só pra caber no mesmo formato Queue<T>/Worker das outras filas.
-export type ProactiveResearchJob = Record<string, never>;
-export type InterpretationFeedbackJob = Record<string, never>;
-/** Expurgo semanal de tool_call_logs (ver repositories/tool-call-logs.ts) — sem payload, o handler fixa o corte de 90 dias. */
-export type LogsRetentionJob = Record<string, never>;
-
 export interface WeeklyDigestGenerateJob {
   accountId: string;
   ownerWhatsappNumber: string;
@@ -143,9 +139,6 @@ let documentQueue: Queue<DocumentUploadJob> | null = null;
 let insightsSweepQueue: Queue<InsightsSweepJob> | null = null;
 let insightsGenerateQueue: Queue<InsightsGenerateJob> | null = null;
 let webhookDispatchQueue: Queue<WebhookDispatchJob> | null = null;
-let proactiveResearchQueue: Queue<ProactiveResearchJob> | null = null;
-let interpretationFeedbackQueue: Queue<InterpretationFeedbackJob> | null = null;
-let logsRetentionQueue: Queue<LogsRetentionJob> | null = null;
 let weeklyDigestGenerateQueue: Queue<WeeklyDigestGenerateJob> | null = null;
 let onboardingNudgeQueue: Queue<OnboardingNudgeJob> | null = null;
 let morningDigestGenerateQueue: Queue<MorningDigestGenerateJob> | null = null;
@@ -205,30 +198,6 @@ export function getWebhookDispatchQueue(): Queue<WebhookDispatchJob> {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return webhookDispatchQueue;
-}
-
-export function getProactiveResearchQueue(): Queue<ProactiveResearchJob> {
-  proactiveResearchQueue ??= new Queue(QUEUE_NAMES.proactiveResearch, {
-    connection: getRedisConnection(),
-    defaultJobOptions: DEFAULT_JOB_OPTIONS,
-  });
-  return proactiveResearchQueue;
-}
-
-export function getInterpretationFeedbackQueue(): Queue<InterpretationFeedbackJob> {
-  interpretationFeedbackQueue ??= new Queue(QUEUE_NAMES.interpretationFeedback, {
-    connection: getRedisConnection(),
-    defaultJobOptions: DEFAULT_JOB_OPTIONS,
-  });
-  return interpretationFeedbackQueue;
-}
-
-export function getLogsRetentionQueue(): Queue<LogsRetentionJob> {
-  logsRetentionQueue ??= new Queue(QUEUE_NAMES.logsRetention, {
-    connection: getRedisConnection(),
-    defaultJobOptions: DEFAULT_JOB_OPTIONS,
-  });
-  return logsRetentionQueue;
 }
 
 export function getWeeklyDigestGenerateQueue(): Queue<WeeklyDigestGenerateJob> {

@@ -1,4 +1,3 @@
-import type { Job } from 'bullmq';
 import { listToolCallLogsInRange, insertInterpretationInsight, type ToolCallLog } from '@zapbuddy/db';
 
 const PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
@@ -53,12 +52,13 @@ export function buildInterpretationReport(logs: ToolCallLog[]): InterpretationRe
 }
 
 /**
- * Job semanal (ver scheduled-jobs.ts) — mina tool_call_logs dos últimos 7
- * dias em busca de padrão de erro de interpretação de linguagem natural e
- * grava um relatório em interpretation_insights. Só leitura/relatório: não
- * ajusta prompt, categoria ou qualquer comportamento sozinho (CLAUDE.md).
+ * Job semanal (2026-10: chamado direto de dentro do sweep horário — ver
+ * nota em proactive-research.ts) — mina tool_call_logs dos últimos 7 dias
+ * em busca de padrão de erro de interpretação de linguagem natural e grava
+ * um relatório em interpretation_insights. Só leitura/relatório: não ajusta
+ * prompt, categoria ou qualquer comportamento sozinho (CLAUDE.md).
  */
-export async function handleInterpretationFeedback(_job: Job): Promise<void> {
+export async function handleInterpretationFeedback(): Promise<void> {
   const periodEnd = new Date();
   const periodStart = new Date(periodEnd.getTime() - PERIOD_MS);
 

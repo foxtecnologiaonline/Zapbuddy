@@ -1,4 +1,3 @@
-import type { Job } from 'bullmq';
 import { logger } from '@zapbuddy/db';
 import { searchWeb } from '@zapbuddy/core';
 
@@ -17,12 +16,16 @@ const RESEARCH_TOPICS = [
 ];
 
 /**
- * Job semanal (ver apps/worker/src/scheduled-jobs.ts) — só alimenta
- * knowledge_entries em background, nunca manda mensagem a usuário sozinho.
- * Falha de um tópico não derruba os outros: cada busca já falha de forma
- * controlada dentro de searchWeb/fetchFromTavily (web-search/client.ts).
+ * Job semanal (2026-10: chamado direto de dentro do sweep horário —
+ * insights-sweep.ts — em vez de ter fila/Worker própria; ver análise de
+ * consumo de Redis no CLAUDE.md: uma fila dedicada a um job semanal ficava
+ * 24/7 presa no teto de 10s de bloqueio do BullMQ só esperando essa única
+ * execução por semana) — só alimenta knowledge_entries em background,
+ * nunca manda mensagem a usuário sozinho. Falha de um tópico não derruba
+ * os outros: cada busca já falha de forma controlada dentro de
+ * searchWeb/fetchFromTavily (web-search/client.ts).
  */
-export async function handleProactiveResearch(_job: Job): Promise<void> {
+export async function handleProactiveResearch(): Promise<void> {
   for (const topic of RESEARCH_TOPICS) {
     try {
       await searchWeb(topic, { origin: 'proactive_research' });

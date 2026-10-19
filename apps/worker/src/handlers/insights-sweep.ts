@@ -5,6 +5,7 @@ import {
   hasSentWeeklyDigestSince,
   listImportantDatesForAccountOnDate,
   hasSentImportantDateReminderThisYear,
+  logger,
 } from '@zapbuddy/db';
 import {
   getLocalHour,
@@ -18,6 +19,9 @@ import {
   isWithinQuietHours,
   type InsightsSweepJob,
 } from '@zapbuddy/core';
+import { handleProactiveResearch } from './proactive-research.js';
+import { handleInterpretationFeedback } from './interpretation-feedback.js';
+import { handleLogsRetention } from './logs-retention.js';
 
 // 19h local — fim de tarde/começo de noite, momento plausível de "ver como
 // foi o dia" sem acordar ninguém (ADR 0003, decisão 2). Granularidade de
@@ -36,9 +40,64 @@ const DIGEST_LOCAL_HOUR = 18;
 const MORNING_DIGEST_LOCAL_HOUR = 8;
 
 // 9h local — manhã, horário distinto dos outros dois (18h/19h) pra não
-// competir por conexão com o Supabase na mesma janela (mesmo raciocínio do
-// comentário em scheduled-jobs.ts sobre os jobs semanais em horas distintas).
+// competir por conexão com o Supabase na mesma janela (mesmo raciocínio dos
+// jobs semanais abaixo, em horas UTC distintas).
 const IMPORTANT_DATE_LOCAL_HOUR = 9;
+
+// Segunda 9h/10h/11h UTC (2026-10, antes eram 3 filas próprias com `repeat`
+// do BullMQ — ver análise de consumo de Redis no CLAUDE.md): cada fila
+// repetível fica presa 24/7 no teto de 10s de bloqueio do BullMQ (qualquer
+// fila com job atrasado pendente cai nesse teto, `drainDelay` não ajuda
+// nesse caso — ver worker.ts), um desperdício enorme pra um job que roda 1x
+// por semana. Dobrados aqui dentro do sweep horário (que já roda 1x/hora de
+// qualquer forma): cada checagem só passa na hora exata certa, reproduzindo
+// o mesmo `repeat: '0 9/10/11 * * 1'` de antes sem fila dedicada. Horas
+// distintas entre si de propósito, mesmo raciocínio dos horários locais
+// acima — evita os três competindo por conexão com o Supabase junto.
+const PROACTIVE_RESEARCH_UTC_WEEKDAY = 1; // segunda
+const PROACTIVE_RESEARCH_UTC_HOUR = 9;
+const INTERPRETATION_FEEDBACK_UTC_WEEKDAY = 1;
+const INTERPRETATION_FEEDBACK_UTC_HOUR = 10;
+const LOGS_RETENTION_UTC_WEEKDAY = 1;
+const LOGS_RETENTION_UTC_HOUR = 11;
+
+/**
+ * Roda a manutenção semanal (pesquisa proativa / feedback de interpretação /
+ * expurgo de logs) quando a checagem acerta a janela certa — nunca deixa uma
+ * falha de manutenção derrubar o sweep horário de verdade (resumo/insight/
+ * lembrete por conta), que roda logo depois desta função.
+ */
+async function runWeeklyMaintenance(): Promise<void> {
+  const weekday = getLocalWeekday('UTC');
+  const hour = getLocalHour('UTC');
+
+  const jobs: { name: string; shouldRun: boolean; run: () => Promise<void> }[] = [
+    {
+      name: 'proactive_research',
+      shouldRun: weekday === PROACTIVE_RESEARCH_UTC_WEEKDAY && hour === PROACTIVE_RESEARCH_UTC_HOUR,
+      run: handleProactiveResearch,
+    },
+    {
+      name: 'interpretation_feedback',
+      shouldRun: weekday === INTERPRETATION_FEEDBACK_UTC_WEEKDAY && hour === INTERPRETATION_FEEDBACK_UTC_HOUR,
+      run: handleInterpretationFeedback,
+    },
+    {
+      name: 'logs_retention',
+      shouldRun: weekday === LOGS_RETENTION_UTC_WEEKDAY && hour === LOGS_RETENTION_UTC_HOUR,
+      run: handleLogsRetention,
+    },
+  ];
+
+  for (const job of jobs) {
+    if (!job.shouldRun) continue;
+    try {
+      await job.run();
+    } catch (error) {
+      logger.error('weekly_maintenance_job_failed', { job: job.name, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+}
 
 /**
  * Varre todas as contas 1x/hora (fila repetível, registrada em worker.ts) —
@@ -51,6 +110,8 @@ const IMPORTANT_DATE_LOCAL_HOUR = 9;
  * gatilhos de dia/hora e fonte de dado diferentes.
  */
 export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<void> {
+  await runWeeklyMaintenance();
+
   const accounts = await listAccountsForInsightsSweep();
 
   await Promise.all(

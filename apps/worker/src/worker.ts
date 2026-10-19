@@ -8,14 +8,10 @@ import { handleDocumentUpload } from './handlers/document-upload.js';
 import { handleInsightsSweep } from './handlers/insights-sweep.js';
 import { handleInsightsGenerate } from './handlers/insights-generate.js';
 import { handleWebhookDispatch } from './handlers/webhook-dispatch.js';
-import { handleProactiveResearch } from './handlers/proactive-research.js';
-import { handleInterpretationFeedback } from './handlers/interpretation-feedback.js';
-import { handleLogsRetention } from './handlers/logs-retention.js';
 import { handleWeeklyDigestGenerate } from './handlers/weekly-digest-generate.js';
 import { handleOnboardingNudge } from './handlers/onboarding-nudge.js';
 import { handleMorningDigestGenerate } from './handlers/morning-digest-generate.js';
 import { handleImportantDateReminder } from './handlers/important-date-reminder.js';
-import { scheduleRecurringJobs } from './scheduled-jobs.js';
 
 const connection = getRedisConnection();
 
@@ -59,7 +55,7 @@ async function notifyUserOfExhaustedJob(whatsappNumber: string): Promise<void> {
 // já gerava ~60 mil comandos/Redis em 2 dias (foi a causa real de estourar o
 // limite do plano Fixed da Upstash em menos de 48h, ver investigação
 // 2026-10: nada a ver com volume de mensagem real, é overhead de infra
-// ocioso). 1h em todas as 11 filas, inclusive incoming-message/
+// ocioso). 1h em todas as filas, inclusive incoming-message/
 // audio-transcription — decisão explícita do dono do produto: aceita que,
 // no caso raro de o worker cair bem no meio de processar uma mensagem real,
 // o usuário pode ficar sem resposta por até 1h (em vez de até 30s) até o
@@ -68,6 +64,24 @@ async function notifyUserOfExhaustedJob(whatsappNumber: string): Promise<void> {
 // processamento (orientado a evento, não polling) — só o tempo de
 // recuperação depois de um crash.
 const STALLED_INTERVAL_MS = 60 * 60_000;
+
+// Segundo achado da mesma análise de consumo (2026-10): mesmo com
+// stalledInterval alto, todo Worker reemite BZPOPMIN a cada `drainDelay`
+// (default do BullMQ: 5s) enquanto a fila está vazia SEM job atrasado
+// pendente — reconectar a cada 5s, 24/7, pra 11 filas é a maior fatia hoje
+// do consumo de comando. Subir pra 55s não atrasa pickup de job real: um
+// job novo acorda o Worker na hora via a chave "marker" que o BullMQ
+// empurra em todo Queue.add() (ver addJobInTargetList.lua), independente
+// do valor de drainDelay — isso só governa a cadência de "nada aconteceu,
+// tenta de novo". NÃO ajuda reminder-dispatch/onboarding-nudge/
+// insights-sweep: enquanto existe QUALQUER job atrasado/repetível
+// pendente nessas filas (o caso comum), o próprio BullMQ ignora
+// drainDelay e usa um teto fixo de 10s (ver node_modules/bullmq
+// getBlockTimeout, "we restrict the maximum block timeout to 10 second") —
+// essas três continuam reconectando no máximo a cada 10s, piso que só sai
+// de código trocando a precisão do lembrete/nudge por uma varredura mais
+// grossa, decisão de produto que não cabe tomar aqui sozinho.
+const DRAIN_DELAY_SECONDS = 55;
 
 const QUEUE_CONFIGS: {
   name: string;
@@ -130,22 +144,6 @@ const QUEUE_CONFIGS: {
     concurrency: 5,
   },
   {
-    name: QUEUE_NAMES.proactiveResearch,
-    handler: handleProactiveResearch,
-    concurrency: 1,
-  },
-  {
-    name: QUEUE_NAMES.interpretationFeedback,
-    handler: handleInterpretationFeedback,
-    concurrency: 1,
-  },
-  {
-    // Sem onExhausted: job de manutenção interna, ninguém espera resposta.
-    name: QUEUE_NAMES.logsRetention,
-    handler: handleLogsRetention,
-    concurrency: 1,
-  },
-  {
     name: QUEUE_NAMES.weeklyDigestGenerate,
     handler: handleWeeklyDigestGenerate,
     concurrency: 5,
@@ -173,7 +171,12 @@ const QUEUE_CONFIGS: {
 ];
 
 const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, onExhausted }) => {
-  const worker = new Worker(name, handler, { connection, concurrency, stalledInterval: STALLED_INTERVAL_MS });
+  const worker = new Worker(name, handler, {
+    connection,
+    concurrency,
+    stalledInterval: STALLED_INTERVAL_MS,
+    drainDelay: DRAIN_DELAY_SECONDS,
+  });
   worker.on('failed', (job, error) => {
     logger.error('job_failed', { queue: name, jobId: job?.id, error: error.message, attemptsMade: job?.attemptsMade });
     if (!job || !isExhausted(job)) return;
@@ -193,10 +196,6 @@ const workers = QUEUE_CONFIGS.map(({ name, handler, concurrency, onExhausted }) 
 });
 
 logger.info('worker_started', { queues: workers.map((w) => w.name) });
-
-void scheduleRecurringJobs().catch((error) => {
-  logger.error('schedule_recurring_jobs_failed', { error: error instanceof Error ? error.message : String(error) });
-});
 
 // Sinal de vida pro card de status do admin — sem isso não há como distinguir
 // "worker rodando mas ocioso" de "worker caiu" a partir do processo da web (que

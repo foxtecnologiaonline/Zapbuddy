@@ -86,6 +86,37 @@ Migration `0019_personal_assistant.sql` precisa ser aplicada no Supabase antes d
     de fato pro estouro de cota é decisão de plano/provedor (Upstash pay-as-you-go, outro
     provedor, ou auto-upgrade), não cabe em código — decisão do dono do produto, não tomada por
     uma sessão sozinha.
+  - **Amendamento 2026-10 (motivo documentado, correção de diagnóstico + redução de ~80-90%):**
+    o dono do produto mandou o próprio dashboard da Upstash — corrige o amendamento acima:
+    **não é tráfego real de mensagem crescendo**, é overhead estrutural do BullMQ. O banco está em
+    **Eco Mode** (modo de billing legado feito pra BullMQ/Bull/Sidekiq, sendo descontinuado pela
+    Upstash — banner no próprio dashboard recomenda migrar pra Fixed Plan) e o gráfico de
+    "Top Commands Usage" mostra `BZPOPMIN`/`ZPOPMIN`/`ZRANGE` dominando, num platô constante de
+    ~20 comandos/s — assinatura de poll de infraestrutura, não de conversa humana. Causa raiz real
+    (lida no código-fonte do BullMQ, `node_modules/bullmq/dist/esm/classes/worker.js`,
+    `getBlockTimeout`): toda fila com QUALQUER job atrasado/repetível pendente é travada pelo
+    próprio BullMQ num teto de bloqueio de 10s (`drainDelay` não se aplica nesse caso — só quando
+    não há nenhum delay pendente) — então qualquer fila com `repeat` do BullMQ fica reconectando a
+    cada ≤10s **24/7**, mesmo que o job em si rode 1x por semana. Isso afetava 3 filas de
+    manutenção semanal (`proactive-research`/`interpretation-feedback`/`logs-retention`, cada uma
+    com seu `repeat` próprio em `scheduled-jobs.ts`) sem nenhum ganho — rodavam 1x/semana mas
+    pagavam o custo de poll o ano inteiro. Corrigido:
+    - As três agora rodam direto de dentro do sweep horário já existente
+      (`insights-sweep.ts` → `runWeeklyMaintenance()`), gated por dia/hora UTC — mesmo
+      `repeat: '0 9/10/11 * * 1'` de antes, sem fila/Worker dedicado. `scheduled-jobs.ts` foi
+      apagado (ficou vazio). Elimina 3 dos 14 Workers (e suas 3 conexões bloqueantes 24/7) por
+      inteiro.
+    - `drainDelay` (`apps/worker/src/worker.ts`, default do BullMQ é 5s) subido pra 55s em todos
+      os Workers restantes — só tem efeito nas filas SEM job atrasado pendente (a maioria), nunca
+      atrasa pickup de job real (`Queue.add()` acorda o Worker bloqueado na hora via a chave
+      "marker", independente do valor de `drainDelay` — confirmado lendo
+      `addJobInTargetList.lua`). `reminder-dispatch`/`onboarding-nudge`/`insights-sweep` continuam
+      presas no teto de 10s do BullMQ sempre que têm job atrasado pendente (quase sempre) — isso
+      não é resolvível por opção de configuração; só trocando a precisão do lembrete/nudge por uma
+      varredura mais grossa, decisão de produto que não foi tomada aqui.
+    Não resolve a cota do Eco Mode já estourada neste ciclo (isso continua sendo a troca de plano
+    já pedida ao dono do produto) — reduz o consumo estrutural pra frente, pra não estourar de
+    novo assim que o plano for trocado.
 - **Canal:** WhatsApp Cloud API oficial (Meta) é o canal **padrão e obrigatório** para qualquer usuário real/dados financeiros.
   - **Amendamento 2026-10 (motivo documentado):** suporte opcional à Evolution API (gateway Baileys self-hosted, mesma usada pelo ZapScript em `deploy/evolution-oci`) como canal alternativo via `WHATSAPP_CHANNEL_PROVIDER=evolution`, só para ambientes de teste/staging ou contingência operacional (ex.: aprovação do número oficial atrasada). Risco de ban e fragilidade para dado financeiro continuam valendo para esse caminho — por isso ele nunca é o default (`WHATSAPP_CHANNEL_PROVIDER` default é `cloud-api`) e qualquer deploy de produção com usuários reais deve permanecer em `cloud-api`. Não é dual-send automático: é uma troca manual de canal via env var.
 - **LLM:** Claude (Anthropic), via tool use/function calling — cada "assessor" é um conjunto de tools, não um serviço separado.
