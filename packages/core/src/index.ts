@@ -33,3 +33,4 @@ export * from './onboarding/nudge-message.js';
 export * from './google/calendar-access.js';
 export * from './time/quiet-hours.js';
 export * from './digest/morning.js';
+export * from './important-dates/message.js';

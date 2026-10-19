@@ -1,67 +1,57 @@
 import { z } from 'zod';
-import { addGoalProgress, createGoal, findGoal, listGoals } from '@zapbuddy/db';
+import { completePersonalGoal, createPersonalGoal, deletePersonalGoal, listPersonalGoals } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 
-export const createGoalTool = defineTool({
-  name: 'create_goal',
+export const createPersonalGoalTool = defineTool({
+  name: 'create_personal_goal',
   description:
-    'Cria uma meta de economia com valor-alvo e prazo opcional (ex.: "juntar R$ 2.000 até dezembro"). ' +
-    'Valor e prazo vêm sempre da pessoa. Nunca prometa rendimento nem sugira quanto render a meta.',
+    'Cria uma meta pessoal qualitativa, pessoal ou profissional (ex.: "quero ler mais", "ir mais na ' +
+    'academia", "fechar mais 2 clientes esse trimestre") — diferente de create_task (sem prazo único, ' +
+    'algo a fazer até tal dia) e de create_note (é algo pra acompanhar/concluir, não só um texto solto).',
   schema: z.object({
-    title: z.string().min(1).max(120),
-    target_amount: z.number().positive().max(100_000_000),
-    deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    description: z.string().min(1).max(300),
   }),
   execute: async (params, ctx) => {
-    const goal = await createGoal({
-      accountId: ctx.accountId,
-      userId: ctx.userId,
-      title: params.title,
-      targetCents: Math.round(params.target_amount * 100),
-      deadline: params.deadline ?? null,
-    });
+    const goal = await createPersonalGoal(ctx.accountId, ctx.userId, params.description);
     return { goal_id: goal.id, created: true };
   },
 });
 
-export const addGoalProgressTool = defineTool({
-  name: 'add_goal_progress',
-  description:
-    'Soma um valor que a pessoa disse ter guardado numa meta, dado o goal_id. O valor é o que ela declarou — ' +
-    'nunca estime. Se a meta for atingida, o retorno vem com completed: true.',
+export const listPersonalGoalsTool = defineTool({
+  name: 'list_personal_goals',
+  description: 'Lista as metas pessoais do usuário, opcionalmente filtradas por status.',
   schema: z.object({
-    goal_id: z.string().uuid(),
-    amount: z.number().positive().max(100_000_000),
+    status: z.enum(['pending', 'done']).optional(),
   }),
   execute: async (params, ctx) => {
-    const goal = await findGoal(ctx.accountId, params.goal_id);
-    if (!goal || goal.status !== 'active') return { updated: false, reason: 'goal_not_active' };
-
-    const updated = await addGoalProgress(goal, Math.round(params.amount * 100));
-    return {
-      updated: true,
-      goal_id: updated.id,
-      saved_cents: updated.saved_cents,
-      target_cents: updated.target_cents,
-      completed: updated.status === 'completed',
-    };
+    const goals = await listPersonalGoals(ctx.accountId, params.status);
+    return { goals };
   },
 });
 
-export const listGoalsTool = defineTool({
-  name: 'list_goals',
-  description: 'Lista as metas ativas da conta, com valor guardado declarado e valor-alvo.',
-  schema: z.object({}),
-  execute: async (_params, ctx) => {
-    const goals = await listGoals(ctx.accountId, 'active');
-    return {
-      goals: goals.map((goal) => ({
-        goal_id: goal.id,
-        title: goal.title,
-        saved_cents: goal.saved_cents,
-        target_cents: goal.target_cents,
-        deadline: goal.deadline,
-      })),
-    };
+export const completePersonalGoalTool = defineTool({
+  name: 'complete_personal_goal',
+  description: 'Marca uma meta pessoal como concluída, dado o goal_id.',
+  schema: z.object({
+    goal_id: z.string().uuid(),
+  }),
+  execute: async (params, ctx) => {
+    const goal = await completePersonalGoal(ctx.accountId, params.goal_id);
+    return { goal_id: goal.id, completed: true };
+  },
+});
+
+export const deletePersonalGoalTool = defineTool({
+  name: 'delete_personal_goal',
+  description:
+    'Exclui definitivamente uma meta pessoal, dado o goal_id — use quando a pessoa desistir dela ou ' +
+    'tiver criado por engano (nunca pra "concluir", isso é complete_personal_goal). Se o goal_id não ' +
+    'existir mais nessa conta, retorna deleted: false.',
+  schema: z.object({
+    goal_id: z.string().uuid(),
+  }),
+  execute: async (params, ctx) => {
+    const goal = await deletePersonalGoal(ctx.accountId, params.goal_id);
+    return goal ? { deleted: true, goal_id: goal.id } : { deleted: false };
   },
 });

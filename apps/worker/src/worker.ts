@@ -14,6 +14,7 @@ import { handleLogsRetention } from './handlers/logs-retention.js';
 import { handleWeeklyDigestGenerate } from './handlers/weekly-digest-generate.js';
 import { handleOnboardingNudge } from './handlers/onboarding-nudge.js';
 import { handleMorningDigestGenerate } from './handlers/morning-digest-generate.js';
+import { handleImportantDateReminder } from './handlers/important-date-reminder.js';
 import { scheduleRecurringJobs } from './scheduled-jobs.js';
 
 const connection = getRedisConnection();
@@ -161,6 +162,12 @@ const QUEUE_CONFIGS: {
     // Sem onExhausted: resumo é opcional por natureza — falha esgotada só vai pro log.
     name: QUEUE_NAMES.morningDigestGenerate,
     handler: handleMorningDigestGenerate,
+    concurrency: 5,
+  },
+  {
+    // Sem onExhausted: mesmo raciocínio do onboardingNudge/weeklyDigestGenerate — ninguém espera essa mensagem num momento exato.
+    name: QUEUE_NAMES.importantDateReminder,
+    handler: handleImportantDateReminder,
     concurrency: 5,
   },
 ];

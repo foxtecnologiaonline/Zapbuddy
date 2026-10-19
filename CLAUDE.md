@@ -2,7 +2,20 @@
 
 Parceiro pessoal 24 horas via WhatsApp com IA para gestão do tempo (agenda e compromissos pessoais), organização de tarefas e notas pessoais, e gestão financeira. Público: consumidores finais (B2C), pessoas físicas. Diferencial central: IA **proativa** (antecipa e sugere), não só reativa a comandos. Documentos entram como suporte a esses três pilares (ex.: comprovante de um gasto), não como um quarto pilar independente.
 
-Referência de mercado estudada: meuassessor.com (6 "assessores" especializados, Open Finance, R$29,90/mês) e Pierre (app de finanças pessoais da CloudWalk). ZapBuddy compete por proatividade de IA e pela cobertura da rotina pessoal num só canal, não por paridade de feature.
+**Posicionamento (2026-10, reafirmado pelo dono do produto — B2C, consumidor final, não B2B):**
+
+Visão informal: *"o Tom é seu amigo que te ouve 24hs por dia, te responde, te ajuda a lembrar do
+que você falou, seja pessoal, profissional, notas, agenda, compromisso ou financeiro."*
+
+Formal: *"O foco do Tom é de apoiar na gestão do tempo, como agenda e compromissos pessoais,
+organização de tarefas e notas pessoais, e gestão financeira, ajudando em parceria com você todo
+dia 24hs."*
+
+"Nicho inicial: autônomos e pequenos negócios (MEI/PJ)" (acima) é o perfil de quem adota primeiro,
+não uma venda B2B — quem paga e usa é a pessoa física, no pessoal e no profissional dela, o que já
+inclui o MEI/PJ como só mais um aspecto da vida de quem usa, não um produto de gestão empresarial.
+Documentos entram como suporte aos três pilares (ex.: comprovante de um gasto), não como um quarto
+pilar independente.
 
 ## Público e escopo (2026-10, motivo documentado)
 
@@ -23,8 +36,9 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
   vencer em até 3 dias. Uma mensagem só; sem nada pra mostrar, não manda nada.
 - **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
   só o que a pessoa informou. Nunca vira pagamento sozinho.
-- **Metas com prazo** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor guardado é o declarado pela
-  pessoa, nunca estimado. Nunca prometer rendimento.
+- **Metas com valor** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor-alvo e valor guardado são
+  os declarados pela pessoa, nunca estimados. Nunca prometer rendimento. Distinta de **metas pessoais** (`personal_goals`,
+  tools `create_personal_goal`/...), que são qualitativas e sem valor.
 - **Horário de silêncio** (`users.quiet_hours_start/end`, tool `set_quiet_hours`): bloqueia só mensagens proativas
   (resumo matinal, insight, resumo semanal). Lembretes que a pessoa agendou continuam chegando na hora marcada.
   Insight e resumo semanal que cairiam dentro da janela são pulados naquele dia, não reagendados.
@@ -36,7 +50,7 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
 - **Exportação** (`/api/dashboard/export`, JSON): tudo que a conta registrou.
 - **Não implementado**: tempo de deslocamento entre compromissos (não há dado de localização).
 
-Migration `0018_personal_assistant.sql` precisa ser aplicada no Supabase antes do deploy.
+Migration `0019_personal_assistant.sql` precisa ser aplicada no Supabase antes do deploy (a `0018` é de `personal_assistant_expansion`, da `main`).
 
 ## Stack (decidida — não revisitar sem motivo forte)
 
@@ -222,6 +236,54 @@ Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboard
 - **Variante de abertura A/B** (`onboarding_variant`): split determinístico por número de WhatsApp
   (par/ímpar do último dígito, nunca aleatório) entre "nome primeiro" (controle) e "ação primeiro"
   — decisão de qual vence fica pra quando a amostra crescer, lida manualmente no funil.
+
+## Expansão B2C — datas importantes, metas, carreira e timeline (2026-10, motivo documentado)
+
+Decisão do usuário: implementar as sugestões A (novos especialistas/tool-clusters), B (cobrir
+"pessoal" de verdade), C (proatividade com a memória de longo prazo) e D (produto/UX) de uma
+rodada de brainstorm feita após reafirmar o posicionamento B2C. Resumo do que entrou:
+
+- **Datas importantes** (`important_dates`, migration `0018`) — recorrente ano a ano (month/day,
+  não uma data completa), via `remember_important_date`/`list_important_dates`/
+  `forget_important_date`. O sweep horário do worker (`insights-sweep.ts`, reaproveitando a mesma
+  varredura da Fase 3) manda o lembrete sozinho no dia certo, no fuso de cada conta — idempotente
+  por ano via `important_date_logs`. Diferente de `create_calendar_event` (evento único, não
+  recorrente).
+- **Metas pessoais/profissionais** (`personal_goals`, migration `0018`) — meta qualitativa sem
+  prazo único ("quero ler mais", "fechar mais clientes"), via `create_personal_goal`/
+  `list_personal_goals`/`complete_personal_goal`/`delete_personal_goal`. Diferente de `tasks`
+  (tem `due_at`, é "a fazer até tal dia") e de `notes` (meta tem status/acompanhamento, nota é só
+  texto solto).
+- **Carreira/profissional** — sem tabela nova: `notes`/`create_personal_goal`/
+  `create_calendar_event` já cobrem (reunião, entrevista, follow-up profissional) — só o
+  system prompt foi ajustado pra convidar esse uso explicitamente, em vez de ficar implícito.
+- **Resumo semanal turbinado** — `formatWeeklyDigestMessage` (digest/message.ts) ganhou um
+  parâmetro opcional de contadores não-financeiros (tarefa pendente, meta em andamento, nota nova
+  na semana) — "lembra de tudo", não só financeiro. Reusa dado que já existia, zero query nova
+  além de contagens simples.
+- **Busca em notas** — `list_notes` (tool e repo) ganhou um parâmetro `query` opcional (ILIKE
+  simples, sem pgvector — nota é texto curto, substring já resolve).
+- **Dashboard** — seções novas "Metas pessoais" e "Datas importantes" (mesmo padrão de
+  criar/listar/apagar via form, já usado por notas/fatos), e "O que aconteceu essa semana": linha
+  do tempo unificada mesclando transação/tarefa/nota/fato/meta recentes, montada por uma função
+  pura testável (`apps/web/app/dashboard/timeline.ts`) — zero query nova, só reorganiza dado já
+  buscado na própria página.
+
+**Conscientemente fora desta rodada** (não é esquecimento, é escopo cortado na hora de implementar
+pra não inflar isto além do que dá pra validar de uma vez):
+- **Hábitos/rotina com acompanhamento** (streak, check-in recorrente tipo "fui pra academia hoje")
+  — viraria uma feature própria (tabela + lógica de streak + prompt periódico), não só uma tool a
+  mais; por ora esse tipo de relato cai em `create_note`/`remember_fact`, sem rastreamento de
+  constância dedicado.
+- **Lembrete disparado por contexto de conversa** ("me lembra de ligar pro João quando eu disser
+  que terminei a reunião") — exigiria uma infra de gatilho conversacional que não existe
+  (lembrete hoje é sempre por data/hora, `reminders.remind_at`); fica pra quando houver desenho
+  concreto de como isso funcionaria sem ambiguidade.
+- **Datas importantes injetadas automaticamente em todo system prompt** (como `memory_facts`) —
+  decisão deliberada de deixar como tool consultada sob demanda (`list_important_dates`), não
+  auto-injetada: a maioria das datas guardadas é irrelevante no dia a dia da conversa, e
+  auto-injetar todas infla token de toda mensagem por pouco ganho — o sweep proativo já cobre o
+  caso que importa (avisar no dia certo).
 
 ## Métricas por fase
 

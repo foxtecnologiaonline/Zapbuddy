@@ -6,11 +6,12 @@ pequenos negócios (MEI/PJ). O nome do assistente que o usuário vê é
 dentro dele.
 
 O usuário manda mensagem (texto ou áudio) pro WhatsApp do Tom; ele
-categoriza gastos/receitas, organiza tarefas, notas pessoais e lembretes,
-guarda documentos, agenda compromissos no Google Agenda, lembra fatos que
-a pessoa contou (memória de longo prazo), e tudo fica visível num
-dashboard web (consulta + algumas ações, como gerar/revogar chave de API
-e gerenciar webhook). Dado é escopado por **conta** (Fase 2,
+categoriza gastos/receitas, organiza tarefas, metas pessoais/profissionais
+e notas pessoais, lembra lembretes e datas importantes (aniversário etc.,
+avisa sozinho todo ano), guarda documentos, agenda compromissos pessoais
+ou profissionais no Google Agenda, lembra fatos que a pessoa contou
+(memória de longo prazo), e tudo fica visível num dashboard web (consulta
++ algumas ações, como gerar/revogar chave de API e gerenciar webhook). Dado é escopado por **conta** (Fase 2,
 `docs/adr/0002`), que pode ser compartilhada entre mais de um número de
 WhatsApp (ex.: sócio, cônjuge). Desde a Fase 3 (`docs/adr/0003`), o Tom
 também manda **insight proativo** (sem a pessoa perguntar) quando um
@@ -125,7 +126,12 @@ abertura A/B, ver `docs/adr/0005-*.md`) → `0016_admin_action_logs.sql`
 admin, ver seção Admin abaixo) → `0017_memory_notes.sql` (`memory_facts`
 — o Tom lembrando algo sobre a pessoa, via `remember_fact`/`forget_fact`
 — e `notes` — nota pessoal livre, via `create_note`/`list_notes`/
-`delete_note` — posicionamento reafirmado 2026-10, ver `CLAUDE.md`).
+`delete_note` — posicionamento reafirmado 2026-10, ver `CLAUDE.md`) →
+`0018_personal_assistant_expansion.sql` (`important_dates` — data
+recorrente/aniversário via `remember_important_date`, lembrada sozinha
+todo ano; `personal_goals` — meta pessoal/profissional qualitativa via
+`create_personal_goal`; `important_date_logs` — idempotência do lembrete
+anual — expansão B2C 2026-10, ver `CLAUDE.md`).
 Rodar em ordem, manualmente, no
 SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das

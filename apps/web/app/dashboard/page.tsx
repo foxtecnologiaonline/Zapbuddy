@@ -12,11 +12,29 @@ import {
   listWebhookSubscriptions,
   listMemoryFacts,
   listNotes,
+  listImportantDates,
+  listPersonalGoals,
 } from '@zapbuddy/db';
 import { getCurrentUserId, getCurrentAccount } from '@/lib/auth';
 import { getCurrentMonthRange } from '@/lib/timezone';
 import { CategoryBars, Sparkline } from './charts';
 import { bucketSumsByDay, TREND_WINDOW_DAYS } from './trend';
+import { buildTimeline, type TimelineEntry } from './timeline';
+
+const MONTH_NAMES_PT = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
 
 const RECENT_TRANSACTIONS_LIMIT = 20;
 
@@ -59,6 +77,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     webhookSubscriptions,
     memoryFacts,
     notes,
+    importantDates,
+    personalGoals,
   ] = await Promise.all([
     summarizeTransactions(account.accountId, startIso, endIso),
     listTransactions(account.accountId, startIso, endIso, {
@@ -77,12 +97,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listWebhookSubscriptions(account.accountId),
     listMemoryFacts(account.accountId),
     listNotes(account.accountId),
+    listImportantDates(account.accountId),
+    listPersonalGoals(account.accountId, 'pending'),
   ]);
 
   const dailyExpenseTrend = bucketSumsByDay(
     trendTransactions.filter((t) => t.type === 'expense'),
     user.timezone,
   );
+
+  // Linha do tempo unificada (posicionamento B2C: "lembra de tudo", não só
+  // financeiro) — mescla as últimas transações/tarefas/notas/fatos/metas já
+  // buscadas acima, sem query nova (buildTimeline só mescla e ordena).
+  const timelineEntries: TimelineEntry[] = [
+    ...recentTransactions.map((t) => ({
+      id: t.id,
+      kind: 'transacao' as const,
+      label: `${t.type === 'income' ? '+' : '-'}${formatCents(t.amount_cents)} em ${t.category}`,
+      at: t.occurred_at,
+    })),
+    ...pendingTasks.map((task) => ({ id: task.id, kind: 'tarefa' as const, label: task.title, at: task.created_at })),
+    ...notes.map((note) => ({ id: note.id, kind: 'nota' as const, label: note.content, at: note.created_at })),
+    ...memoryFacts.map((fact) => ({ id: fact.id, kind: 'fato' as const, label: fact.fact, at: fact.created_at })),
+    ...personalGoals.map((goal) => ({ id: goal.id, kind: 'meta' as const, label: goal.description, at: goal.created_at })),
+  ];
+  const timeline = buildTimeline(timelineEntries);
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
@@ -263,6 +302,72 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           Baixe tudo que você registrou com o Tom — gastos, tarefas, notas, contas, metas e o que ele lembra.
         </p>
         <a href="/api/dashboard/export">Baixar meus dados (JSON)</a>
+      </section>
+
+      <section>
+        <h2>Metas pessoais</h2>
+        {personalGoals.length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nenhuma meta em andamento — manda "quero [algo]" pro Tom no WhatsApp.</p>
+        ) : (
+          <ul style={{ fontSize: 14 }}>
+            {personalGoals.map((goal) => (
+              <li key={goal.id}>
+                {goal.description}
+                <form action={`/api/dashboard/personal-goals/${goal.id}/complete`} method="POST" style={{ display: 'inline' }}>
+                  <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
+                    concluir
+                  </button>
+                </form>
+                <form action={`/api/dashboard/personal-goals/${goal.id}/delete`} method="POST" style={{ display: 'inline' }}>
+                  <button type="submit" style={{ marginLeft: 4, fontSize: 12, cursor: 'pointer' }}>
+                    remover
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>Datas importantes</h2>
+        <p style={{ opacity: 0.6, fontSize: 13 }}>
+          Aniversários e datas que se repetem todo ano — o Tom avisa sozinho no dia.
+        </p>
+        {importantDates.length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nenhuma data guardada ainda.</p>
+        ) : (
+          <ul style={{ fontSize: 14 }}>
+            {importantDates.map((date) => (
+              <li key={date.id}>
+                {date.label} — {date.day} de {MONTH_NAMES_PT[date.month - 1]}
+                <form action={`/api/dashboard/important-dates/${date.id}/delete`} method="POST" style={{ display: 'inline' }}>
+                  <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
+                    esquecer
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>O que aconteceu essa semana</h2>
+        <p style={{ opacity: 0.6, fontSize: 13 }}>
+          Transações, tarefas, notas, fatos e metas mais recentes, juntos numa só linha do tempo.
+        </p>
+        {timeline.length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nada registrado ainda.</p>
+        ) : (
+          <ul style={{ fontSize: 14 }}>
+            {timeline.map((entry) => (
+              <li key={`${entry.kind}-${entry.id}`}>
+                <span style={{ opacity: 0.6, fontSize: 12 }}>[{entry.kind}]</span> {entry.label}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section>

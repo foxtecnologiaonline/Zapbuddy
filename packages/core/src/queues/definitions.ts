@@ -42,6 +42,7 @@ export const QUEUE_NAMES = {
   weeklyDigestGenerate: 'weekly-digest-generate',
   onboardingNudge: 'onboarding-nudge',
   morningDigestGenerate: 'morning-digest-generate',
+  importantDateReminder: 'important-date-reminder',
 } as const;
 
 export interface AudioTranscriptionJob {
@@ -122,6 +123,19 @@ export interface OnboardingNudgeJob {
   stage: OnboardingNudgeStage;
 }
 
+/**
+ * Enfileirado pelo sweep horário (insights-sweep.ts) quando detecta que o
+ * dia de hoje, no fuso da conta, bate com o month/day de uma important_date
+ * — mesmo padrão de insights-generate/weekly-digest-generate (sweep decide
+ * QUEM, este job só manda e loga).
+ */
+export interface ImportantDateReminderJob {
+  importantDateId: string;
+  label: string;
+  ownerWhatsappNumber: string;
+  year: number;
+}
+
 let audioQueue: Queue<AudioTranscriptionJob> | null = null;
 let messageQueue: Queue<IncomingMessageJob> | null = null;
 let reminderQueue: Queue<ReminderDispatchJob> | null = null;
@@ -135,6 +149,7 @@ let logsRetentionQueue: Queue<LogsRetentionJob> | null = null;
 let weeklyDigestGenerateQueue: Queue<WeeklyDigestGenerateJob> | null = null;
 let onboardingNudgeQueue: Queue<OnboardingNudgeJob> | null = null;
 let morningDigestGenerateQueue: Queue<MorningDigestGenerateJob> | null = null;
+let importantDateReminderQueue: Queue<ImportantDateReminderJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
   audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
@@ -238,4 +253,12 @@ export function getMorningDigestGenerateQueue(): Queue<MorningDigestGenerateJob>
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return morningDigestGenerateQueue;
+}
+
+export function getImportantDateReminderQueue(): Queue<ImportantDateReminderJob> {
+  importantDateReminderQueue ??= new Queue(QUEUE_NAMES.importantDateReminder, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return importantDateReminderQueue;
 }

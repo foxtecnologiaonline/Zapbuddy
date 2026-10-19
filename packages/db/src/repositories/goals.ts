@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '../client.js';
-import type { Goal, GoalStatus } from '../types.js';
+import type { SavingsGoal, SavingsGoalStatus } from '../types.js';
 
 export interface CreateGoalInput {
   accountId: string;
@@ -9,7 +9,7 @@ export interface CreateGoalInput {
   deadline: string | null;
 }
 
-export async function createGoal(input: CreateGoalInput): Promise<Goal> {
+export async function createGoal(input: CreateGoalInput): Promise<SavingsGoal> {
   const { data, error } = await getSupabaseClient()
     .from('goals')
     .insert({
@@ -23,10 +23,10 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
     .single();
 
   if (error) throw error;
-  return data as Goal;
+  return data as SavingsGoal;
 }
 
-export async function listGoals(accountId: string, status: GoalStatus = 'active'): Promise<Goal[]> {
+export async function listGoals(accountId: string, status: SavingsGoalStatus = 'active'): Promise<SavingsGoal[]> {
   const { data, error } = await getSupabaseClient()
     .from('goals')
     .select('*')
@@ -35,10 +35,10 @@ export async function listGoals(accountId: string, status: GoalStatus = 'active'
     .order('deadline', { ascending: true, nullsFirst: false });
 
   if (error) throw error;
-  return (data ?? []) as Goal[];
+  return (data ?? []) as SavingsGoal[];
 }
 
-export async function findGoal(accountId: string, goalId: string): Promise<Goal | null> {
+export async function findGoal(accountId: string, goalId: string): Promise<SavingsGoal | null> {
   const { data, error } = await getSupabaseClient()
     .from('goals')
     .select('*')
@@ -47,7 +47,7 @@ export async function findGoal(accountId: string, goalId: string): Promise<Goal 
     .maybeSingle();
 
   if (error) throw error;
-  return (data as Goal | null) ?? null;
+  return (data as SavingsGoal | null) ?? null;
 }
 
 /**
@@ -55,7 +55,7 @@ export async function findGoal(accountId: string, goalId: string): Promise<Goal 
  * meta é um compromisso declarado, não uma categoria de gasto — e o total
  * nunca é inventado pela IA, só o que a pessoa informou.
  */
-export async function addGoalProgress(goal: Goal, amountCents: number): Promise<Goal> {
+export async function addGoalProgress(goal: SavingsGoal, amountCents: number): Promise<SavingsGoal> {
   const savedCents = goal.saved_cents + amountCents;
   const completed = savedCents >= goal.target_cents;
 
@@ -72,10 +72,10 @@ export async function addGoalProgress(goal: Goal, amountCents: number): Promise<
     .single();
 
   if (error) throw error;
-  return data as Goal;
+  return data as SavingsGoal;
 }
 
-export async function cancelGoal(accountId: string, goalId: string): Promise<Goal | null> {
+export async function cancelGoal(accountId: string, goalId: string): Promise<SavingsGoal | null> {
   const { data, error } = await getSupabaseClient()
     .from('goals')
     .update({ status: 'cancelled' })
@@ -85,5 +85,5 @@ export async function cancelGoal(accountId: string, goalId: string): Promise<Goa
     .maybeSingle();
 
   if (error) throw error;
-  return (data as Goal | null) ?? null;
+  return (data as SavingsGoal | null) ?? null;
 }

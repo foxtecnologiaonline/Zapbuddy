@@ -20,8 +20,9 @@ export const createNoteTool = defineTool({
 export const listNotesTool = defineTool({
   name: 'list_notes',
   description:
-    'Lista as notas pessoais da pessoa, mais recentes primeiro. Passe `query` pra buscar notas que contenham esse texto ' +
-    '("o que anotei sobre a viagem?" → query: "viagem").',
+    'Lista as notas pessoais da pessoa, mais recentes primeiro. Passe query pra buscar só notas que ' +
+    'contenham um termo (ex.: "o que eu anotei sobre o aluguel" → query: "aluguel") — sem query, lista ' +
+    'tudo.',
   schema: z.object({
     query: z.string().min(1).max(200).optional(),
   }),

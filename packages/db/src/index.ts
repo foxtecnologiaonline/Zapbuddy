@@ -28,3 +28,5 @@ export * from './repositories/notes.js';
 export * from './repositories/recurring-bills.js';
 export * from './repositories/goals.js';
 export * from './repositories/account-export.js';
+export * from './repositories/important-dates.js';
+export * from './repositories/personal-goals.js';
