@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
+import { logger } from '@zapbuddy/db';
 
 let cached: Redis | null = null;
 
@@ -9,6 +10,14 @@ export function getRedisConnection(): Redis {
   if (!url) throw new Error('REDIS_URL must be set');
 
   cached = new Redis(url, { maxRetriesPerRequest: null });
+  // Sem isso, erro de conexão (ex.: estouro de limite do provider, credencial
+  // trocada) só aparecia como warning solto do ioredis no console, sem rastro
+  // estruturado — foi exatamente o que dificultou diagnosticar o incidente de
+  // 2026-10 (ver CLAUDE.md). Loga, não derruba: a própria lib já tenta
+  // reconectar sozinha.
+  cached.on('error', (error) => {
+    logger.error('redis_connection_error', { error: error.message });
+  });
   return cached;
 }
 
