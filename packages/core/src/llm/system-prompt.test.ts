@@ -225,6 +225,21 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('O que você já sabe sobre essa pessoa');
   });
 
+  it('instrui quebrar linha a cada frase e nunca usar negrito markdown/lista pra conversa do dia a dia', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/pule para a linha seguinte depois de cada frase/i);
+    expect(prompt).toMatch(/negrito em markdown de dois asteriscos/i);
+    expect(prompt).toMatch(/nem renderiza como negrito no whatsapp/i);
+  });
+
+  it('cobre a amplitude atual (agenda, meta, nota, financeiro) ao descrever o que o Tom faz, sem parar só no financeiro', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/nunca pare só na parte financeira/i);
+    expect(prompt).toMatch(/agenda e compromisso, tarefa e meta, nota e lembrete/i);
+  });
+
   it('injeta os fatos de memória de longo prazo quando existem', () => {
     const prompt = buildSystemPrompt(baseUser(), [], null, [
       {
