@@ -233,6 +233,38 @@ export async function setPreferredName(userId: string, preferredName: string | n
   return data as User;
 }
 
+/** CPF/CNPJ só é pedido quando a pessoa topa assinar de verdade (ver register_plan_intent) — exigência da Asaas, não dado capturado antecipadamente. */
+export async function saveUserCpfCnpj(userId: string, cpfCnpj: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('users').update({ cpf_cnpj: cpfCnpj }).eq('id', userId);
+  if (error) throw error;
+}
+
+/** Grava o vínculo com o cliente/assinatura da Asaas + o link de checkout, pra reusar sem chamada nova à API em pedidos seguintes. */
+export async function saveAsaasSubscription(
+  userId: string,
+  customerId: string,
+  subscriptionId: string,
+  paymentLink: string,
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('users')
+    .update({ asaas_customer_id: customerId, asaas_subscription_id: subscriptionId, asaas_payment_link: paymentLink })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+/** Usado pelo webhook de pagamento confirmado (apps/web/app/api/payments/webhook-asaas) pra achar quem ativar. */
+export async function findUserByAsaasSubscriptionId(subscriptionId: string): Promise<User | null> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .select('*')
+    .eq('asaas_subscription_id', subscriptionId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as User | null;
+}
+
 export async function setQuietHours(userId: string, startHour: number, endHour: number): Promise<User> {
   const { data, error } = await getSupabaseClient()
     .from('users')

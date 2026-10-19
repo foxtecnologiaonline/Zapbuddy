@@ -18,6 +18,11 @@ export interface User {
   plan_intent_requested_at: string | null;
   quiet_hours_start: number;
   quiet_hours_end: number;
+  /** Exigência da Asaas (POST /customers) pra gerar checkout real — ver migration 0020. */
+  cpf_cnpj: string | null;
+  asaas_customer_id: string | null;
+  asaas_subscription_id: string | null;
+  asaas_payment_link: string | null;
   created_at: string;
 }
 

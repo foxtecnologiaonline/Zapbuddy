@@ -28,6 +28,10 @@ function baseUser(overrides: Partial<User> = {}): User {
     plan_status_updated_at: null,
     plan_intent: null,
     plan_intent_requested_at: null,
+    cpf_cnpj: null,
+    asaas_customer_id: null,
+    asaas_subscription_id: null,
+    asaas_payment_link: null,
     created_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -119,11 +123,14 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/UMA volta/);
   });
 
-  it('nunca pede pra inventar preço, urgência falsa ou prova social no convite de venda', () => {
+  it('cita o preço real da assinatura e pede CPF/CNPJ, mas nunca inventa desconto, urgência falsa ou prova social', () => {
     const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(10) }));
 
-    expect(prompt).toMatch(/não existe\s+preço de assinatura fechado/i);
-    expect(prompt).toMatch(/nunca invente preço, promoção, prazo/i);
+    expect(prompt).toMatch(/R\$ 27,90\/mês/);
+    expect(prompt).toMatch(/pergunte o CPF ou CNPJ/i);
+    expect(prompt).toMatch(/cpf_cnpj/);
+    expect(prompt).toMatch(/checkout_url/);
+    expect(prompt).toMatch(/nunca invente outro valor, desconto, prazo/i);
   });
 
   it('não dispara convite de venda pra quem já é assinante ativo', () => {

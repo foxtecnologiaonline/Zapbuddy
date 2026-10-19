@@ -101,3 +101,31 @@ dois sentidos) — não é retenção agressiva.
 - Quando houver decisão de preço, provedor de cobrança e recompensa de indicação, essas partes do
   system prompt são as que mudam — a estrutura (certeza em fato real, convite único, loop de
   objeção limitado, sem invenção) continua valendo.
+
+## Amendamento 2026-10 — preço fechado e checkout real (Asaas)
+
+Decisão explícita do dono do produto: reverte a Decisão 2 acima. Preço fechado em **R$ 27,90/mês**
+(`packages/core/src/payments/plan.ts`) e provedor escolhido (**Asaas**) — `register_plan_intent`
+(intent: `"upgrade"`) deixa de só avisar um humano e passa a gerar um checkout real:
+
+1. **Collecta CPF/CNPJ só na hora de fechar** — exigência da própria API da Asaas (POST
+   `/customers`), nunca pedido antes/separado do momento de venda. Novas colunas `users.cpf_cnpj`,
+   `asaas_customer_id`, `asaas_subscription_id`, `asaas_payment_link` (migration `0020`).
+2. **Cliente + assinatura criados sob demanda** (`packages/core/src/payments/asaas-client.ts`) —
+   `billingType: "UNDEFINED"` deixa a pessoa escolher PIX/boleto/cartão na própria página
+   hospedada pela Asaas (nunca entra no nosso código). Resultado reusado em pedidos seguintes (sem
+   criar cliente/assinatura duplicada).
+3. **Ativação automática via webhook** (`apps/web/app/api/payments/webhook-asaas`) — eventos
+   `PAYMENT_CONFIRMED`/`PAYMENT_RECEIVED` localizam o usuário por `asaas_subscription_id` e viram
+   `plan_status = 'active'`. Token fixo (`ASAAS_WEBHOOK_TOKEN`), comparado em tempo constante —
+   mesmo raciocínio do HMAC do webhook do WhatsApp, só que a Asaas não assina o corpo, então a
+   defesa é um token configurado manualmente no painel dela.
+4. **Cancelamento continua manual** — decisão explícita de não automatizar isso agora (o webhook
+   só ativa, nunca cancela); `register_plan_intent(intent: "cancel")` continua só avisando um
+   humano, que cancela a assinatura na Asaas e atualiza `plan_status` pelo admin, exatamente como
+   antes deste amendamento.
+5. **`ASAAS_ENV=sandbox` por padrão** — freio de segurança explícito: nenhuma cobrança real
+   acontece até alguém trocar pra `production` depois de testar.
+
+O resto da Decisão 1 (certeza em fato real, convite único, loop de objeção limitado a uma volta,
+sem urgência/prova social fabricada) continua valendo sem mudança — só a Decisão 2 foi revertida.

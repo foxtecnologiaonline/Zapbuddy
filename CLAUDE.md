@@ -198,10 +198,19 @@ Decisão do usuário: o Tom passa a vender a continuidade da assinatura e pedir 
 proativa (antes, `get_referral_info` só respondia se perguntado, e não havia nenhum momento de
 venda). Detalhe completo em `docs/adr/0004-vendas-onboarding-indicacao.md` — resumo:
 
-- **Sem preço fechado e sem cobrança real nesta rodada** — nenhum provedor de pagamento decidido.
-  O Tom captura intenção ("quero continuar"/"quero cancelar") via tool `register_plan_intent`,
-  nunca cobra nem cancela nada sozinho; um humano trata manualmente pelo admin (mesmo padrão já
-  usado por `plan_status`). Não revisitar preço/provedor sem decisão explícita do usuário.
+- **Amendamento 2026-10 (motivo documentado — reversão explícita da decisão original abaixo):**
+  preço fechado em **R$ 27,90/mês**, provedor **Asaas**. `register_plan_intent(intent: "upgrade")`
+  gera checkout real (PIX/boleto/cartão na página hospedada pela Asaas — nunca entra no nosso
+  código), ativado automaticamente via webhook (`apps/web/app/api/payments/webhook-asaas`) quando
+  o pagamento confirma. Exige CPF/CNPJ só na hora de fechar (exigência da Asaas, migration `0020`).
+  `ASAAS_ENV=sandbox` por padrão — só cobra de verdade com `production` setado explicitamente.
+  Cancelamento continua manual (`intent: "cancel"` só avisa um humano) — decisão explícita de não
+  automatizar isso agora. Detalhe completo: amendamento no fim de
+  `docs/adr/0004-vendas-onboarding-indicacao.md`.
+- ~~Sem preço fechado e sem cobrança real~~ (decisão original, revertida pelo amendamento acima —
+  mantida aqui só pra contexto histórico): nenhum provedor de pagamento decidido. O Tom capturava
+  intenção via tool `register_plan_intent`, nunca cobrava nem cancelava nada sozinho; um humano
+  tratava manualmente pelo admin (mesmo padrão já usado por `plan_status`).
 - **Trial de 7 dias**, calculado a partir de `users.created_at` — sem convite de venda antes do
   5º dia, "prepara o terreno" entre o 5º e o 7º, convite direto a partir do 7º (só pra quem
   continua em `plan_status = 'trial'`).

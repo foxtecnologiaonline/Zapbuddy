@@ -131,7 +131,16 @@ admin, ver seção Admin abaixo) → `0017_memory_notes.sql` (`memory_facts`
 recorrente/aniversário via `remember_important_date`, lembrada sozinha
 todo ano; `personal_goals` — meta pessoal/profissional qualitativa via
 `create_personal_goal`; `important_date_logs` — idempotência do lembrete
-anual — expansão B2C 2026-10, ver `CLAUDE.md`).
+anual — expansão B2C 2026-10, ver `CLAUDE.md`) →
+`0019_personal_assistant.sql` (`users.quiet_hours_start`/`quiet_hours_end`
+— horário de silêncio pra mensagem proativa; `recurring_bills` — conta
+que se repete todo mês, aviso antecipado via `create_recurring_bill`;
+`goals` — meta com valor e prazo via `create_goal`/`add_goal_progress`,
+separada de `personal_goals`, que é qualitativa) →
+`0020_billing_asaas.sql` (`users.cpf_cnpj`/`asaas_customer_id`/
+`asaas_subscription_id`/`asaas_payment_link` — checkout real de
+assinatura via Asaas, R$ 27,90/mês, ver amendamento 2026-10 em
+`docs/adr/0004-*.md`).
 Rodar em ordem, manualmente, no
 SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das

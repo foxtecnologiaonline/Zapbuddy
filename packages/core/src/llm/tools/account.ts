@@ -1,6 +1,15 @@
 import { z } from 'zod';
-import { createAccountInvite, listAccountMembers, getReferralStats, registerPlanIntent } from '@zapbuddy/db';
+import {
+  createAccountInvite,
+  listAccountMembers,
+  getReferralStats,
+  registerPlanIntent,
+  findUserById,
+  saveUserCpfCnpj,
+  saveAsaasSubscription,
+} from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
+import { createAsaasCustomer, createAsaasSubscription } from '../../payments/asaas-client.js';
 
 export const inviteMemberTool = defineTool({
   name: 'invite_member',
@@ -46,13 +55,50 @@ export const registerPlanIntentTool = defineTool({
   description:
     'Registra que a pessoa disse, nesta conversa, que quer assinar (continuar pagando depois do ' +
     'teste) ou cancelar. Chame ANTES de confirmar "anotei"/"vou providenciar" — nunca diga isso sem ' +
-    'ter chamado a tool, igual vale pra dado financeiro. Não cobra nada nem cancela nada sozinho: só ' +
-    'avisa um humano, que trata manualmente (ainda não existe cobrança automática).',
+    'ter chamado a tool, igual vale pra dado financeiro.\n' +
+    '- intent "cancel": não cancela nada sozinho — só avisa um humano, que confirma manualmente.\n' +
+    '- intent "upgrade": gera um checkout REAL (Asaas, R$ 27,90/mês, PIX/boleto/cartão à escolha da ' +
+    'pessoa na própria página). Exige CPF ou CNPJ (exigência da Asaas, não sua) — se ainda não tiver, ' +
+    'o retorno vem com needs_cpf: true; peça o CPF/CNPJ e chame de novo com cpf_cnpj preenchido. ' +
+    'Quando vier checkout_url, mande esse link pra ela — nunca invente outro valor, prazo "que acaba ' +
+    'hoje" ou prova social que você não tenha de verdade.',
   schema: z.object({
     intent: z.enum(['upgrade', 'cancel']),
+    cpf_cnpj: z.string().optional(),
   }),
   execute: async (params, ctx) => {
     await registerPlanIntent(ctx.userId, params.intent);
-    return { registered: true };
+
+    if (params.intent === 'cancel') {
+      return { registered: true };
+    }
+
+    const user = await findUserById(ctx.userId);
+    if (!user) return { registered: true, needs_cpf: true };
+
+    if (user.asaas_subscription_id && user.asaas_payment_link) {
+      return { registered: true, checkout_url: user.asaas_payment_link };
+    }
+
+    const cpfCnpj = params.cpf_cnpj ?? user.cpf_cnpj ?? undefined;
+    if (!cpfCnpj) {
+      return { registered: true, needs_cpf: true };
+    }
+    if (params.cpf_cnpj && params.cpf_cnpj !== user.cpf_cnpj) {
+      await saveUserCpfCnpj(ctx.userId, params.cpf_cnpj);
+    }
+
+    const customer = user.asaas_customer_id
+      ? { id: user.asaas_customer_id }
+      : await createAsaasCustomer({
+          name: user.preferred_name ?? user.name ?? 'Cliente ZapBuddy',
+          cpfCnpj,
+          externalReference: user.id,
+        });
+
+    const subscription = await createAsaasSubscription({ customerId: customer.id, externalReference: user.id });
+    await saveAsaasSubscription(ctx.userId, customer.id, subscription.id, subscription.paymentLink);
+
+    return { registered: true, checkout_url: subscription.paymentLink };
   },
 });
