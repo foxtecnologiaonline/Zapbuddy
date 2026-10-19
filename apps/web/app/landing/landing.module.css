@@ -1,0 +1,373 @@
+/* Mobile-first: uma coluna até 760px, colunas a partir daí. Cores das variáveis do globals.css. */
+
+.root {
+  --accent: #25d366;
+  --accent-ink: #06130b;
+  --text-soft: rgba(230, 237, 243, 0.78);
+  --surface: #121821;
+  --line: #222b38;
+
+  min-height: 100vh;
+  padding: 0 16px;
+  color: var(--fg);
+  line-height: 1.55;
+}
+
+.header,
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 20px 0;
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  margin-top: 56px;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+}
+
+.login {
+  color: var(--text-soft);
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.login:hover {
+  color: var(--fg);
+}
+
+.main {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 40px;
+  align-items: center;
+  padding: 32px 0 48px;
+}
+
+.heroText {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.h1 {
+  margin: 0 0 16px;
+  font-size: clamp(30px, 6vw, 48px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+.h2 {
+  margin: 0 0 20px;
+  font-size: clamp(24px, 4vw, 32px);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.lead {
+  margin: 0 0 28px;
+  font-size: 18px;
+  color: var(--text-soft);
+}
+
+.body {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.intro {
+  margin: -8px 0 24px;
+  max-width: 640px;
+  color: var(--text-soft);
+  font-size: 17px;
+}
+
+.micro {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+
+.ctaGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 28px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 17px;
+  text-decoration: none;
+}
+
+.cta:hover {
+  filter: brightness(1.06);
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.bubbleUser,
+.bubbleTom {
+  margin: 0;
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  white-space: pre-line;
+  font-size: 15px;
+}
+
+.bubbleUser {
+  align-self: flex-end;
+  background: #1f3a2c;
+  border-bottom-right-radius: 4px;
+}
+
+.bubbleTom {
+  align-self: flex-start;
+  background: #1b2330;
+  border-bottom-left-radius: 4px;
+}
+
+.section {
+  padding: 56px 0 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.card,
+.priceCard {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.card .list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+}
+
+.card .list li + li {
+  margin-top: 10px;
+}
+
+.card .list strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.tag {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.step {
+  position: relative;
+  padding: 22px 22px 22px 70px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  counter-increment: step;
+}
+
+.step::before {
+  content: counter(step);
+  position: absolute;
+  left: 22px;
+  top: 20px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.checks {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checks li {
+  position: relative;
+  padding-left: 28px;
+  color: var(--text-soft);
+}
+
+.checks li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.priceCard {
+  display: grid;
+  gap: 18px;
+  max-width: 560px;
+  padding: 28px;
+}
+
+.price {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.period {
+  margin-left: 6px;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.priceCard .cta {
+  width: 100%;
+}
+
+.faq {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.faqItem {
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.faqQuestion {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+.faqQuestion::after {
+  content: '+';
+  float: right;
+  color: var(--accent);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.faqItem[open] .faqQuestion::after {
+  content: '–';
+}
+
+.faqItem p {
+  margin: 12px 0 0;
+}
+
+.finalCta {
+  margin-top: 64px;
+  padding: 40px 24px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+.finalCta .h2 {
+  margin-bottom: 24px;
+}
+
+.finalCta .cta {
+  margin: 0 auto;
+}
+
+@media (min-width: 760px) {
+  .hero {
+    grid-template-columns: 1.1fr 0.9fr;
+    padding: 64px 0 72px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .section {
+    padding-top: 80px;
+  }
+}
