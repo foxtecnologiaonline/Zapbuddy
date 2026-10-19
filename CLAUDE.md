@@ -4,8 +4,9 @@ Assistente pessoal via WhatsApp com IA. Nicho inicial: autônomos e pequenos neg
 
 **Posicionamento (2026-10, reafirmado pelo dono do produto — B2C, consumidor final, não B2B):**
 
-Visão informal: *"o Tom é seu amigo que te ouve 24hs por dia, te responde, te ajuda a lembrar do
-que você falou, seja pessoal, profissional, notas, agenda, compromisso ou financeiro."*
+Visão informal: *"o Tom é seu amigo 24hs por dia, que te ouve, te responde, gera sugestões, te
+ajuda a lembrar do que você falou, seja pessoal, profissional, notas, agenda, compromisso ou
+financeiro."*
 
 Formal: *"O foco do Tom é de apoiar na gestão do tempo, como agenda e compromissos pessoais,
 organização de tarefas e notas pessoais, e gestão financeira, ajudando em parceria com você todo
