@@ -1,14 +1,42 @@
+/*
+ * Tokens de cor e layout do painel do Tom. Tema escuro é o padrão (o look
+ * atual); o claro entra quando o sistema da pessoa pede. Cores de status
+ * (income/expense/error) ficam reservadas pra valor e alerta — nunca pra
+ * identidade de série num gráfico.
+ */
 :root {
+  color-scheme: dark;
   --bg: #0b0f14;
   --fg: #e6edf3;
   --card-bg: #121821;
   --border: #2a3340;
   --row-border: #1f2733;
   --muted: rgba(230, 237, 243, 0.6);
-  --muted-strong: rgba(230, 237, 243, 0.7);
+  --muted-strong: rgba(230, 237, 243, 0.75);
+  --accent: #7cc4ff;
   --income: #4ade80;
   --expense: #f87171;
   --error: #ff6b6b;
+  --radius: 12px;
+  --input-bg: #0b0f14;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --bg: #f5f7fa;
+    --fg: #111827;
+    --card-bg: #ffffff;
+    --border: #d5dbe3;
+    --row-border: #edf0f4;
+    --muted: rgba(17, 24, 39, 0.6);
+    --muted-strong: rgba(17, 24, 39, 0.75);
+    --accent: #0b6aa8;
+    --income: #15803d;
+    --expense: #b91c1c;
+    --error: #b91c1c;
+    --input-bg: #f5f7fa;
+  }
 }
 
 * {
@@ -17,21 +45,426 @@
 
 body {
   margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-.cards-row {
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-size: 0.9em;
+  word-break: break-all;
+}
+
+/* ---------- Página ---------- */
+
+.page {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px 16px 56px;
+}
+
+.page-narrow {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 80px 16px;
+  text-align: center;
+}
+
+.page-header {
   display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   gap: 16px;
-  margin: 24px 0;
   flex-wrap: wrap;
 }
 
-.cards-row > div {
-  flex: 1 1 200px;
+.greeting h1 {
+  font-size: 26px;
+  margin: 0 0 4px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.muted-sm {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.notice {
+  background: var(--card-bg);
+  border: 1px solid var(--row-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin: 16px 0 0;
+}
+
+.notice-error {
+  color: var(--expense);
+}
+
+/* ---------- KPIs ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 24px 0 8px;
+}
+
+.kpi {
+  background: var(--card-bg);
+  border: 1px solid var(--row-border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.kpi-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-value-income {
+  color: var(--income);
+}
+
+.kpi-value-expense {
+  color: var(--expense);
+}
+
+/* ---------- Grade de cartões ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (min-width: 800px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .span-2 {
+    grid-column: 1 / -1;
+  }
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--row-border);
+  border-radius: var(--radius);
+  padding: 18px;
+  min-width: 0;
+}
+
+.card h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.card h3 {
+  font-size: 14px;
+  margin: 16px 0 4px;
+}
+
+/* ---------- Listas ---------- */
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+}
+
+.item-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--row-border);
+  overflow-wrap: anywhere;
+}
+
+.item-list li:last-child {
+  border-bottom: none;
+}
+
+.item-list-sm {
+  font-size: 13px;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--muted-strong);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.item-actions {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* ---------- Botões e campos ---------- */
+
+.btn {
+  font: inherit;
+  font-size: 14px;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  min-height: 36px;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-sm {
+  font-size: 12px;
+  padding: 4px 8px;
+  min-height: 28px;
+  color: var(--muted-strong);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-danger:hover {
+  border-color: var(--expense);
+  color: var(--expense);
+}
+
+.field {
+  font: inherit;
+  font-size: 14px;
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+  min-height: 36px;
+}
+
+.field:focus-visible,
+.btn:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.form-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.form-row .field {
+  flex: 1 1 180px;
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.check {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- Tabela ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 0 -18px;
+  padding: 0 18px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-strong);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--row-border);
+}
+
+.table td {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--row-border);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table .col-date {
+  white-space: nowrap;
+  color: var(--muted-strong);
+}
+
+/* ---------- Gráficos ---------- */
+
+.chart-total {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: 8px 0 12px;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 140px) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-track {
+  background: var(--row-border);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  background: var(--expense);
+  height: 100%;
+  border-radius: 999px;
+}
+
+.bar-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-strong);
+}
+
+/* ---------- Linha do tempo ---------- */
+
+.timeline li {
+  justify-content: flex-start;
+}
+
+.timeline-text {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ---------- Estados de carregamento ---------- */
+
+.skeleton {
+  background: var(--card-bg);
+  border: 1px solid var(--row-border);
+  border-radius: var(--radius);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
 }
 
 @media (max-width: 480px) {
-  .cards-row {
-    flex-direction: column;
+  .page {
+    padding: 16px 12px 40px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .table-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
   }
 }

@@ -12,11 +12,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const errorMessage = error ? ERROR_MESSAGES[error] : undefined;
 
   return (
-    <main style={{ maxWidth: 480, margin: '80px auto', padding: 24, textAlign: 'center' }}>
+    <main className="page-narrow">
       <h1>Tom</h1>
       <p>Para acessar seu painel, peça o link de acesso no seu WhatsApp conectado ao Tom.</p>
-      <p style={{ opacity: 0.7 }}>Basta mandar uma mensagem como &quot;quero ver o painel&quot;.</p>
-      {errorMessage ? <p style={{ color: 'var(--error)' }}>{errorMessage}</p> : null}
+      <p className="muted">Basta mandar uma mensagem como &quot;quero ver o painel&quot;.</p>
+      {errorMessage ? <p className="notice notice-error">{errorMessage}</p> : null}
     </main>
   );
 }
