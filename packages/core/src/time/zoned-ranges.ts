@@ -76,6 +76,15 @@ function datePartsInZone(timeZone: string, referenceDate: Date): { year: number;
   };
 }
 
+/**
+ * Ano/mês/dia local no fuso informado — usado pelo sweep de datas
+ * importantes (insights-sweep.ts) pra comparar "hoje" com o month/day
+ * guardado em important_dates, sem depender do fuso do servidor.
+ */
+export function getLocalDateParts(timeZone: string, referenceDate: Date = new Date()): { year: number; month: number; day: number } {
+  return datePartsInZone(timeZone, referenceDate);
+}
+
 /** Início (00:00:00) e fim (23:59:59) do dia corrente NO FUSO DO USUÁRIO. */
 export function getTodayRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
   const { year, month, day } = datePartsInZone(timeZone, referenceDate);

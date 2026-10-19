@@ -92,6 +92,30 @@ export interface Note {
   created_at: string;
 }
 
+export interface ImportantDate {
+  id: string;
+  account_id: string;
+  label: string;
+  /** 1-12 — recorrente ano a ano, não uma data completa (ver migration 0018). */
+  month: number;
+  /** 1-31 */
+  day: number;
+  created_by_user_id: string;
+  created_at: string;
+}
+
+export type GoalStatus = 'pending' | 'done';
+
+export interface PersonalGoal {
+  id: string;
+  account_id: string;
+  description: string;
+  status: GoalStatus;
+  created_by_user_id: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
 export type ReminderRecurrence = 'daily' | 'weekly' | 'monthly';
 

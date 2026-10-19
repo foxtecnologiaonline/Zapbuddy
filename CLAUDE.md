@@ -204,6 +204,54 @@ Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboard
   (par/ímpar do último dígito, nunca aleatório) entre "nome primeiro" (controle) e "ação primeiro"
   — decisão de qual vence fica pra quando a amostra crescer, lida manualmente no funil.
 
+## Expansão B2C — datas importantes, metas, carreira e timeline (2026-10, motivo documentado)
+
+Decisão do usuário: implementar as sugestões A (novos especialistas/tool-clusters), B (cobrir
+"pessoal" de verdade), C (proatividade com a memória de longo prazo) e D (produto/UX) de uma
+rodada de brainstorm feita após reafirmar o posicionamento B2C. Resumo do que entrou:
+
+- **Datas importantes** (`important_dates`, migration `0018`) — recorrente ano a ano (month/day,
+  não uma data completa), via `remember_important_date`/`list_important_dates`/
+  `forget_important_date`. O sweep horário do worker (`insights-sweep.ts`, reaproveitando a mesma
+  varredura da Fase 3) manda o lembrete sozinho no dia certo, no fuso de cada conta — idempotente
+  por ano via `important_date_logs`. Diferente de `create_calendar_event` (evento único, não
+  recorrente).
+- **Metas pessoais/profissionais** (`personal_goals`, migration `0018`) — meta qualitativa sem
+  prazo único ("quero ler mais", "fechar mais clientes"), via `create_personal_goal`/
+  `list_personal_goals`/`complete_personal_goal`/`delete_personal_goal`. Diferente de `tasks`
+  (tem `due_at`, é "a fazer até tal dia") e de `notes` (meta tem status/acompanhamento, nota é só
+  texto solto).
+- **Carreira/profissional** — sem tabela nova: `notes`/`create_personal_goal`/
+  `create_calendar_event` já cobrem (reunião, entrevista, follow-up profissional) — só o
+  system prompt foi ajustado pra convidar esse uso explicitamente, em vez de ficar implícito.
+- **Resumo semanal turbinado** — `formatWeeklyDigestMessage` (digest/message.ts) ganhou um
+  parâmetro opcional de contadores não-financeiros (tarefa pendente, meta em andamento, nota nova
+  na semana) — "lembra de tudo", não só financeiro. Reusa dado que já existia, zero query nova
+  além de contagens simples.
+- **Busca em notas** — `list_notes` (tool e repo) ganhou um parâmetro `query` opcional (ILIKE
+  simples, sem pgvector — nota é texto curto, substring já resolve).
+- **Dashboard** — seções novas "Metas pessoais" e "Datas importantes" (mesmo padrão de
+  criar/listar/apagar via form, já usado por notas/fatos), e "O que aconteceu essa semana": linha
+  do tempo unificada mesclando transação/tarefa/nota/fato/meta recentes, montada por uma função
+  pura testável (`apps/web/app/dashboard/timeline.ts`) — zero query nova, só reorganiza dado já
+  buscado na própria página.
+
+**Conscientemente fora desta rodada** (não é esquecimento, é escopo cortado na hora de implementar
+pra não inflar isto além do que dá pra validar de uma vez):
+- **Hábitos/rotina com acompanhamento** (streak, check-in recorrente tipo "fui pra academia hoje")
+  — viraria uma feature própria (tabela + lógica de streak + prompt periódico), não só uma tool a
+  mais; por ora esse tipo de relato cai em `create_note`/`remember_fact`, sem rastreamento de
+  constância dedicado.
+- **Lembrete disparado por contexto de conversa** ("me lembra de ligar pro João quando eu disser
+  que terminei a reunião") — exigiria uma infra de gatilho conversacional que não existe
+  (lembrete hoje é sempre por data/hora, `reminders.remind_at`); fica pra quando houver desenho
+  concreto de como isso funcionaria sem ambiguidade.
+- **Datas importantes injetadas automaticamente em todo system prompt** (como `memory_facts`) —
+  decisão deliberada de deixar como tool consultada sob demanda (`list_important_dates`), não
+  auto-injetada: a maioria das datas guardadas é irrelevante no dia a dia da conversa, e
+  auto-injetar todas infla token de toda mensagem por pouco ganho — o sweep proativo já cobre o
+  caso que importa (avisar no dia certo).
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

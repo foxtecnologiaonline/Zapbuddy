@@ -13,6 +13,7 @@ import { handleInterpretationFeedback } from './handlers/interpretation-feedback
 import { handleLogsRetention } from './handlers/logs-retention.js';
 import { handleWeeklyDigestGenerate } from './handlers/weekly-digest-generate.js';
 import { handleOnboardingNudge } from './handlers/onboarding-nudge.js';
+import { handleImportantDateReminder } from './handlers/important-date-reminder.js';
 import { scheduleRecurringJobs } from './scheduled-jobs.js';
 
 const connection = getRedisConnection();
@@ -154,6 +155,12 @@ const QUEUE_CONFIGS: {
     // de erro acima, mesmo raciocínio do insightsSweep/weeklyDigestGenerate.
     name: QUEUE_NAMES.onboardingNudge,
     handler: handleOnboardingNudge,
+    concurrency: 5,
+  },
+  {
+    // Sem onExhausted: mesmo raciocínio do onboardingNudge/weeklyDigestGenerate — ninguém espera essa mensagem num momento exato.
+    name: QUEUE_NAMES.importantDateReminder,
+    handler: handleImportantDateReminder,
     concurrency: 5,
   },
 ];

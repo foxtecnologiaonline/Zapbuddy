@@ -19,10 +19,15 @@ export const createNoteTool = defineTool({
 
 export const listNotesTool = defineTool({
   name: 'list_notes',
-  description: 'Lista as notas pessoais da pessoa, mais recentes primeiro.',
-  schema: z.object({}),
-  execute: async (_params, ctx) => {
-    const notes = await listNotes(ctx.accountId);
+  description:
+    'Lista as notas pessoais da pessoa, mais recentes primeiro. Passe query pra buscar só notas que ' +
+    'contenham um termo (ex.: "o que eu anotei sobre o aluguel" → query: "aluguel") — sem query, lista ' +
+    'tudo.',
+  schema: z.object({
+    query: z.string().min(1).max(200).optional(),
+  }),
+  execute: async (params, ctx) => {
+    const notes = await listNotes(ctx.accountId, undefined, params.query);
     return { notes };
   },
 });

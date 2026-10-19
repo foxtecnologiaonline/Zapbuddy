@@ -1,11 +1,19 @@
 import type { Job } from 'bullmq';
-import { listAccountsForInsightsSweep, hasSentProactiveInsightToday, hasSentWeeklyDigestSince } from '@zapbuddy/db';
+import {
+  listAccountsForInsightsSweep,
+  hasSentProactiveInsightToday,
+  hasSentWeeklyDigestSince,
+  listImportantDatesForAccountOnDate,
+  hasSentImportantDateReminderThisYear,
+} from '@zapbuddy/db';
 import {
   getLocalHour,
   getLocalWeekday,
+  getLocalDateParts,
   getTodayRange,
   getInsightsGenerateQueue,
   getWeeklyDigestGenerateQueue,
+  getImportantDateReminderQueue,
   type InsightsSweepJob,
 } from '@zapbuddy/core';
 
@@ -20,14 +28,20 @@ const TARGET_LOCAL_HOUR = 19;
 const DIGEST_LOCAL_WEEKDAY = 5; // sexta
 const DIGEST_LOCAL_HOUR = 18;
 
+// 9h local — manhã, horário distinto dos outros dois (18h/19h) pra não
+// competir por conexão com o Supabase na mesma janela (mesmo raciocínio do
+// comentário em scheduled-jobs.ts sobre os jobs semanais em horas distintas).
+const IMPORTANT_DATE_LOCAL_HOUR = 9;
+
 /**
  * Varre todas as contas 1x/hora (fila repetível, registrada em worker.ts) —
- * não gera o insight/resumo aqui, só decide QUEM deve receber o quê agora e
- * enfileira um job por conta (insights-generate / weekly-digest-generate)
- * pra fazer o trabalho isolado/retentável por conta. Resumo semanal reusa
- * esta mesma varredura (em vez de uma sweep paralela) por ser exatamente a
- * mesma decisão — "é a hora local certa pra essa conta?" — só com um
- * segundo gatilho de dia/hora.
+ * não gera o insight/resumo/lembrete aqui, só decide QUEM deve receber o quê
+ * agora e enfileira um job por conta (insights-generate / weekly-digest-
+ * generate / important-date-reminder) pra fazer o trabalho isolado/
+ * retentável. Resumo semanal e lembrete de data importante reusam esta
+ * mesma varredura (em vez de uma sweep paralela cada) por ser exatamente a
+ * mesma decisão — "é a hora local certa pra essa conta?" — só com
+ * gatilhos de dia/hora e fonte de dado diferentes.
  */
 export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<void> {
   const accounts = await listAccountsForInsightsSweep();
@@ -49,6 +63,24 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
             { jobId: `${account.accountId}:${today.startIso.slice(0, 10)}` },
           );
         }
+      }
+
+      if (localHour === IMPORTANT_DATE_LOCAL_HOUR) {
+        const { month, day, year } = getLocalDateParts(account.ownerTimezone);
+        const matches = await listImportantDatesForAccountOnDate(account.accountId, month, day);
+
+        await Promise.all(
+          matches.map(async (importantDate) => {
+            const alreadySent = await hasSentImportantDateReminderThisYear(importantDate.id, year);
+            if (alreadySent) return;
+
+            await getImportantDateReminderQueue().add(
+              'send',
+              { importantDateId: importantDate.id, label: importantDate.label, ownerWhatsappNumber: account.ownerWhatsappNumber, year },
+              { jobId: `important-date:${importantDate.id}:${year}` },
+            );
+          }),
+        );
       }
 
       if (localHour === DIGEST_LOCAL_HOUR && getLocalWeekday(account.ownerTimezone) === DIGEST_LOCAL_WEEKDAY) {

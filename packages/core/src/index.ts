@@ -30,3 +30,4 @@ export * from './insights/message.js';
 export * from './digest/message.js';
 export * from './webhooks/dispatch.js';
 export * from './onboarding/nudge-message.js';
+export * from './important-dates/message.js';

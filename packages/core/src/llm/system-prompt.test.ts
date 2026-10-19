@@ -208,6 +208,17 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('delete_note');
   });
 
+  it('cita remember_important_date/forget_important_date e as tools de meta pessoal na triagem', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('remember_important_date');
+    expect(prompt).toContain('forget_important_date');
+    expect(prompt).toContain('create_personal_goal');
+    expect(prompt).toContain('list_personal_goals');
+    expect(prompt).toContain('complete_personal_goal');
+    expect(prompt).toContain('delete_personal_goal');
+  });
+
   it('não inclui a seção de memória de longo prazo quando não há fato nenhum', () => {
     const prompt = buildSystemPrompt(baseUser());
 

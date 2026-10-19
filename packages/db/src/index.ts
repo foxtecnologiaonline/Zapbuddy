@@ -25,3 +25,5 @@ export * from './repositories/budgets.js';
 export * from './repositories/weekly-digest.js';
 export * from './repositories/memory-facts.js';
 export * from './repositories/notes.js';
+export * from './repositories/important-dates.js';
+export * from './repositories/personal-goals.js';
