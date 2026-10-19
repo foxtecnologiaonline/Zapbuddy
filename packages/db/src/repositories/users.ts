@@ -233,6 +233,18 @@ export async function setPreferredName(userId: string, preferredName: string | n
   return data as User;
 }
 
+export async function setQuietHours(userId: string, startHour: number, endHour: number): Promise<User> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .update({ quiet_hours_start: startHour, quiet_hours_end: endHour })
+    .eq('id', userId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as User;
+}
+
 /** Contagem de pedidos de assinatura aguardando contato humano, pro admin overview. */
 export async function countPendingUpgradeIntents(): Promise<number> {
   const { count, error } = await getSupabaseClient()

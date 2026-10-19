@@ -41,6 +41,7 @@ export const QUEUE_NAMES = {
   logsRetention: 'logs-retention',
   weeklyDigestGenerate: 'weekly-digest-generate',
   onboardingNudge: 'onboarding-nudge',
+  morningDigestGenerate: 'morning-digest-generate',
 } as const;
 
 export interface AudioTranscriptionJob {
@@ -100,6 +101,12 @@ export interface WeeklyDigestGenerateJob {
   ownerTimezone: string;
 }
 
+export interface MorningDigestGenerateJob {
+  accountId: string;
+  ownerWhatsappNumber: string;
+  ownerTimezone: string;
+}
+
 export type OnboardingNudgeStage = '2h' | '24h';
 
 /**
@@ -127,6 +134,7 @@ let interpretationFeedbackQueue: Queue<InterpretationFeedbackJob> | null = null;
 let logsRetentionQueue: Queue<LogsRetentionJob> | null = null;
 let weeklyDigestGenerateQueue: Queue<WeeklyDigestGenerateJob> | null = null;
 let onboardingNudgeQueue: Queue<OnboardingNudgeJob> | null = null;
+let morningDigestGenerateQueue: Queue<MorningDigestGenerateJob> | null = null;
 
 export function getAudioTranscriptionQueue(): Queue<AudioTranscriptionJob> {
   audioQueue ??= new Queue(QUEUE_NAMES.audioTranscription, {
@@ -222,4 +230,12 @@ export function getOnboardingNudgeQueue(): Queue<OnboardingNudgeJob> {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return onboardingNudgeQueue;
+}
+
+export function getMorningDigestGenerateQueue(): Queue<MorningDigestGenerateJob> {
+  morningDigestGenerateQueue ??= new Queue(QUEUE_NAMES.morningDigestGenerate, {
+    connection: getRedisConnection(),
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
+  return morningDigestGenerateQueue;
 }

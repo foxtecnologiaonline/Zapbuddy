@@ -154,6 +154,8 @@ export interface AccountOwnerForSweep {
   ownerUserId: string;
   ownerWhatsappNumber: string;
   ownerTimezone: string;
+  quietHoursStart: number;
+  quietHoursEnd: number;
 }
 
 /**
@@ -165,17 +167,25 @@ export interface AccountOwnerForSweep {
 export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSweep[]> {
   const { data, error } = await getSupabaseClient()
     .from('account_members')
-    .select('account_id, users(id, whatsapp_number, timezone)')
+    .select('account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end)')
     .eq('role', 'owner');
 
   if (error) throw error;
   return (data ?? []).map((row) => {
-    const user = row.users as unknown as { id: string; whatsapp_number: string; timezone: string };
+    const user = row.users as unknown as {
+      id: string;
+      whatsapp_number: string;
+      timezone: string;
+      quiet_hours_start: number;
+      quiet_hours_end: number;
+    };
     return {
       accountId: row.account_id as string,
       ownerUserId: user.id,
       ownerWhatsappNumber: user.whatsapp_number,
       ownerTimezone: user.timezone,
+      quietHoursStart: user.quiet_hours_start,
+      quietHoursEnd: user.quiet_hours_end,
     };
   });
 }

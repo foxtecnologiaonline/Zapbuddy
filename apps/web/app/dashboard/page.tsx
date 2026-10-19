@@ -258,6 +258,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </section>
 
       <section>
+        <h2>Seus dados</h2>
+        <p style={{ opacity: 0.6, fontSize: 13 }}>
+          Baixe tudo que você registrou com o Tom — gastos, tarefas, notas, contas, metas e o que ele lembra.
+        </p>
+        <a href="/api/dashboard/export">Baixar meus dados (JSON)</a>
+      </section>
+
+      <section>
         <h2>O que o Tom lembra de você</h2>
         <p style={{ opacity: 0.6, fontSize: 13 }}>
           Fatos que você contou em conversas e o Tom guardou pra usar depois — financeiro nunca entra

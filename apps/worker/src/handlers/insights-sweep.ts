@@ -6,6 +6,8 @@ import {
   getTodayRange,
   getInsightsGenerateQueue,
   getWeeklyDigestGenerateQueue,
+  getMorningDigestGenerateQueue,
+  isWithinQuietHours,
   type InsightsSweepJob,
 } from '@zapbuddy/core';
 
@@ -19,6 +21,11 @@ const TARGET_LOCAL_HOUR = 19;
 // de anomalia (19h) pra não mandar duas mensagens seguidas na mesma hora.
 const DIGEST_LOCAL_WEEKDAY = 5; // sexta
 const DIGEST_LOCAL_HOUR = 18;
+
+// 8h local — primeira coisa do dia. Janela de silêncio padrão (22h–7h) não
+// cobre esse horário, então por padrão sempre chega; quem configurar silêncio
+// nessa faixa simplesmente não recebe o resumo matinal naquele dia.
+const MORNING_DIGEST_LOCAL_HOUR = 8;
 
 /**
  * Varre todas as contas 1x/hora (fila repetível, registrada em worker.ts) —
@@ -35,8 +42,18 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
   await Promise.all(
     accounts.map(async (account) => {
       const localHour = getLocalHour(account.ownerTimezone);
+      const quiet = isWithinQuietHours(localHour, account.quietHoursStart, account.quietHoursEnd);
 
-      if (localHour === TARGET_LOCAL_HOUR) {
+      if (localHour === MORNING_DIGEST_LOCAL_HOUR && !quiet) {
+        const today = getTodayRange(account.ownerTimezone);
+        await getMorningDigestGenerateQueue().add(
+          'generate',
+          { accountId: account.accountId, ownerWhatsappNumber: account.ownerWhatsappNumber, ownerTimezone: account.ownerTimezone },
+          { jobId: `morning:${account.accountId}:${today.startIso.slice(0, 10)}` },
+        );
+      }
+
+      if (localHour === TARGET_LOCAL_HOUR && !quiet) {
         const today = getTodayRange(account.ownerTimezone);
         const alreadySent = await hasSentProactiveInsightToday(account.accountId, today.startIso, today.endIso);
         if (!alreadySent) {
@@ -51,7 +68,7 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
         }
       }
 
-      if (localHour === DIGEST_LOCAL_HOUR && getLocalWeekday(account.ownerTimezone) === DIGEST_LOCAL_WEEKDAY) {
+      if (localHour === DIGEST_LOCAL_HOUR && !quiet && getLocalWeekday(account.ownerTimezone) === DIGEST_LOCAL_WEEKDAY) {
         // "Essa semana" = últimos 8 dias — folga de 1 dia sobre o intervalo
         // de 7 dias que o próprio resumo mostra, só pra idempotência (nunca
         // usado pra calcular o conteúdo do resumo, só pra decidir se já

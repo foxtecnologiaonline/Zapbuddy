@@ -1,20 +1,8 @@
 import { z } from 'zod';
-import { getCalendarConnection } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
-import { decryptSecret } from '../../security/crypto.js';
-import { refreshGoogleAccessToken } from '../../google/oauth.js';
 import { createGoogleCalendarEvent, listGoogleCalendarEvents } from '../../google/calendar.js';
+import { getFreshCalendarAccess } from '../../google/calendar-access.js';
 import { getTodayRange, getLast7DaysRange } from '../../time/zoned-ranges.js';
-
-/** Sem cache de access token (ADR 0002, decisão 3) — sempre renova via refresh token antes de cada chamada. */
-async function getFreshAccessToken(accountId: string): Promise<{ accessToken: string; calendarId: string } | null> {
-  const connection = await getCalendarConnection(accountId);
-  if (!connection) return null;
-
-  const refreshToken = decryptSecret(connection.google_refresh_token_encrypted);
-  const { accessToken } = await refreshGoogleAccessToken(refreshToken);
-  return { accessToken, calendarId: connection.google_calendar_id };
-}
 
 export const createCalendarEventTool = defineTool({
   name: 'create_calendar_event',
@@ -29,8 +17,12 @@ export const createCalendarEventTool = defineTool({
     description: z.string().optional(),
   }),
   execute: async (params, ctx) => {
-    const auth = await getFreshAccessToken(ctx.accountId);
+    const auth = await getFreshCalendarAccess(ctx.accountId);
     if (!auth) return { connected: false };
+
+    // Google devolve só eventos que se sobrepõem à janela pedida, então qualquer
+    // item aqui é um conflito. Não bloqueia: a pessoa pode querer marcar mesmo assim.
+    const overlapping = await listGoogleCalendarEvents(auth.accessToken, auth.calendarId, params.start_at, params.end_at);
 
     const event = await createGoogleCalendarEvent(auth.accessToken, auth.calendarId, {
       summary: params.summary,
@@ -38,7 +30,13 @@ export const createCalendarEventTool = defineTool({
       endIso: params.end_at,
       description: params.description,
     });
-    return { connected: true, created: true, event_id: event.id, html_link: event.htmlLink };
+    return {
+      connected: true,
+      created: true,
+      event_id: event.id,
+      html_link: event.htmlLink,
+      conflicts: overlapping.map((item) => ({ summary: item.summary, start_at: item.startIso })),
+    };
   },
 });
 
@@ -49,7 +47,7 @@ export const listCalendarEventsTool = defineTool({
     period: z.enum(['today', 'last_7_days']),
   }),
   execute: async (params, ctx) => {
-    const auth = await getFreshAccessToken(ctx.accountId);
+    const auth = await getFreshCalendarAccess(ctx.accountId);
     if (!auth) return { connected: false };
 
     const range = params.period === 'today' ? getTodayRange(ctx.timezone) : getLast7DaysRange(ctx.timezone);

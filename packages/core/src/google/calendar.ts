@@ -74,3 +74,16 @@ export async function listGoogleCalendarEvents(
     startIso: item.start.dateTime ?? item.start.date ?? '',
   }));
 }
+
+/** Apaga um evento criado pelo próprio assistente (usado pelo "desfazer"). 404/410 = já não existe, tratado como sucesso. */
+export async function deleteGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
+  const response = await fetchWithRetry(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
+    10_000,
+  );
+
+  if (!response.ok && response.status !== 404 && response.status !== 410) {
+    throw new Error(`Google Calendar event deletion failed (${response.status}): ${await response.text()}`);
+  }
+}

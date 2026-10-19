@@ -14,13 +14,20 @@ export async function createNote(accountId: string, userId: string, content: str
 
 const DEFAULT_NOTES_LIMIT = 50;
 
-export async function listNotes(accountId: string, limit: number = DEFAULT_NOTES_LIMIT): Promise<Note[]> {
-  const { data, error } = await getSupabaseClient()
-    .from('notes')
-    .select('*')
-    .eq('account_id', accountId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+/** Escapa curingas do ILIKE pra que a busca do usuário seja sempre texto literal. */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+export async function listNotes(
+  accountId: string,
+  limit: number = DEFAULT_NOTES_LIMIT,
+  query?: string,
+): Promise<Note[]> {
+  let builder = getSupabaseClient().from('notes').select('*').eq('account_id', accountId);
+  if (query) builder = builder.ilike('content', `%${escapeLike(query)}%`);
+
+  const { data, error } = await builder.order('created_at', { ascending: false }).limit(limit);
 
   if (error) throw error;
   return (data ?? []) as Note[];

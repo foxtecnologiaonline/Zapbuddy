@@ -36,3 +36,18 @@ describe('formatWeeklyDigestMessage', () => {
     expect(listPart).not.toContain('a:');
   });
 });
+
+describe('formatWeeklyDigestMessage com semana anterior', () => {
+  const current = { totalIncomeCents: 0, totalExpenseCents: 15000, byCategory: { Mercado: 15000 } } as never;
+
+  it('mostra a variação percentual quando há gasto nas duas semanas', () => {
+    const previous = { totalIncomeCents: 0, totalExpenseCents: 10000, byCategory: {} } as never;
+    const message = formatWeeklyDigestMessage(current, previous).replace(/\u00a0/g, ' ');
+    expect(message).toContain('50% acima da semana anterior (R$ 100,00)');
+  });
+
+  it('não compara quando a semana anterior não tem gasto', () => {
+    const previous = { totalIncomeCents: 0, totalExpenseCents: 0, byCategory: {} } as never;
+    expect(formatWeeklyDigestMessage(current, previous)).not.toContain('semana anterior');
+  });
+});

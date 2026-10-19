@@ -194,3 +194,17 @@ export async function summarizeTransactions(
 
   return summary;
 }
+
+/** Remove uma transação recém-registrada (usado só pelo "desfazer"). Escopado por conta. */
+export async function deleteTransaction(accountId: string, transactionId: string): Promise<boolean> {
+  const { data, error } = await getSupabaseClient()
+    .from('transactions')
+    .delete()
+    .eq('id', transactionId)
+    .eq('account_id', accountId)
+    .select('id')
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}

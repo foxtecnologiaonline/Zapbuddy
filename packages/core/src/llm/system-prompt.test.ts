@@ -23,6 +23,8 @@ function baseUser(overrides: Partial<User> = {}): User {
     onboarding_completed_at: '2026-01-01T00:00:00.000Z',
     onboarding_variant: 'ask_name_first',
     plan_status: 'trial',
+    quiet_hours_start: 22,
+    quiet_hours_end: 7,
     plan_status_updated_at: null,
     plan_intent: null,
     plan_intent_requested_at: null,
@@ -227,5 +229,20 @@ describe('buildSystemPrompt', () => {
 
     expect(prompt).toContain('O que você já sabe sobre essa pessoa');
     expect(prompt).toContain('trabalha de terça a sábado');
+  });
+});
+
+describe('buildSystemPrompt persona B2C', () => {
+  it('não usa MEI/PJ como padrão quando a pessoa ainda não tem nome', () => {
+    const prompt = buildSystemPrompt(baseUser({ name: null, preferred_name: null }));
+    expect(prompt).not.toContain('MEI/PJ');
+  });
+
+  it('ensina o uso de contas, metas, silêncio e desfazer', () => {
+    const prompt = buildSystemPrompt(baseUser());
+    expect(prompt).toContain('create_recurring_bill');
+    expect(prompt).toContain('add_goal_progress');
+    expect(prompt).toContain('set_quiet_hours');
+    expect(prompt).toContain('undo_last_action');
   });
 });

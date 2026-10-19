@@ -13,6 +13,10 @@ import { createCalendarEventTool, listCalendarEventsTool } from './tools/calenda
 import { webSearchTool } from './tools/web-search.js';
 import { rememberFactTool, forgetFactTool } from './tools/memory.js';
 import { createNoteTool, listNotesTool, deleteNoteTool } from './tools/notes.js';
+import { createRecurringBillTool, listRecurringBillsTool, cancelRecurringBillTool } from './tools/bills.js';
+import { createGoalTool, addGoalProgressTool, listGoalsTool } from './tools/goals.js';
+import { setQuietHoursTool } from './tools/preferences.js';
+import { undoLastActionTool } from './tools/undo.js';
 
 export const ALL_TOOLS: ToolDefinition<any>[] = [
   recordTransactionTool,
@@ -41,6 +45,14 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   createNoteTool,
   listNotesTool,
   deleteNoteTool,
+  createRecurringBillTool,
+  listRecurringBillsTool,
+  cancelRecurringBillTool,
+  createGoalTool,
+  addGoalProgressTool,
+  listGoalsTool,
+  setQuietHoursTool,
+  undoLastActionTool,
 ];
 
 export function getToolByName(name: string) {

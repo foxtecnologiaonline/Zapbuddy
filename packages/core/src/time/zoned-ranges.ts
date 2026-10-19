@@ -61,7 +61,7 @@ export function getLocalWeekday(timeZone: string, referenceDate: Date = new Date
   return WEEKDAY_INDEX[weekdayName] ?? 0;
 }
 
-function datePartsInZone(timeZone: string, referenceDate: Date): { year: number; month: number; day: number } {
+export function datePartsInZone(timeZone: string, referenceDate: Date): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
@@ -145,6 +145,14 @@ export function getPreviousMonthRange(timeZone: string, referenceDate: Date = ne
 export function getPriorFourWeeksRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
   const { year, month, day } = datePartsInZone(timeZone, referenceDate);
   const start = zonedWallTimeToUtc(year, month, day - 34, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(year, month, day - 7, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/** Os 7 dias anteriores à janela de `getLast7DaysRange` (dias -13 a -7) NO FUSO DO USUÁRIO — base de comparação do resumo semanal. */
+export function getPreviousWeekRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, day - 13, 0, 0, 0, timeZone);
   const end = zonedWallTimeToUtc(year, month, day - 7, 23, 59, 59, timeZone);
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }

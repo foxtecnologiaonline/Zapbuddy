@@ -225,3 +225,24 @@ export async function listToolCallCreatedAtSince(sinceIso: string): Promise<{ cr
   if (error) throw error;
   return (data ?? []) as { created_at: string; success: boolean }[];
 }
+
+/** Última chamada bem-sucedida de uma das tools informadas pra esse usuário, desde `sinceIso` — base do "desfazer". */
+export async function findLastSuccessfulToolCall(
+  userId: string,
+  toolNames: string[],
+  sinceIso: string,
+): Promise<ToolCallLog | null> {
+  const { data, error } = await getSupabaseClient()
+    .from('tool_call_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('success', true)
+    .in('tool_name', toolNames)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as ToolCallLog | null) ?? null;
+}

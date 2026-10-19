@@ -15,6 +15,29 @@ Decisão do usuário: o público é B2C, não MEI/PJ. O foco do Tom é:
 
 Itens de negócio (fluxo de caixa de MEI/PJ, DAS, nota fiscal) não são nicho do produto. Não revisitar esse recorte sem pedido explícito do usuário.
 
+## Diferenciais de assistente pessoal (2026-10, pedido do dono do produto)
+
+Entram no código, por pedido explícito, mesmo fora da ordem de fases:
+
+- **Resumo matinal** (fila `morning-digest-generate`, 8h local): agenda do dia, tarefas de hoje e atrasadas, contas a
+  vencer em até 3 dias. Uma mensagem só; sem nada pra mostrar, não manda nada.
+- **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
+  só o que a pessoa informou. Nunca vira pagamento sozinho.
+- **Metas com prazo** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor guardado é o declarado pela
+  pessoa, nunca estimado. Nunca prometer rendimento.
+- **Horário de silêncio** (`users.quiet_hours_start/end`, tool `set_quiet_hours`): bloqueia só mensagens proativas
+  (resumo matinal, insight, resumo semanal). Lembretes que a pessoa agendou continuam chegando na hora marcada.
+  Insight e resumo semanal que cairiam dentro da janela são pulados naquele dia, não reagendados.
+- **Resumo semanal comparativo**: mostra variação percentual contra a semana anterior, só quando as duas têm gasto.
+- **Busca em notas** (`list_notes` com `query`) e **conflito de agenda** (`create_calendar_event` devolve `conflicts`,
+  sem bloquear a criação).
+- **Desfazer** (`undo_last_action`): reverte só a última criação da pessoa nos últimos 10 minutos, lendo o log de tool
+  calls. Decisão: desfazer em vez de confirmação antes de salvar, para não travar a conversa. Não desfaz duas vezes.
+- **Exportação** (`/api/dashboard/export`, JSON): tudo que a conta registrou.
+- **Não implementado**: tempo de deslocamento entre compromissos (não há dado de localização).
+
+Migration `0018_personal_assistant.sql` precisa ser aplicada no Supabase antes do deploy.
+
 ## Stack (decidida — não revisitar sem motivo forte)
 
 - **Backend:** Node.js + TypeScript

@@ -16,6 +16,8 @@ export interface User {
   plan_status_updated_at: string | null;
   plan_intent: PlanIntent | null;
   plan_intent_requested_at: string | null;
+  quiet_hours_start: number;
+  quiet_hours_end: number;
   created_at: string;
 }
 
@@ -90,6 +92,32 @@ export interface Note {
   content: string;
   created_by_user_id: string;
   created_at: string;
+}
+
+export interface RecurringBill {
+  id: string;
+  account_id: string;
+  name: string;
+  amount_cents: number;
+  due_day: number;
+  active: boolean;
+  created_by_user_id: string;
+  created_at: string;
+}
+
+export type GoalStatus = 'active' | 'completed' | 'cancelled';
+
+export interface Goal {
+  id: string;
+  account_id: string;
+  title: string;
+  target_cents: number;
+  saved_cents: number;
+  deadline: string | null;
+  status: GoalStatus;
+  created_by_user_id: string;
+  created_at: string;
+  completed_at: string | null;
 }
 
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';

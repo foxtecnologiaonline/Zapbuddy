@@ -1,6 +1,12 @@
 import type { Job } from 'bullmq';
 import { summarizeTransactions, logWeeklyDigest } from '@zapbuddy/db';
-import { sendWhatsappTextMessage, formatWeeklyDigestMessage, getLast7DaysRange, type WeeklyDigestGenerateJob } from '@zapbuddy/core';
+import {
+  sendWhatsappTextMessage,
+  formatWeeklyDigestMessage,
+  getLast7DaysRange,
+  getPreviousWeekRange,
+  type WeeklyDigestGenerateJob,
+} from '@zapbuddy/core';
 
 /**
  * Manda o resumo dos últimos 7 dias pro dono da conta — sempre que chamado
@@ -12,8 +18,12 @@ export async function handleWeeklyDigestGenerate(job: Job<WeeklyDigestGenerateJo
   const { accountId, ownerWhatsappNumber, ownerTimezone } = job.data;
 
   const range = getLast7DaysRange(ownerTimezone);
-  const summary = await summarizeTransactions(accountId, range.startIso, range.endIso);
+  const previousRange = getPreviousWeekRange(ownerTimezone);
+  const [summary, previous] = await Promise.all([
+    summarizeTransactions(accountId, range.startIso, range.endIso),
+    summarizeTransactions(accountId, previousRange.startIso, previousRange.endIso),
+  ]);
 
-  await sendWhatsappTextMessage(ownerWhatsappNumber, formatWeeklyDigestMessage(summary));
+  await sendWhatsappTextMessage(ownerWhatsappNumber, formatWeeklyDigestMessage(summary, previous));
   await logWeeklyDigest(accountId);
 }
