@@ -1,6 +1,7 @@
 export type PlanStatus = 'trial' | 'active' | 'canceled';
 export type PlanIntent = 'upgrade' | 'cancel';
 export type OnboardingVariant = 'ask_name_first' | 'ask_action_first';
+export type PreferredPaymentMethod = 'pix' | 'boleto' | 'cartao';
 
 export interface User {
   id: string;
@@ -18,6 +19,11 @@ export interface User {
   plan_intent_requested_at: string | null;
   quiet_hours_start: number;
   quiet_hours_end: number;
+  /** Preenchido quando a pessoa confirma via set_quiet_hours — diferente de quiet_hours_start/end, que sempre têm um valor (default 22/7) mesmo sem confirmação. */
+  quiet_hours_confirmed_at: string | null;
+  email: string | null;
+  /** Só a preferência declarada (nunca dado de pagamento real) — ver migration 0021. */
+  preferred_payment_method: PreferredPaymentMethod | null;
   /** Exigência da Asaas (POST /customers) pra gerar checkout real — ver migration 0020. */
   cpf_cnpj: string | null;
   asaas_customer_id: string | null;

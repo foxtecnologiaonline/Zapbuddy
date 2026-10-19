@@ -14,6 +14,7 @@ export * from './llm/tool-registry.js';
 export * from './llm/web-search/client.js';
 export * from './audio/transcriber.js';
 export * from './whatsapp/channel.js';
+export * from './whatsapp/deep-link.js';
 export {
   evolutionConfiguredInstanceName,
   evolutionCreateInstance,

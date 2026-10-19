@@ -140,7 +140,12 @@ separada de `personal_goals`, que é qualitativa) →
 `0020_billing_asaas.sql` (`users.cpf_cnpj`/`asaas_customer_id`/
 `asaas_subscription_id`/`asaas_payment_link` — checkout real de
 assinatura via Asaas, R$ 27,90/mês, ver amendamento 2026-10 em
-`docs/adr/0004-*.md`).
+`docs/adr/0004-*.md`) →
+`0021_cadastro_progressivo.sql` (`users.email`/`quiet_hours_confirmed_at`/
+`preferred_payment_method` — cadastro progressivo ao longo do teste de 7
+dias via `update_occupation`/`set_email`/`set_quiet_hours`; método de
+pagamento salvo sozinho pelo webhook da Asaas, nunca perguntado em
+conversa — ver `CLAUDE.md`).
 Rodar em ordem, manualmente, no
 SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das

@@ -25,6 +25,9 @@ function baseUser(overrides: Partial<User> = {}): User {
     plan_status: 'trial',
     quiet_hours_start: 22,
     quiet_hours_end: 7,
+    quiet_hours_confirmed_at: null,
+    email: null,
+    preferred_payment_method: null,
     plan_status_updated_at: null,
     plan_intent: null,
     plan_intent_requested_at: null,
@@ -337,5 +340,63 @@ describe('buildSystemPrompt persona B2C', () => {
     expect(prompt).toMatch(/Diferente\s+da meta pessoal qualitativa abaixo \(create_personal_goal\)/);
     expect(prompt).toMatch(/SEM valor em dinheiro/);
     expect(prompt).toMatch(/isso é create_goal/);
+  });
+});
+
+describe('buildSystemPrompt — cadastro progressivo (primeiros 7 dias)', () => {
+  /** A seção não é a última do prompt — corta no próximo cabeçalho "# " pra isolar o trecho. */
+  function extractSection(prompt: string): string {
+    const start = prompt.indexOf('# Cadastro progressivo');
+    if (start === -1) return '';
+    const nextHeading = prompt.indexOf('\n\n# ', start + 1);
+    return prompt.slice(start, nextHeading === -1 ? undefined : nextHeading);
+  }
+
+  it('lista os campos que ainda faltam dentro da janela de 7 dias', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(3) }));
+    const section = extractSection(prompt);
+
+    expect(section).toContain('update_occupation');
+    expect(section).toContain('set_quiet_hours');
+    expect(section).toContain('set_email');
+  });
+
+  it('some da seção o que já foi preenchido', () => {
+    const prompt = buildSystemPrompt(
+      baseUser({ created_at: createdDaysAgo(3), occupation: 'designer', quiet_hours_confirmed_at: createdDaysAgo(1) }),
+    );
+    const section = extractSection(prompt);
+
+    expect(section).not.toBe('');
+    expect(section).not.toContain('update_occupation');
+    expect(section).not.toContain('set_quiet_hours');
+    expect(section).toContain('set_email');
+  });
+
+  it('não aparece depois de passar os 7 dias', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(8) }));
+
+    expect(prompt).not.toContain('Cadastro progressivo');
+  });
+
+  it('não aparece quando todos os campos já estão preenchidos', () => {
+    const prompt = buildSystemPrompt(
+      baseUser({
+        created_at: createdDaysAgo(2),
+        occupation: 'designer',
+        quiet_hours_confirmed_at: createdDaysAgo(1),
+        email: 'marina@example.com',
+      }),
+    );
+
+    expect(prompt).not.toContain('Cadastro progressivo');
+  });
+
+  it('nunca inclui forma de pagamento/CPF — esses não são perguntados em conversa', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(3) }));
+    const section = extractSection(prompt);
+
+    expect(section).not.toBe('');
+    expect(section).not.toMatch(/forma de pagamento|preferred_payment_method|CPF/);
   });
 });

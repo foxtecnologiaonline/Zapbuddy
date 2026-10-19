@@ -349,6 +349,43 @@ do merge chegar aqui. Sincronizado (`git merge --ff-only`), typecheck/teste/buil
 limpos depois — nenhuma ação adicional necessária, só reforça a importância da convenção já
 documentada acima ("checar branches e PRs abertos antes de trabalho grande").
 
+## Cadastro progressivo e link direto pro WhatsApp (2026-10, motivo documentado)
+
+Decisão do usuário: (1) um link `wa.me` pronto, com "Oi Tom!" pré-preenchido, pra quem acessa cair
+direto na conversa — sem digitar nada; (2) ao longo dos 7 dias de teste, o Tom vai perguntando os
+campos de cadastro que ainda faltam, sem formulário e sem interrogatório, só quando a conversa
+abrir espaço natural pra isso. Campos cobertos (`migration 0021_cadastro_progressivo.sql`):
+
+- **Ocupação** (já existia desde o onboarding, capturada só se mencionada) — ganhou
+  `update_occupation`, pra quando só vem à tona depois do primeiro dia.
+- **Horário de silêncio** — `users.quiet_hours_confirmed_at` marca que a pessoa de fato confirmou
+  via `set_quiet_hours` (diferente de `quiet_hours_start/end`, que sempre têm um valor default
+  22/7 mesmo sem confirmação nenhuma) — sem essa coluna não dava pra saber se "ainda falta
+  perguntar" ou se o default já é o que ela queria.
+- **E-mail** — nova tool `set_email`, só quando a própria pessoa informa.
+- **CPF/CNPJ** — já existia (migration 0020), continua pedido só no momento de fechar a assinatura
+  (`buildUpgradeSection`), nunca nos primeiros dias.
+- **Número de WhatsApp** — não entra no cadastro progressivo: já é capturado automaticamente na
+  primeira mensagem (`users.whatsapp_number`); pedir de novo seria redundante.
+- **Forma de pagamento** (`users.preferred_payment_method`, PIX/boleto/cartão) — **amendamento
+  dentro desta mesma decisão**: não é perguntada em conversa. A Asaas só informa o meio
+  (`billingType`) depois que um pagamento de verdade confirma — por isso é salva automaticamente
+  no webhook (`apps/web/app/api/payments/webhook-asaas/route.ts`, evento `PAYMENT_CONFIRMED`/
+  `PAYMENT_RECEIVED`), nunca pelo Tom perguntando antes. Continua sendo só a categoria declarada
+  pela própria Asaas (nunca número de cartão/chave PIX, que a Asaas nunca manda pra nós).
+
+Regra geral da seção nova no system prompt (`buildProgressiveSignupSection`): no máximo um campo
+pendente perguntado por conversa, só nos primeiros 7 dias (`daysSince(created_at) <= 7`), nunca
+interrompendo o que a pessoa pediu, nunca repetido se ela não responder.
+
+**Link `wa.me`** (`packages/core/src/whatsapp/deep-link.ts`, env nova `TOM_WHATSAPP_NUMBER` —
+diferente de `WHATSAPP_PHONE_NUMBER_ID`, que é o identificador opaco da Cloud API, não o número de
+telefone real): `buildWhatsappDeepLink` monta o link genérico ("Oi Tom!"); aproveitado também pelo
+fluxo de indicação já existente (`get_referral_info`/`buildReferralWhatsappDeepLink`) — a pessoa
+indicada agora pode clicar num link com "Indicado <código>" já preenchido em vez de digitar isso
+manualmente. Sem `TOM_WHATSAPP_NUMBER` configurada, a tool e o painel caem de volta pro código
+manual — nunca um link quebrado.
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

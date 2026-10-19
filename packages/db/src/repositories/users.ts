@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '../client.js';
-import type { OnboardingVariant, PlanIntent, PlanStatus, User } from '../types.js';
+import type { OnboardingVariant, PlanIntent, PlanStatus, PreferredPaymentMethod, User } from '../types.js';
 import { inferTimezoneFromWhatsappNumber } from '../timezone-from-ddd.js';
 import { assignOnboardingVariant } from '../onboarding-variant.js';
 
@@ -265,10 +265,39 @@ export async function findUserByAsaasSubscriptionId(subscriptionId: string): Pro
   return data as User | null;
 }
 
+/** Diferente de completeOnboarding: essa chama fora do onboarding, quando a ocupação só vem à tona depois (cadastro progressivo, 2026-10). */
+export async function setOccupation(userId: string, occupation: string): Promise<User> {
+  const { data, error } = await getSupabaseClient().from('users').update({ occupation }).eq('id', userId).select('*').single();
+  if (error) throw error;
+  return data as User;
+}
+
+export async function saveUserEmail(userId: string, email: string): Promise<User> {
+  const { data, error } = await getSupabaseClient().from('users').update({ email }).eq('id', userId).select('*').single();
+  if (error) throw error;
+  return data as User;
+}
+
+/** Só a preferência declarada (PIX/boleto/cartão) — nunca dado de pagamento real, ver migration 0021. */
+export async function savePreferredPaymentMethod(userId: string, method: PreferredPaymentMethod): Promise<User> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .update({ preferred_payment_method: method })
+    .eq('id', userId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as User;
+}
+
 export async function setQuietHours(userId: string, startHour: number, endHour: number): Promise<User> {
   const { data, error } = await getSupabaseClient()
     .from('users')
-    .update({ quiet_hours_start: startHour, quiet_hours_end: endHour })
+    // quiet_hours_confirmed_at junto: marca que a pessoa confirmou de
+    // verdade (cadastro progressivo, 2026-10) — sem isso não dava pra
+    // distinguir "ainda no default" de "ela já respondeu e o default
+    // coincide com o que ela quer".
+    .update({ quiet_hours_start: startHour, quiet_hours_end: endHour, quiet_hours_confirmed_at: new Date().toISOString() })
     .eq('id', userId)
     .select('*')
     .single();

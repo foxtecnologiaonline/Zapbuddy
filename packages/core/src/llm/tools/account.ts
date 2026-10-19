@@ -10,6 +10,7 @@ import {
 } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 import { createAsaasCustomer, createAsaasSubscription } from '../../payments/asaas-client.js';
+import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError } from '../../whatsapp/deep-link.js';
 
 export const inviteMemberTool = defineTool({
   name: 'invite_member',
@@ -40,13 +41,21 @@ export const listMembersTool = defineTool({
 export const getReferralInfoTool = defineTool({
   name: 'get_referral_info',
   description:
-    'Retorna o código de indicação da conta e quantas pessoas já se cadastraram usando ele. ' +
-    'Use quando perguntarem "como funciona a indicação", "meu código", "quantas pessoas eu indiquei" etc. ' +
-    'Pra indicar alguém, essa pessoa deve mandar "indicado <código>" como uma das primeiras mensagens dela.',
+    'Retorna o código de indicação da conta, quantas pessoas já se cadastraram usando ele, e um link ' +
+    'wa.me pronto (texto "Indicado <código>" já preenchido) pra mandar direto pra pessoa indicada clicar ' +
+    'e abrir a conversa com você. Use quando perguntarem "como funciona a indicação", "meu código", ' +
+    '"quantas pessoas eu indiquei" etc. Se referral_link vier ausente, mande só o código mesmo — a pessoa ' +
+    'indicada ainda pode mandar "indicado <código>" manualmente.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const stats = await getReferralStats(ctx.accountId);
-    return { referral_code: stats.code, total_referred: stats.totalReferred };
+    let referralLink: string | undefined;
+    try {
+      referralLink = buildReferralWhatsappDeepLink(stats.code);
+    } catch (error) {
+      if (!(error instanceof WhatsappNumberNotConfiguredError)) throw error;
+    }
+    return { referral_code: stats.code, total_referred: stats.totalReferred, referral_link: referralLink };
   },
 });
 

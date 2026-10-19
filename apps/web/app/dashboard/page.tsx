@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError } from '@zapbuddy/core';
 import {
   findUserById,
   listTransactions,
@@ -106,6 +107,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listActiveRecurringBills(account.accountId),
     listGoals(account.accountId, 'active'),
   ]);
+
+  let referralLink: string | null = null;
+  try {
+    referralLink = buildReferralWhatsappDeepLink(referralStats.code);
+  } catch (error) {
+    if (!(error instanceof WhatsappNumberNotConfiguredError)) throw error;
+  }
 
   const dailyExpenseTrend = bucketSumsByDay(
     trendTransactions.filter((t) => t.type === 'expense'),
@@ -440,9 +448,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <p style={{ opacity: 0.7 }}>
           Seu código: <strong>{referralStats.code}</strong> — {referralStats.totalReferred} pessoa(s) já se cadastraram com ele.
         </p>
-        <p style={{ opacity: 0.6, fontSize: 13 }}>
-          Pra indicar alguém, peça pra essa pessoa mandar &quot;indicado {referralStats.code}&quot; pro Tom como uma das primeiras mensagens dela.
-        </p>
+        {referralLink ? (
+          <p style={{ opacity: 0.6, fontSize: 13 }}>
+            Manda esse link pra pessoa que você quer indicar — ela só clica e já abre o WhatsApp com a mensagem certa pronta:{' '}
+            <a href={referralLink} target="_blank" rel="noopener noreferrer">
+              {referralLink}
+            </a>
+          </p>
+        ) : (
+          <p style={{ opacity: 0.6, fontSize: 13 }}>
+            Pra indicar alguém, peça pra essa pessoa mandar &quot;indicado {referralStats.code}&quot; pro Tom como uma das primeiras mensagens dela.
+          </p>
+        )}
       </section>
 
       <section>

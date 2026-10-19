@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 const db = vi.hoisted(() => ({
   createAccountInvite: vi.fn(),
@@ -18,7 +18,7 @@ const asaas = vi.hoisted(() => ({
 vi.mock('@zapbuddy/db', () => db);
 vi.mock('../../payments/asaas-client.js', () => asaas);
 
-import { registerPlanIntentTool } from './account.js';
+import { registerPlanIntentTool, getReferralInfoTool } from './account.js';
 
 const ctx = { userId: 'user-1', accountId: 'account-1' } as never;
 
@@ -99,5 +99,39 @@ describe('register_plan_intent', () => {
     expect(asaas.createAsaasCustomer).not.toHaveBeenCalled();
     expect(asaas.createAsaasSubscription).toHaveBeenCalledWith({ customerId: 'cus_123', externalReference: 'user-1' });
     expect(result).toEqual({ registered: true, checkout_url: 'https://asaas.com/pay/xyz' });
+  });
+});
+
+describe('get_referral_info', () => {
+  const originalNumber = process.env.TOM_WHATSAPP_NUMBER;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.getReferralStats.mockResolvedValue({ code: 'ABC123', totalReferred: 2 });
+  });
+
+  afterEach(() => {
+    if (originalNumber === undefined) delete process.env.TOM_WHATSAPP_NUMBER;
+    else process.env.TOM_WHATSAPP_NUMBER = originalNumber;
+  });
+
+  it('com TOM_WHATSAPP_NUMBER configurado, devolve um link wa.me com "Indicado <código>" pré-preenchido', async () => {
+    process.env.TOM_WHATSAPP_NUMBER = '5511999999999';
+
+    const result = await getReferralInfoTool.execute({}, ctx);
+
+    expect(result).toEqual({
+      referral_code: 'ABC123',
+      total_referred: 2,
+      referral_link: 'https://wa.me/5511999999999?text=Indicado%20ABC123',
+    });
+  });
+
+  it('sem TOM_WHATSAPP_NUMBER configurado, devolve só o código — sem link quebrado', async () => {
+    delete process.env.TOM_WHATSAPP_NUMBER;
+
+    const result = await getReferralInfoTool.execute({}, ctx);
+
+    expect(result).toEqual({ referral_code: 'ABC123', total_referred: 2, referral_link: undefined });
   });
 });
