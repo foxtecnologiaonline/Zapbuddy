@@ -76,6 +76,22 @@ export interface Task {
   created_at: string;
 }
 
+export interface MemoryFact {
+  id: string;
+  account_id: string;
+  fact: string;
+  created_by_user_id: string;
+  created_at: string;
+}
+
+export interface Note {
+  id: string;
+  account_id: string;
+  content: string;
+  created_by_user_id: string;
+  created_at: string;
+}
+
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
 export type ReminderRecurrence = 'daily' | 'weekly' | 'monthly';
 

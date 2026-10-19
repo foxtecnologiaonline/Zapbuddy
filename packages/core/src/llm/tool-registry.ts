@@ -11,6 +11,8 @@ import { inviteMemberTool, listMembersTool, getReferralInfoTool, registerPlanInt
 import { findDocumentTool } from './tools/documents.js';
 import { createCalendarEventTool, listCalendarEventsTool } from './tools/calendar.js';
 import { webSearchTool } from './tools/web-search.js';
+import { rememberFactTool, forgetFactTool } from './tools/memory.js';
+import { createNoteTool, listNotesTool, deleteNoteTool } from './tools/notes.js';
 
 export const ALL_TOOLS: ToolDefinition<any>[] = [
   recordTransactionTool,
@@ -34,6 +36,11 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   createCalendarEventTool,
   listCalendarEventsTool,
   webSearchTool,
+  rememberFactTool,
+  forgetFactTool,
+  createNoteTool,
+  listNotesTool,
+  deleteNoteTool,
 ];
 
 export function getToolByName(name: string) {

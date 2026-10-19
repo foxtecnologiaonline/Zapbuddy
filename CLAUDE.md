@@ -1,6 +1,11 @@
 # ZapBuddy
 
-Assistente pessoal via WhatsApp com IA para organização financeira, agenda, tarefas e documentos. Nicho inicial: autônomos e pequenos negócios (MEI/PJ). Diferencial central: IA **proativa** (antecipa e sugere), não só reativa a comandos.
+Assistente pessoal via WhatsApp com IA. Nicho inicial: autônomos e pequenos negócios (MEI/PJ). Diferencial central: IA **proativa** (antecipa e sugere), não só reativa a comandos.
+
+**Posicionamento (2026-10, reafirmado pelo dono do produto):** o foco do Tom é apoiar a gestão do
+tempo (agenda e compromissos pessoais), a organização de tarefas e notas pessoais, e a gestão
+financeira — ajudando e sendo parceiro do usuário todo dia, 24h. Documentos entram como suporte a
+esses três pilares (ex.: comprovante de um gasto), não como um quarto pilar independente.
 
 Referência de mercado estudada: meuassessor.com (6 "assessores" especializados, Open Finance, R$29,90/mês). ZapBuddy compete por nicho + proatividade de IA, não por paridade de feature.
 
@@ -24,7 +29,11 @@ Referência de mercado estudada: meuassessor.com (6 "assessores" especializados,
   - **Amendamento 2026-10 (motivo documentado):** suporte opcional à Evolution API (gateway Baileys self-hosted, mesma usada pelo ZapScript em `deploy/evolution-oci`) como canal alternativo via `WHATSAPP_CHANNEL_PROVIDER=evolution`, só para ambientes de teste/staging ou contingência operacional (ex.: aprovação do número oficial atrasada). Risco de ban e fragilidade para dado financeiro continuam valendo para esse caminho — por isso ele nunca é o default (`WHATSAPP_CHANNEL_PROVIDER` default é `cloud-api`) e qualquer deploy de produção com usuários reais deve permanecer em `cloud-api`. Não é dual-send automático: é uma troca manual de canal via env var.
 - **LLM:** Claude (Anthropic), via tool use/function calling — cada "assessor" é um conjunto de tools, não um serviço separado.
   - **Amendamento 2026-10 (motivo documentado):** fallback automático pra OpenAI (`OPENAI_API_KEY`, reaproveitada do fallback de transcrição) quando o Anthropic falha por qualquer motivo — já causou indisponibilidade total em produção (créditos esgotados, sem rede de segurança). Claude continua o provider primário e decidido; OpenAI só assume quando o Anthropic erra, nunca por preferência/custo. Arquitetura em `packages/core/src/llm/providers/` (`config.ts` = ordem de prioridade, `orchestration.ts` = tenta em ordem e loga qual provider respondeu), inspirada no sistema multi-provider de `mycollect` (`src/lib/vision/providers/`). Cada provider roda seu próprio loop de tool-use e usa a mesma `runToolCall()` — a regra não-negociável abaixo (nunca inventar dado financeiro) vale igual não importa qual LLM decidiu chamar a tool.
-- **Dashboard web:** Next.js (App Router), somente leitura no MVP, login via magic link disparado pelo WhatsApp
+- **Dashboard web:** Next.js (App Router), login via magic link disparado pelo WhatsApp.
+  - **Amendamento 2026-10 (motivo documentado, correção de doc):** a frase "somente leitura" não
+    reflete o código há um tempo — Fase 2/3 já trouxeram escrita real (criar/revogar chave de API,
+    criar/desabilitar webhook). Não é uma decisão nova, é a doc alcançando o que já estava
+    implementado.
 
 ## Arquitetura (fixa)
 
@@ -37,9 +46,23 @@ WhatsApp Cloud API → webhook (Vercel function)
   → resposta ao usuário no WhatsApp
 ```
 
-Regra de design não-negociável: a IA nunca "inventa" dado financeiro. Toda transação/tarefa é persistida como registro estruturado antes de qualquer resposta confirmar a ação. Contexto de conversa (curto prazo) e dados estruturados (longo prazo) ficam em camadas separadas.
+Regra de design não-negociável: a IA nunca "inventa" dado financeiro. Toda transação/tarefa é persistida como registro estruturado antes de qualquer resposta confirmar a ação. Contexto de conversa (curto prazo), memória de longo prazo e dados estruturados ficam em camadas separadas (ver amendamento abaixo).
 
 Logar toda tool call da IA (nome + parâmetros + resultado) desde o primeiro commit — é o principal insumo de debug de erros de interpretação de linguagem natural.
+
+**Amendamento 2026-10 (motivo documentado — memória expandida):** três camadas de memória, cada
+uma com um propósito e um limite claro, pra não misturar "lembrar de algo" com "registrar dado
+financeiro":
+1. **Conversa de curto prazo** (Redis, `conversation-context.ts`) — últimas 40 trocas / 24h de
+   inatividade. Só dá ao LLM continuidade de conversa, nunca é fonte de verdade.
+2. **Fatos de longo prazo** (`memory_facts`, Postgres) — o Tom guardando algo SOBRE a pessoa
+   (rotina, preferência, relação), via tool `remember_fact`/`forget_fact`, auditado como qualquer
+   outra tool call. Nunca substitui `record_transaction` ou qualquer tool estruturada — é contexto
+   conversacional persistente, não dado estruturado. Injetado no system prompt (até 30 fatos mais
+   recentes), visível e editável pelo usuário no dashboard ("O que o Tom lembra de você").
+3. **Notas pessoais** (`notes`, Postgres) — a PESSOA anotando algo pra si mesma ("anota aí: ..."),
+   via `create_note`/`list_notes`/`delete_note`. Diferente de tarefa (sem `due_at`, sem conceito de
+   concluir) e diferente de fato de memória (é a pessoa anotando, não o Tom lembrando sozinho).
 
 ## MVP — escopo travado (Fase 1)
 

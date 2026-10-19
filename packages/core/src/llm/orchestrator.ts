@@ -6,6 +6,7 @@ import {
   findAccountByReferralCode,
   recordReferral,
   listRecentCategorizedTransactions,
+  listMemoryFacts,
 } from '@zapbuddy/db';
 import { buildSystemPrompt } from './system-prompt.js';
 import type { ToolContext } from './tool-types.js';
@@ -102,12 +103,13 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     role: account.role,
   };
 
-  const [history, recentCategorizations, streakDays] = await Promise.all([
+  const [history, recentCategorizations, streakDays, memoryFacts] = await Promise.all([
     getRecentTurns(user.whatsapp_number),
     listRecentCategorizedTransactions(account.accountId),
     getCurrentStreakDays(account.accountId, user.timezone),
+    listMemoryFacts(account.accountId),
   ]);
-  const system = buildSystemPrompt(user, recentCategorizations, streakDays);
+  const system = buildSystemPrompt(user, recentCategorizations, streakDays, memoryFacts);
 
   const { replyText } = await runLlmWithFallback({
     system,

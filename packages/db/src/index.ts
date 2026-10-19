@@ -23,3 +23,5 @@ export * from './repositories/knowledge-entries.js';
 export * from './repositories/interpretation-insights.js';
 export * from './repositories/budgets.js';
 export * from './repositories/weekly-digest.js';
+export * from './repositories/memory-facts.js';
+export * from './repositories/notes.js';

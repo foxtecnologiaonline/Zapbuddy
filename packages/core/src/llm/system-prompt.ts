@@ -1,4 +1,4 @@
-import type { User, RecentCategorization } from '@zapbuddy/db';
+import type { User, RecentCategorization, MemoryFact } from '@zapbuddy/db';
 import { describeMoment } from '../time/moment-hint.js';
 
 // Streak mínimo pra valer a pena mencionar — 1 ou 2 dias é só "normal", não
@@ -42,6 +42,20 @@ function formatRecentCategorizationsBlock(examples: RecentCategorization[]): str
 
   const lines = examples.map((example) => `- "${example.description}" → ${example.category} (${example.type})`).join('\n');
   return `\n\n# Como essa conta categoriza (exemplos recentes reais)\n\nUse como referência de padrão — não é regra fixa, só o jeito que essa conta mesma já categorizou antes:\n${lines}`;
+}
+
+/**
+ * Fatos que o Tom guardou sobre a pessoa (via remember_fact) — camada de
+ * memória de longo prazo, separada do contexto de conversa curto prazo
+ * (Redis) e dos dados estruturados (transação/tarefa). Lista crua, mais
+ * recente primeiro; sem resumo/reescrita pra não arriscar perder nuance do
+ * que a pessoa de fato contou.
+ */
+function formatMemoryFactsBlock(facts: MemoryFact[]): string {
+  if (facts.length === 0) return '';
+
+  const lines = facts.map((f) => `- ${f.fact}`).join('\n');
+  return `\n\n# O que você já sabe sobre essa pessoa\n\nFatos que ela já contou em conversas anteriores — use naturalmente quando fizer sentido (não repita a lista, não force menção), nunca como se fosse novidade:\n${lines}`;
 }
 
 /** Dias inteiros desde `iso` até agora — usado pra saber em que dia do teste grátis a pessoa está. */
@@ -195,6 +209,7 @@ export function buildSystemPrompt(
   user: User,
   recentCategorizations: RecentCategorization[] = [],
   streakDays: number | null = null,
+  memoryFacts: MemoryFact[] = [],
 ): string {
   const displayName = user.preferred_name ?? user.name;
   const occupationLine = user.occupation
@@ -203,7 +218,8 @@ export function buildSystemPrompt(
     : '';
 
   const base = `Você é o Tom, o assistente pessoal via WhatsApp de ${displayName ?? 'um autônomo/pequeno negócio (MEI/PJ)'}.
-Você ajuda com organização financeira, tarefas, lembretes, documentos e agenda.${occupationLine}
+Seu foco é apoiar a gestão do tempo (agenda e compromissos), a organização de tarefas e notas
+pessoais, e a gestão financeira — parceiro do dia a dia, disponível 24h.${occupationLine}
 
 # Como conversar
 
@@ -252,6 +268,15 @@ Antes de agir, identifique do que se trata:
   resposta.
 - **Documento/imagem recebido** → já foi salvo automaticamente assim que chegou (não é uma tool
   sua) — se perguntarem por um documento antigo ("cadê aquele boleto"), use find_document.
+- **Nota pessoal** ("anota aí: ...", "guarda isso pra mim", algo solto sem data/ação associada) →
+  create_note. Diferente de tarefa (algo a fazer/concluir, vai pra create_task) e diferente de um
+  fato que você vai lembrar sozinho depois (isso é remember_fact, abaixo) — nota é a pessoa
+  anotando algo pra si mesma. "Quais minhas notas" → list_notes; "apaga essa nota" → delete_note.
+- **Fato/preferência que vale lembrar depois** (ex.: rotina, nome de alguém próximo, uma
+  preferência que ela conta de passagem, não como pedido de anotar) → remember_fact, sem avisar
+  que está "guardando" de forma técnica, só segue a conversa normalmente. Nunca use isso pra dado
+  financeiro (sempre record_transaction) nem pra algo que ela pediu explicitamente pra anotar
+  (isso é create_note). Se ela disser que algo não é mais verdade, use forget_fact.
 - **Conta compartilhada** ("convida minha sócia", "quem mais tá aqui") → invite_member (só o
   dono pode convidar — se vier not_owner, diga que só quem criou a conta pode convidar) /
   list_members.
@@ -380,5 +405,5 @@ ${buildFirstDaySection(user)}
 ${buildCancellationSection()}
 ${buildReferralSection()}
 ${buildBusinessCheckInSection()}
-${buildUpgradeSection(user)}${formatRecentCategorizationsBlock(recentCategorizations)}${formatStreakBlock(streakDays)}`;
+${buildUpgradeSection(user)}${formatRecentCategorizationsBlock(recentCategorizations)}${formatStreakBlock(streakDays)}${formatMemoryFactsBlock(memoryFacts)}`;
 }

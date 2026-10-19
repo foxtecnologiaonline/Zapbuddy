@@ -197,4 +197,35 @@ describe('buildSystemPrompt', () => {
 
     expect(prompt).not.toContain('Primeiro dia');
   });
+
+  it('cita remember_fact/forget_fact e create_note/list_notes/delete_note na triagem', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('remember_fact');
+    expect(prompt).toContain('forget_fact');
+    expect(prompt).toContain('create_note');
+    expect(prompt).toContain('list_notes');
+    expect(prompt).toContain('delete_note');
+  });
+
+  it('não inclui a seção de memória de longo prazo quando não há fato nenhum', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).not.toContain('O que você já sabe sobre essa pessoa');
+  });
+
+  it('injeta os fatos de memória de longo prazo quando existem', () => {
+    const prompt = buildSystemPrompt(baseUser(), [], null, [
+      {
+        id: 'fact-1',
+        account_id: 'account-1',
+        fact: 'trabalha de terça a sábado',
+        created_by_user_id: 'user-1',
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+
+    expect(prompt).toContain('O que você já sabe sobre essa pessoa');
+    expect(prompt).toContain('trabalha de terça a sábado');
+  });
 });

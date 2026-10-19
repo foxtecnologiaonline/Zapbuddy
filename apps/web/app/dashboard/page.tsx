@@ -10,9 +10,13 @@ import {
   getReferralStats,
   listApiKeys,
   listWebhookSubscriptions,
+  listMemoryFacts,
+  listNotes,
 } from '@zapbuddy/db';
 import { getCurrentUserId, getCurrentAccount } from '@/lib/auth';
 import { getCurrentMonthRange } from '@/lib/timezone';
+import { CategoryBars, Sparkline } from './charts';
+import { bucketSumsByDay, TREND_WINDOW_DAYS } from './trend';
 
 const RECENT_TRANSACTIONS_LIMIT = 20;
 
@@ -36,26 +40,49 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const { calendar: calendarStatus, new_api_key: newApiKey, new_webhook_secret: newWebhookSecret, webhook: webhookStatus } = await searchParams;
   const { startIso, endIso } = getCurrentMonthRange(user.timezone);
+  const trendStartIso = new Date(Date.now() - TREND_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   // Consultas direcionadas (não uma só buscando 2000 linhas completas pra só
   // somar totais e exibir 20): o resumo só pede as colunas que soma, e a
   // tabela já vem limitada ao que de fato é exibido. Tudo escopado pela
   // conta (ADR 0002), não pelo usuário — pode incluir dado de outro membro.
-  const [summary, recentTransactions, pendingTasks, documents, calendarConnection, members, referralStats, apiKeys, webhookSubscriptions] =
-    await Promise.all([
-      summarizeTransactions(account.accountId, startIso, endIso),
-      listTransactions(account.accountId, startIso, endIso, {
-        limit: RECENT_TRANSACTIONS_LIMIT,
-        columns: 'id, occurred_at, category, amount_cents, type',
-      }),
-      listTasks(account.accountId, 'pending'),
-      listRecentDocuments(account.accountId, 5),
-      getCalendarConnection(account.accountId),
-      listAccountMembers(account.accountId),
-      getReferralStats(account.accountId),
-      listApiKeys(account.accountId),
-      listWebhookSubscriptions(account.accountId),
-    ]);
+  const [
+    summary,
+    recentTransactions,
+    trendTransactions,
+    pendingTasks,
+    documents,
+    calendarConnection,
+    members,
+    referralStats,
+    apiKeys,
+    webhookSubscriptions,
+    memoryFacts,
+    notes,
+  ] = await Promise.all([
+    summarizeTransactions(account.accountId, startIso, endIso),
+    listTransactions(account.accountId, startIso, endIso, {
+      limit: RECENT_TRANSACTIONS_LIMIT,
+      columns: 'id, occurred_at, category, amount_cents, type',
+    }),
+    listTransactions(account.accountId, trendStartIso, new Date().toISOString(), {
+      columns: 'occurred_at, amount_cents, type',
+    }),
+    listTasks(account.accountId, 'pending'),
+    listRecentDocuments(account.accountId, 5),
+    getCalendarConnection(account.accountId),
+    listAccountMembers(account.accountId),
+    getReferralStats(account.accountId),
+    listApiKeys(account.accountId),
+    listWebhookSubscriptions(account.accountId),
+    listMemoryFacts(account.accountId),
+    listNotes(account.accountId),
+  ]);
+
+  const dailyExpenseTrend = bucketSumsByDay(
+    trendTransactions.filter((t) => t.type === 'expense'),
+    user.timezone,
+  );
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
@@ -63,7 +90,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div>
           <h1 style={{ marginBottom: 4 }}>Olá, {user.name ?? 'usuário'}</h1>
           <p style={{ opacity: 0.7, margin: 0 }}>
-            Painel somente leitura — mês atual.
+            Resumo do mês atual.
             {members.length > 1 && ` Conta compartilhada com ${members.length - 1} pessoa(s).`}
           </p>
         </div>
@@ -105,6 +132,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <div style={{ opacity: 0.6, fontSize: 13 }}>Gastos</div>
           <div style={{ fontSize: 24 }}>{formatCents(summary.totalExpenseCents)}</div>
         </div>
+      </section>
+
+      <section>
+        <h2>Gasto por categoria</h2>
+        {Object.keys(summary.byCategory).length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nenhum gasto este mês.</p>
+        ) : (
+          <CategoryBars byCategory={summary.byCategory} />
+        )}
+      </section>
+
+      <section>
+        <h2>Tendência ({TREND_WINDOW_DAYS} dias)</h2>
+        {dailyExpenseTrend.every((v) => v === 0) ? (
+          <p style={{ opacity: 0.6 }}>Nenhum gasto nos últimos {TREND_WINDOW_DAYS} dias.</p>
+        ) : (
+          <Sparkline data={dailyExpenseTrend} />
+        )}
       </section>
 
       <section>
@@ -193,6 +238,43 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {doc.file_name}
                 </a>
                 {doc.caption && <span style={{ opacity: 0.6 }}> — {doc.caption}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>Notas</h2>
+        {notes.length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nenhuma nota ainda — manda "anota aí: ..." pro Tom no WhatsApp.</p>
+        ) : (
+          <ul style={{ fontSize: 14 }}>
+            {notes.map((note) => (
+              <li key={note.id}>{note.content}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>O que o Tom lembra de você</h2>
+        <p style={{ opacity: 0.6, fontSize: 13 }}>
+          Fatos que você contou em conversas e o Tom guardou pra usar depois — financeiro nunca entra
+          aqui, só preferência/rotina pessoal.
+        </p>
+        {memoryFacts.length === 0 ? (
+          <p style={{ opacity: 0.6 }}>Nada guardado ainda.</p>
+        ) : (
+          <ul style={{ fontSize: 14 }}>
+            {memoryFacts.map((fact) => (
+              <li key={fact.id}>
+                {fact.fact}
+                <form action={`/api/dashboard/memory-facts/${fact.id}/delete`} method="POST" style={{ display: 'inline' }}>
+                  <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
+                    esquecer
+                  </button>
+                </form>
               </li>
             ))}
           </ul>

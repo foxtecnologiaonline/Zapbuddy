@@ -6,8 +6,13 @@ export interface ConversationTurn {
   at: string;
 }
 
-const MAX_TURNS = 20;
-const TTL_SECONDS = 60 * 60 * 6; // 6h de inatividade encerra o contexto curto prazo
+// Esticado de 20/6h (2026-10, pedido explícito do dono do produto) — bem
+// diferente do incidente de overhead do Redis na mesma época: essa chave já
+// tem teto fixo (LTRIM) + EXPIRE em toda escrita, sem crescimento ilimitado,
+// então aumentar o teto não reintroduz aquele problema (que era polling de
+// infra ociosa, não esta chave).
+const MAX_TURNS = 40;
+const TTL_SECONDS = 60 * 60 * 24; // 24h de inatividade encerra o contexto curto prazo
 // Uma nota de voz longa transcrita ocuparia o contexto inteiro sozinha e seria
 // reenviada por completo em todo turno seguinte, inflando tokens/custo sem
 // ganho real de memória conversacional — trunca o que sobra do que o modelo
