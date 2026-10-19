@@ -10,6 +10,16 @@ Referência de mercado estudada: meuassessor.com (6 "assessores" especializados,
 - **Banco/Auth/Storage:** Supabase (Postgres + Storage + Auth) — MCP já disponível neste ambiente
 - **Deploy (API + dashboard web):** Vercel — MCP já disponível neste ambiente
 - **Fila assíncrona:** BullMQ + Redis (transcrição de áudio, ações demoradas)
+  - **Amendamento 2026-10 (motivo documentado, incidente):** o banco Redis gerenciado (Upstash) foi
+    criado e, em menos de 48h, estourou o limite do plano Fixed — travando até o `AUTH`, o que
+    derrubou webhook e worker ao mesmo tempo (nenhuma mensagem processada, silêncio total). Causa
+    raiz: 11 `Worker` do BullMQ checando job "travado" a cada 30s cada, 24/7, mesmo sem job ativo
+    (overhead de infra ociosa, não tráfego de usuário real — ver `apps/worker/src/worker.ts`).
+    Corrigido: `removeOnComplete`/`removeOnFail` (`packages/core/src/queues/definitions.ts`),
+    `stalledInterval` e heartbeat esticados pra 1h/2h (decisão explícita, aceita o trade-off de até
+    1h pra recuperar um job travado por crash em troca de ~99% menos comando/dia). `REDIS_URL`
+    migrada pra uma instância Upstash nova (`allowing-chow-82780.upstash.io`) depois do banco
+    anterior ficar inacessível mesmo após as correções de código.
 - **Canal:** WhatsApp Cloud API oficial (Meta) é o canal **padrão e obrigatório** para qualquer usuário real/dados financeiros.
   - **Amendamento 2026-10 (motivo documentado):** suporte opcional à Evolution API (gateway Baileys self-hosted, mesma usada pelo ZapScript em `deploy/evolution-oci`) como canal alternativo via `WHATSAPP_CHANNEL_PROVIDER=evolution`, só para ambientes de teste/staging ou contingência operacional (ex.: aprovação do número oficial atrasada). Risco de ban e fragilidade para dado financeiro continuam valendo para esse caminho — por isso ele nunca é o default (`WHATSAPP_CHANNEL_PROVIDER` default é `cloud-api`) e qualquer deploy de produção com usuários reais deve permanecer em `cloud-api`. Não é dual-send automático: é uma troca manual de canal via env var.
 - **LLM:** Claude (Anthropic), via tool use/function calling — cada "assessor" é um conjunto de tools, não um serviço separado.
