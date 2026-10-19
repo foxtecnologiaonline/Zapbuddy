@@ -258,6 +258,15 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/cada exemplo acima usa um emoji diferente, de propósito/i);
   });
 
+  it('oferece uma paleta ampla de emojis por categoria, não só um punhado', () => {
+    const prompt = buildSystemPrompt(baseUser());
+    const palette = prompt.match(/paleta ampla[\s\S]*?Nunca o mesmo emoji/i)?.[0] ?? '';
+    const emojis = new Set(palette.match(/\p{Extended_Pictographic}/gu) ?? []);
+
+    expect(emojis.size).toBeGreaterThanOrEqual(25);
+    expect(prompt).toMatch(/no máximo UM por mensagem/);
+  });
+
   it('cobre a amplitude atual (agenda, meta, nota, financeiro) ao descrever o que o Tom faz, sem parar só no financeiro', () => {
     const prompt = buildSystemPrompt(baseUser());
 
