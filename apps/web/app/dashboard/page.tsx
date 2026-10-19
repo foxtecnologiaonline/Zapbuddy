@@ -119,6 +119,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     trendTransactions.filter((t) => t.type === 'expense'),
     user.timezone,
   );
+  const trendTotalCents = dailyExpenseTrend.reduce((sum, cents) => sum + cents, 0);
+
+  // Saldo do mês é só a diferença entre o que já está registrado (receita −
+  // gasto), sem estimativa nem projeção.
+  const balanceCents = summary.totalIncomeCents - summary.totalExpenseCents;
 
   // Linha do tempo unificada (posicionamento B2C: "lembra de tudo", não só
   // financeiro) — mescla as últimas transações/tarefas/notas/fatos/metas já
@@ -138,408 +143,417 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const timeline = buildTimeline(timelineEntries);
 
   return (
-    <main style={{ maxWidth: 720, margin: '0 auto', padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h1 style={{ marginBottom: 4 }}>Olá, {user.name ?? 'usuário'}</h1>
-          <p style={{ opacity: 0.7, margin: 0 }}>
+    <main className="page">
+      <header className="page-header">
+        <div className="greeting">
+          <h1>Olá, {user.name ?? 'usuário'}</h1>
+          <p className="muted" style={{ margin: 0 }}>
             Resumo do mês atual.
             {members.length > 1 && ` Conta compartilhada com ${members.length - 1} pessoa(s).`}
           </p>
-          <p style={{ opacity: 0.6, margin: 0, fontSize: 13 }}>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
             Horário de silêncio: {user.quiet_hours_start}h–{user.quiet_hours_end}h (sem resumo/insight proativo
             nessa janela — pra mudar, peça pro Tom no WhatsApp).
           </p>
         </div>
         <form action="/api/auth/logout" method="POST">
-          <button
-            type="submit"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              color: 'var(--fg)',
-              borderRadius: 6,
-              padding: '6px 12px',
-              cursor: 'pointer',
-              fontSize: 13,
-            }}
-          >
+          <button type="submit" className="btn btn-sm">
             Sair
           </button>
         </form>
-      </div>
+      </header>
 
-      {calendarStatus === 'connected' && (
-        <p style={{ background: 'var(--card-bg)', borderRadius: 8, padding: '8px 12px', fontSize: 14 }}>
-          Google Agenda conectado com sucesso.
-        </p>
-      )}
+      {calendarStatus === 'connected' && <p className="notice">Google Agenda conectado com sucesso.</p>}
       {calendarStatus === 'error' && (
-        <p style={{ background: 'var(--card-bg)', borderRadius: 8, padding: '8px 12px', fontSize: 14, color: 'var(--expense)' }}>
-          Não deu pra conectar o Google Agenda. Tenta de novo?
-        </p>
+        <p className="notice notice-error">Não deu pra conectar o Google Agenda. Tenta de novo?</p>
       )}
 
-      <section className="cards-row">
-        <div style={{ background: 'var(--card-bg)', borderRadius: 8, padding: 16 }}>
-          <div style={{ opacity: 0.6, fontSize: 13 }}>Receitas</div>
-          <div style={{ fontSize: 24 }}>{formatCents(summary.totalIncomeCents)}</div>
+      <section className="kpis" aria-label="Resumo do mês">
+        <div className="kpi">
+          <div className="kpi-label">Receitas</div>
+          <div className="kpi-value kpi-value-income">{formatCents(summary.totalIncomeCents)}</div>
         </div>
-        <div style={{ background: 'var(--card-bg)', borderRadius: 8, padding: 16 }}>
-          <div style={{ opacity: 0.6, fontSize: 13 }}>Gastos</div>
-          <div style={{ fontSize: 24 }}>{formatCents(summary.totalExpenseCents)}</div>
+        <div className="kpi">
+          <div className="kpi-label">Gastos</div>
+          <div className="kpi-value kpi-value-expense">{formatCents(summary.totalExpenseCents)}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Saldo do mês</div>
+          <div className={`kpi-value ${balanceCents >= 0 ? 'kpi-value-income' : 'kpi-value-expense'}`}>
+            {formatCents(balanceCents)}
+          </div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Tarefas pendentes</div>
+          <div className="kpi-value">{pendingTasks.length}</div>
         </div>
       </section>
 
-      <section>
-        <h2>Gasto por categoria</h2>
-        {Object.keys(summary.byCategory).length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhum gasto este mês.</p>
-        ) : (
-          <CategoryBars byCategory={summary.byCategory} />
-        )}
-      </section>
+      <div className="grid">
+        <section className="card">
+          <h2>Gasto por categoria</h2>
+          <p className="muted-sm">Este mês, do maior pro menor.</p>
+          {Object.keys(summary.byCategory).length === 0 ? (
+            <p className="muted">Nenhum gasto este mês.</p>
+          ) : (
+            <CategoryBars byCategory={summary.byCategory} />
+          )}
+        </section>
 
-      <section>
-        <h2>Tendência ({TREND_WINDOW_DAYS} dias)</h2>
-        {dailyExpenseTrend.every((v) => v === 0) ? (
-          <p style={{ opacity: 0.6 }}>Nenhum gasto nos últimos {TREND_WINDOW_DAYS} dias.</p>
-        ) : (
-          <Sparkline data={dailyExpenseTrend} />
-        )}
-      </section>
+        <section className="card">
+          <h2>Tendência ({TREND_WINDOW_DAYS} dias)</h2>
+          {dailyExpenseTrend.every((v) => v === 0) ? (
+            <p className="muted">Nenhum gasto nos últimos {TREND_WINDOW_DAYS} dias.</p>
+          ) : (
+            <>
+              <p className="muted-sm">Gastos por dia.</p>
+              <div className="chart-total">{formatCents(trendTotalCents)}</div>
+              <Sparkline data={dailyExpenseTrend} />
+            </>
+          )}
+        </section>
 
-      <section>
-        <h2>Tarefas pendentes</h2>
-        {pendingTasks.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhuma tarefa pendente.</p>
-        ) : (
-          <ul>
-            {pendingTasks.map((task) => (
-              <li key={task.id}>{task.title}</li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="card span-2">
+          <h2>Últimas transações</h2>
+          <p className="muted-sm">As {RECENT_TRANSACTIONS_LIMIT} mais recentes deste mês.</p>
+          {recentTransactions.length === 0 ? (
+            <p className="muted">Nenhuma transação este mês.</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Categoria</th>
+                    <th style={{ textAlign: 'right' }}>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTransactions.map((t) => (
+                    <tr key={t.id}>
+                      <td className="col-date">
+                        {new Date(t.occurred_at).toLocaleDateString('pt-BR', { timeZone: user.timezone })}
+                      </td>
+                      <td>{t.category}</td>
+                      <td className="num" style={{ color: t.type === 'income' ? 'var(--income)' : 'var(--expense)' }}>
+                        {t.type === 'income' ? '+' : '-'}
+                        {formatCents(t.amount_cents)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-      <section>
-        <h2>Contas recorrentes</h2>
-        {recurringBills.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhuma conta recorrente cadastrada ainda.</p>
-        ) : (
-          <ul>
-            {recurringBills.map((bill) => (
-              <li key={bill.id}>
-                {bill.name} — {formatCents(bill.amount_cents)} (todo dia {bill.due_day})
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section>
-        <h2>Metas com valor</h2>
-        {savingsGoals.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhuma meta com valor em andamento.</p>
-        ) : (
-          <ul>
-            {savingsGoals.map((goal) => (
-              <li key={goal.id}>
-                {goal.title} — {formatCents(goal.saved_cents)} de {formatCents(goal.target_cents)}
-                {goal.deadline && ` até ${new Date(goal.deadline).toLocaleDateString('pt-BR')}`}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section>
-        <h2>Últimas transações</h2>
-        {recentTransactions.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhuma transação este mês.</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--row-border)' }}>
-                <th style={{ textAlign: 'left', padding: '6px 0', fontSize: 13, color: 'var(--muted-strong)' }}>
-                  Data
-                </th>
-                <th style={{ textAlign: 'left', fontSize: 13, color: 'var(--muted-strong)' }}>Categoria</th>
-                <th style={{ textAlign: 'right', fontSize: 13, color: 'var(--muted-strong)' }}>Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTransactions.map((t) => (
-                <tr key={t.id} style={{ borderBottom: '1px solid var(--row-border)' }}>
-                  <td style={{ padding: '6px 0' }}>
-                    {new Date(t.occurred_at).toLocaleDateString('pt-BR', { timeZone: user.timezone })}
-                  </td>
-                  <td>{t.category}</td>
-                  <td
-                    style={{
-                      textAlign: 'right',
-                      color: t.type === 'income' ? 'var(--income)' : 'var(--expense)',
-                    }}
-                  >
-                    {t.type === 'income' ? '+' : '-'}
-                    {formatCents(t.amount_cents)}
-                  </td>
-                </tr>
+        <section className="card">
+          <h2>Tarefas pendentes</h2>
+          {pendingTasks.length === 0 ? (
+            <p className="muted">Nenhuma tarefa pendente.</p>
+          ) : (
+            <ul className="item-list">
+              {pendingTasks.map((task) => (
+                <li key={task.id}>{task.title}</li>
               ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>Google Agenda</h2>
-        {calendarConnection ? (
-          <p style={{ opacity: 0.7 }}>Conectado.</p>
-        ) : (
-          <a
-            href="/api/calendar/connect"
-            style={{
-              display: 'inline-block',
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              padding: '8px 14px',
-              color: 'var(--fg)',
-              textDecoration: 'none',
-              fontSize: 14,
-            }}
-          >
-            Conectar Google Agenda
-          </a>
-        )}
-      </section>
+        <section className="card">
+          <h2>Contas recorrentes</h2>
+          {recurringBills.length === 0 ? (
+            <p className="muted">Nenhuma conta recorrente cadastrada ainda.</p>
+          ) : (
+            <ul className="item-list">
+              {recurringBills.map((bill) => (
+                <li key={bill.id}>
+                  <span>{bill.name}</span>
+                  <span className="muted">
+                    {formatCents(bill.amount_cents)} · todo dia {bill.due_day}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>Documentos recentes</h2>
-        {documents.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhum documento enviado ainda.</p>
-        ) : (
-          <ul>
-            {documents.map((doc) => (
-              <li key={doc.id}>
-                <a href={doc.download_url} target="_blank" rel="noreferrer">
-                  {doc.file_name}
-                </a>
-                {doc.caption && <span style={{ opacity: 0.6 }}> — {doc.caption}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="card">
+          <h2>Metas com valor</h2>
+          {savingsGoals.length === 0 ? (
+            <p className="muted">Nenhuma meta com valor em andamento.</p>
+          ) : (
+            <ul className="item-list">
+              {savingsGoals.map((goal) => (
+                <li key={goal.id}>
+                  <span>{goal.title}</span>
+                  <span className="muted">
+                    {formatCents(goal.saved_cents)} de {formatCents(goal.target_cents)}
+                    {goal.deadline && ` · até ${new Date(goal.deadline).toLocaleDateString('pt-BR')}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>Notas</h2>
-        {notes.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhuma nota ainda — manda "anota aí: ..." pro Tom no WhatsApp.</p>
-        ) : (
-          <ul style={{ fontSize: 14 }}>
-            {notes.map((note) => (
-              <li key={note.id}>{note.content}</li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="card">
+          <h2>Metas pessoais</h2>
+          {personalGoals.length === 0 ? (
+            <p className="muted">Nenhuma meta em andamento — manda &quot;quero [algo]&quot; pro Tom no WhatsApp.</p>
+          ) : (
+            <ul className="item-list">
+              {personalGoals.map((goal) => (
+                <li key={goal.id}>
+                  <span>{goal.description}</span>
+                  <span className="item-actions">
+                    <form action={`/api/dashboard/personal-goals/${goal.id}/complete`} method="POST">
+                      <button type="submit" className="btn btn-sm">
+                        concluir
+                      </button>
+                    </form>
+                    <form action={`/api/dashboard/personal-goals/${goal.id}/delete`} method="POST">
+                      <button type="submit" className="btn btn-sm btn-danger">
+                        remover
+                      </button>
+                    </form>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>Seus dados</h2>
-        <p style={{ opacity: 0.6, fontSize: 13 }}>
-          Baixe tudo que você registrou com o Tom — gastos, tarefas, notas, contas, metas e o que ele lembra.
-        </p>
-        <a href="/api/dashboard/export">Baixar meus dados (JSON)</a>
-      </section>
+        <section className="card">
+          <h2>Datas importantes</h2>
+          <p className="muted-sm">Aniversários e datas que se repetem todo ano — o Tom avisa sozinho no dia.</p>
+          {importantDates.length === 0 ? (
+            <p className="muted">Nenhuma data guardada ainda.</p>
+          ) : (
+            <ul className="item-list">
+              {importantDates.map((date) => (
+                <li key={date.id}>
+                  <span>
+                    {date.label} <span className="muted">· {date.day} de {MONTH_NAMES_PT[date.month - 1]}</span>
+                  </span>
+                  <span className="item-actions">
+                    <form action={`/api/dashboard/important-dates/${date.id}/delete`} method="POST">
+                      <button type="submit" className="btn btn-sm btn-danger">
+                        esquecer
+                      </button>
+                    </form>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>Metas pessoais</h2>
-        {personalGoals.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhuma meta em andamento — manda "quero [algo]" pro Tom no WhatsApp.</p>
-        ) : (
-          <ul style={{ fontSize: 14 }}>
-            {personalGoals.map((goal) => (
-              <li key={goal.id}>
-                {goal.description}
-                <form action={`/api/dashboard/personal-goals/${goal.id}/complete`} method="POST" style={{ display: 'inline' }}>
-                  <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
-                    concluir
-                  </button>
-                </form>
-                <form action={`/api/dashboard/personal-goals/${goal.id}/delete`} method="POST" style={{ display: 'inline' }}>
-                  <button type="submit" style={{ marginLeft: 4, fontSize: 12, cursor: 'pointer' }}>
-                    remover
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="card span-2">
+          <h2>O que aconteceu essa semana</h2>
+          <p className="muted-sm">Transações, tarefas, notas, fatos e metas mais recentes, juntos numa só linha do tempo.</p>
+          {timeline.length === 0 ? (
+            <p className="muted">Nada registrado ainda.</p>
+          ) : (
+            <ul className="item-list timeline">
+              {timeline.map((entry) => (
+                <li key={`${entry.kind}-${entry.id}`}>
+                  <span className="tag">{entry.kind}</span>
+                  <span className="timeline-text">{entry.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>Datas importantes</h2>
-        <p style={{ opacity: 0.6, fontSize: 13 }}>
-          Aniversários e datas que se repetem todo ano — o Tom avisa sozinho no dia.
-        </p>
-        {importantDates.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nenhuma data guardada ainda.</p>
-        ) : (
-          <ul style={{ fontSize: 14 }}>
-            {importantDates.map((date) => (
-              <li key={date.id}>
-                {date.label} — {date.day} de {MONTH_NAMES_PT[date.month - 1]}
-                <form action={`/api/dashboard/important-dates/${date.id}/delete`} method="POST" style={{ display: 'inline' }}>
-                  <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
-                    esquecer
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="card">
+          <h2>O que o Tom lembra de você</h2>
+          <p className="muted-sm">
+            Fatos que você contou em conversas e o Tom guardou pra usar depois — financeiro nunca entra aqui, só
+            preferência/rotina pessoal.
+          </p>
+          {memoryFacts.length === 0 ? (
+            <p className="muted">Nada guardado ainda.</p>
+          ) : (
+            <ul className="item-list">
+              {memoryFacts.map((fact) => (
+                <li key={fact.id}>
+                  <span>{fact.fact}</span>
+                  <span className="item-actions">
+                    <form action={`/api/dashboard/memory-facts/${fact.id}/delete`} method="POST">
+                      <button type="submit" className="btn btn-sm btn-danger">
+                        esquecer
+                      </button>
+                    </form>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>O que aconteceu essa semana</h2>
-        <p style={{ opacity: 0.6, fontSize: 13 }}>
-          Transações, tarefas, notas, fatos e metas mais recentes, juntos numa só linha do tempo.
-        </p>
-        {timeline.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nada registrado ainda.</p>
-        ) : (
-          <ul style={{ fontSize: 14 }}>
-            {timeline.map((entry) => (
-              <li key={`${entry.kind}-${entry.id}`}>
-                <span style={{ opacity: 0.6, fontSize: 12 }}>[{entry.kind}]</span> {entry.label}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="card">
+          <h2>Notas</h2>
+          {notes.length === 0 ? (
+            <p className="muted">Nenhuma nota ainda — manda &quot;anota aí: ...&quot; pro Tom no WhatsApp.</p>
+          ) : (
+            <ul className="item-list">
+              {notes.map((note) => (
+                <li key={note.id}>{note.content}</li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>O que o Tom lembra de você</h2>
-        <p style={{ opacity: 0.6, fontSize: 13 }}>
-          Fatos que você contou em conversas e o Tom guardou pra usar depois — financeiro nunca entra
-          aqui, só preferência/rotina pessoal.
-        </p>
-        {memoryFacts.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>Nada guardado ainda.</p>
-        ) : (
-          <ul style={{ fontSize: 14 }}>
-            {memoryFacts.map((fact) => (
-              <li key={fact.id}>
-                {fact.fact}
-                <form action={`/api/dashboard/memory-facts/${fact.id}/delete`} method="POST" style={{ display: 'inline' }}>
-                  <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
-                    esquecer
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="card">
+          <h2>Documentos recentes</h2>
+          {documents.length === 0 ? (
+            <p className="muted">Nenhum documento enviado ainda.</p>
+          ) : (
+            <ul className="item-list">
+              {documents.map((doc) => (
+                <li key={doc.id}>
+                  <span>
+                    <a href={doc.download_url} target="_blank" rel="noreferrer">
+                      {doc.file_name}
+                    </a>
+                    {doc.caption && <span className="muted"> — {doc.caption}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <section>
-        <h2>Programa de indicação</h2>
-        <p style={{ opacity: 0.7 }}>
-          Seu código: <strong>{referralStats.code}</strong> — {referralStats.totalReferred} pessoa(s) já se cadastraram com ele.
-        </p>
-        {referralLink ? (
-          <p style={{ opacity: 0.6, fontSize: 13 }}>
-            Manda esse link pra pessoa que você quer indicar — ela só clica e já abre o WhatsApp com a mensagem certa pronta:{' '}
-            <a href={referralLink} target="_blank" rel="noopener noreferrer">
-              {referralLink}
+        <section className="card">
+          <h2>Google Agenda</h2>
+          {calendarConnection ? (
+            <p className="muted">Conectado.</p>
+          ) : (
+            <a href="/api/calendar/connect" className="btn">
+              Conectar Google Agenda
             </a>
-          </p>
-        ) : (
-          <p style={{ opacity: 0.6, fontSize: 13 }}>
-            Pra indicar alguém, peça pra essa pessoa mandar &quot;indicado {referralStats.code}&quot; pro Tom como uma das primeiras mensagens dela.
-          </p>
-        )}
-      </section>
+          )}
+        </section>
 
-      <section>
-        <h2>API e webhooks</h2>
-        <p style={{ opacity: 0.6, fontSize: 13 }}>Pra integrar seu financeiro/tarefas com outro sistema. Leitura apenas.</p>
-
-        {newApiKey && (
-          <p style={{ background: 'var(--card-bg)', borderRadius: 8, padding: '8px 12px', fontSize: 13, wordBreak: 'break-all' }}>
-            Sua chave de API (só aparece agora, guarde num lugar seguro): <code>{newApiKey}</code>
+        <section className="card">
+          <h2>Programa de indicação</h2>
+          <p>
+            Seu código: <strong>{referralStats.code}</strong> — {referralStats.totalReferred} pessoa(s) já se cadastraram com ele.
           </p>
-        )}
-        {newWebhookSecret && (
-          <p style={{ background: 'var(--card-bg)', borderRadius: 8, padding: '8px 12px', fontSize: 13, wordBreak: 'break-all' }}>
-            Segredo de assinatura do webhook (só aparece agora): <code>{newWebhookSecret}</code>
-          </p>
-        )}
-        {webhookStatus === 'error' && (
-          <p style={{ color: 'var(--expense)', fontSize: 13 }}>URL inválida (precisa ser https://) ou nenhum evento selecionado.</p>
-        )}
+          {referralLink ? (
+            <p className="muted-sm">
+              Manda esse link pra pessoa que você quer indicar — ela só clica e já abre o WhatsApp com a mensagem certa pronta:{' '}
+              <a href={referralLink} target="_blank" rel="noopener noreferrer">
+                {referralLink}
+              </a>
+            </p>
+          ) : (
+            <p className="muted-sm">
+              Pra indicar alguém, peça pra essa pessoa mandar &quot;indicado {referralStats.code}&quot; pro Tom como uma das primeiras mensagens dela.
+            </p>
+          )}
+        </section>
 
-        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Chaves de API</h3>
-        {apiKeys.length === 0 ? (
-          <p style={{ opacity: 0.6, fontSize: 13 }}>Nenhuma chave criada.</p>
-        ) : (
-          <ul style={{ fontSize: 13 }}>
-            {apiKeys.map((key) => (
-              <li key={key.id}>
-                {key.name} — criada em {new Date(key.created_at).toLocaleDateString('pt-BR')}
-                {key.revoked_at ? (
-                  <span style={{ opacity: 0.5 }}> (revogada)</span>
-                ) : (
-                  <form action={`/api/dashboard/api-keys/${key.id}/revoke`} method="POST" style={{ display: 'inline' }}>
-                    <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
-                      revogar
-                    </button>
-                  </form>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <form action="/api/dashboard/api-keys" method="POST" style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <input name="name" placeholder="Nome da chave (ex.: planilha)" style={{ flex: 1, padding: '6px 8px' }} />
-          <button type="submit">Gerar chave</button>
-        </form>
+        <section className="card">
+          <h2>Seus dados</h2>
+          <p className="muted-sm">Baixe tudo que você registrou com o Tom — gastos, tarefas, notas, contas, metas e o que ele lembra.</p>
+          <a href="/api/dashboard/export" className="btn">
+            Baixar meus dados (JSON)
+          </a>
+        </section>
 
-        <h3 style={{ fontSize: 15, marginTop: 16, marginBottom: 4 }}>Webhooks</h3>
-        {webhookSubscriptions.length === 0 ? (
-          <p style={{ opacity: 0.6, fontSize: 13 }}>Nenhum webhook configurado.</p>
-        ) : (
-          <ul style={{ fontSize: 13 }}>
-            {webhookSubscriptions.map((sub) => (
-              <li key={sub.id}>
-                {sub.url} ({sub.event_types.join(', ')})
-                {sub.disabled_at ? (
-                  <span style={{ opacity: 0.5 }}> (desabilitado)</span>
-                ) : (
-                  <form action={`/api/dashboard/webhooks/${sub.id}/disable`} method="POST" style={{ display: 'inline' }}>
-                    <button type="submit" style={{ marginLeft: 8, fontSize: 12, cursor: 'pointer' }}>
-                      desabilitar
-                    </button>
-                  </form>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <form action="/api/dashboard/webhooks" method="POST" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-          <input name="url" placeholder="https://seu-sistema.com/webhook" style={{ padding: '6px 8px' }} />
-          <label style={{ fontSize: 13 }}>
-            <input type="checkbox" name="event_types" value="transaction.created" /> transação criada
-          </label>
-          <label style={{ fontSize: 13 }}>
-            <input type="checkbox" name="event_types" value="task.completed" /> tarefa concluída
-          </label>
-          <button type="submit" style={{ alignSelf: 'flex-start' }}>
-            Adicionar webhook
-          </button>
-        </form>
-      </section>
+        <section className="card span-2">
+          <h2>API e webhooks</h2>
+          <p className="muted-sm">Pra integrar seu financeiro/tarefas com outro sistema. Leitura apenas.</p>
+
+          {newApiKey && (
+            <p className="notice" style={{ wordBreak: 'break-all' }}>
+              Sua chave de API (só aparece agora, guarde num lugar seguro): <code>{newApiKey}</code>
+            </p>
+          )}
+          {newWebhookSecret && (
+            <p className="notice" style={{ wordBreak: 'break-all' }}>
+              Segredo de assinatura do webhook (só aparece agora): <code>{newWebhookSecret}</code>
+            </p>
+          )}
+          {webhookStatus === 'error' && (
+            <p className="notice notice-error">URL inválida (precisa ser https://) ou nenhum evento selecionado.</p>
+          )}
+
+          <h3>Chaves de API</h3>
+          {apiKeys.length === 0 ? (
+            <p className="muted-sm">Nenhuma chave criada.</p>
+          ) : (
+            <ul className="item-list item-list-sm">
+              {apiKeys.map((key) => (
+                <li key={key.id}>
+                  <span>
+                    {key.name} <span className="muted">· criada em {new Date(key.created_at).toLocaleDateString('pt-BR')}</span>
+                  </span>
+                  {key.revoked_at ? (
+                    <span className="muted">revogada</span>
+                  ) : (
+                    <span className="item-actions">
+                      <form action={`/api/dashboard/api-keys/${key.id}/revoke`} method="POST">
+                        <button type="submit" className="btn btn-sm btn-danger">
+                          revogar
+                        </button>
+                      </form>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <form action="/api/dashboard/api-keys" method="POST" className="form-row">
+            <input name="name" placeholder="Nome da chave (ex.: planilha)" className="field" />
+            <button type="submit" className="btn btn-primary">
+              Gerar chave
+            </button>
+          </form>
+
+          <h3>Webhooks</h3>
+          {webhookSubscriptions.length === 0 ? (
+            <p className="muted-sm">Nenhum webhook configurado.</p>
+          ) : (
+            <ul className="item-list item-list-sm">
+              {webhookSubscriptions.map((sub) => (
+                <li key={sub.id}>
+                  <span style={{ overflowWrap: 'anywhere' }}>
+                    {sub.url} <span className="muted">({sub.event_types.join(', ')})</span>
+                  </span>
+                  {sub.disabled_at ? (
+                    <span className="muted">desabilitado</span>
+                  ) : (
+                    <span className="item-actions">
+                      <form action={`/api/dashboard/webhooks/${sub.id}/disable`} method="POST">
+                        <button type="submit" className="btn btn-sm btn-danger">
+                          desabilitar
+                        </button>
+                      </form>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <form action="/api/dashboard/webhooks" method="POST" className="form-stack">
+            <input name="url" placeholder="https://seu-sistema.com/webhook" className="field" />
+            <label className="check">
+              <input type="checkbox" name="event_types" value="transaction.created" /> transação criada
+            </label>
+            <label className="check">
+              <input type="checkbox" name="event_types" value="task.completed" /> tarefa concluída
+            </label>
+            <div>
+              <button type="submit" className="btn btn-primary">
+                Adicionar webhook
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
     </main>
   );
 }
