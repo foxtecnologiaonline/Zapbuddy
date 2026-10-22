@@ -86,17 +86,22 @@ deploy/
   e aprendizado contínuo" no `CLAUDE.md`
 
 ### `apps/worker/src`
-- `worker.ts` — os 11 workers BullMQ (mensagem recebida, transcrição de
+- `worker.ts` — os 10 workers BullMQ (mensagem recebida, transcrição de
   áudio, disparo de lembrete, upload de documento, sweep + geração de
-  insight proativo, disparo de webhook, resumo semanal/matinal,
-  reengajamento de onboarding, lembrete de data importante) — registra
-  também o job repetível de sweep de insights (1x/hora) no boot
-- `handlers/` — lógica de cada fila. `insights-sweep.ts` também roda a
-  manutenção semanal (pesquisa proativa, feedback de interpretação,
-  expurgo de logs) direto, gated por dia/hora UTC — **sem fila/Worker
-  própria pra cada uma** (2026-10, análise de consumo de Redis: uma fila
-  `repeat` do BullMQ fica presa 24/7 num teto de bloqueio de 10s mesmo
-  rodando 1x/semana — ver `CLAUDE.md`)
+  insight proativo, disparo de webhook, resumo semanal/matinal, lembrete
+  de data importante) — registra também o job repetível de sweep de
+  insights (1x/hora) no boot
+- `handlers/` — lógica de cada fila. `insights-sweep.ts` também roda,
+  direto (sem fila/Worker própria), a manutenção semanal (pesquisa
+  proativa, feedback de interpretação, expurgo de logs — gated por
+  dia/hora UTC) e o reengajamento de onboarding (checado toda hora, gated
+  por horas desde o cadastro) — 2026-10, análise de consumo de Redis: uma
+  fila com job atrasado/repetível pendente fica presa 24/7 num teto de
+  bloqueio de 10s do próprio BullMQ, desperdício grande pra algo que roda
+  raro (semanal) ou não precisa de precisão ao minuto (nudge). Exceção:
+  `reminder-dispatch` continua com delay nativo do BullMQ — lembrete
+  precisa disparar na hora exata, decisão explícita do dono do produto.
+  Detalhe completo em `CLAUDE.md`.
 - `audio/` — pipeline Whisper (Groq → Groq full → OpenAI, com detector
   de alucinação) e conversão de áudio via ffmpeg
 

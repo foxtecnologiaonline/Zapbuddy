@@ -9,7 +9,6 @@ import { handleInsightsSweep } from './handlers/insights-sweep.js';
 import { handleInsightsGenerate } from './handlers/insights-generate.js';
 import { handleWebhookDispatch } from './handlers/webhook-dispatch.js';
 import { handleWeeklyDigestGenerate } from './handlers/weekly-digest-generate.js';
-import { handleOnboardingNudge } from './handlers/onboarding-nudge.js';
 import { handleMorningDigestGenerate } from './handlers/morning-digest-generate.js';
 import { handleImportantDateReminder } from './handlers/important-date-reminder.js';
 
@@ -68,20 +67,35 @@ const STALLED_INTERVAL_MS = 60 * 60_000;
 // Segundo achado da mesma análise de consumo (2026-10): mesmo com
 // stalledInterval alto, todo Worker reemite BZPOPMIN a cada `drainDelay`
 // (default do BullMQ: 5s) enquanto a fila está vazia SEM job atrasado
-// pendente — reconectar a cada 5s, 24/7, pra 11 filas é a maior fatia hoje
-// do consumo de comando. Subir pra 55s não atrasa pickup de job real: um
-// job novo acorda o Worker na hora via a chave "marker" que o BullMQ
-// empurra em todo Queue.add() (ver addJobInTargetList.lua), independente
-// do valor de drainDelay — isso só governa a cadência de "nada aconteceu,
-// tenta de novo". NÃO ajuda reminder-dispatch/onboarding-nudge/
-// insights-sweep: enquanto existe QUALQUER job atrasado/repetível
-// pendente nessas filas (o caso comum), o próprio BullMQ ignora
-// drainDelay e usa um teto fixo de 10s (ver node_modules/bullmq
-// getBlockTimeout, "we restrict the maximum block timeout to 10 second") —
-// essas três continuam reconectando no máximo a cada 10s, piso que só sai
-// de código trocando a precisão do lembrete/nudge por uma varredura mais
-// grossa, decisão de produto que não cabe tomar aqui sozinho.
-const DRAIN_DELAY_SECONDS = 55;
+// pendente. Subido pra 1h (pedido explícito do dono do produto, 2026-10) —
+// não atrasa pickup de job real: um job novo acorda o Worker na hora via a
+// chave "marker" que o BullMQ empurra em todo Queue.add() (ver
+// addJobInTargetList.lua), independente do valor de drainDelay — isso só
+// governa a cadência de "nada aconteceu, tenta de novo".
+//
+// IMPORTANTE — isso NÃO cobre reminder-dispatch/insights-sweep: enquanto
+// existe QUALQUER job atrasado/repetível pendente nessas filas (o caso
+// comum — sempre que alguém tem lembrete futuro marcado, ou pro sweep
+// horário em si, que por definição sempre tem a próxima ocorrência
+// pendente), o próprio BullMQ IGNORA drainDelay e usa um teto fixo de 10s,
+// hardcoded na própria lib (node_modules/bullmq/dist/esm/classes/worker.js,
+// `const maximumBlockTimeout = 10`, dentro de getBlockTimeout — motivo
+// documentado lá: "restrict the maximum block timeout to 10 second to
+// avoid blocking the connection for too long in the case of
+// reconnections", referenciando taskforcesh/bullmq#1658). Não é uma opção
+// de configuração — não existe campo em WorkerOptions pra isso. Patchar a
+// lib de terceiro pra ignorar isso (frágil, quebra a cada `npm update
+// bullmq`) reintroduziria o próprio risco que a BullMQ documentou: um
+// Worker bloqueado até 1h esperando um bzpopmin que nunca volta, porque a
+// conexão caiu e ele não percebeu — o mesmo "Tom não responde" que motivou
+// essa investigação, só que pior. Decisão explícita do dono do produto
+// (2026-10): manter essas duas como estão (lembrete precisa disparar na
+// hora exata; o sweep não tem como evitar ter sempre uma próxima
+// ocorrência pendente) — `onboarding-nudge` foi a única das três
+// candidatas convertida pra varredura horária (ver
+// handlers/onboarding-nudge.ts), por não ter a mesma exigência de
+// precisão.
+const DRAIN_DELAY_SECONDS = 60 * 60;
 
 const QUEUE_CONFIGS: {
   name: string;
@@ -149,21 +163,13 @@ const QUEUE_CONFIGS: {
     concurrency: 5,
   },
   {
-    // Sem onExhausted: é um empurrão opcional, ninguém está esperando essa
-    // mensagem especificamente — uma falha esgotada só fica no log genérico
-    // de erro acima, mesmo raciocínio do insightsSweep/weeklyDigestGenerate.
-    name: QUEUE_NAMES.onboardingNudge,
-    handler: handleOnboardingNudge,
-    concurrency: 5,
-  },
-  {
     // Sem onExhausted: resumo é opcional por natureza — falha esgotada só vai pro log.
     name: QUEUE_NAMES.morningDigestGenerate,
     handler: handleMorningDigestGenerate,
     concurrency: 5,
   },
   {
-    // Sem onExhausted: mesmo raciocínio do onboardingNudge/weeklyDigestGenerate — ninguém espera essa mensagem num momento exato.
+    // Sem onExhausted: mesmo raciocínio do weeklyDigestGenerate — ninguém espera essa mensagem num momento exato.
     name: QUEUE_NAMES.importantDateReminder,
     handler: handleImportantDateReminder,
     concurrency: 5,

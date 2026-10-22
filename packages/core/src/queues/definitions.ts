@@ -28,13 +28,20 @@ const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
   removeOnFail: { count: 500, age: 7 * 24 * 3600 },
 };
 
-// proactive-research/interpretation-feedback/logs-retention não têm fila
-// própria (2026-10, análise de consumo de Redis — ver CLAUDE.md): eram 3
-// filas `repeat` rodando 1x/semana, mas qualquer fila com job atrasado
-// pendente fica presa 24/7 no teto de 10s de bloqueio do BullMQ — um
-// desperdício enorme de comando Redis pra uma execução semanal. As três
+// proactive-research/interpretation-feedback/logs-retention/onboarding-nudge
+// não têm fila própria (2026-10, análise de consumo de Redis — ver
+// CLAUDE.md): as 3 primeiras eram filas `repeat` rodando 1x/semana;
+// onboarding-nudge era delay nativo do BullMQ por usuário (2h/24h). Em
+// qualquer um dos dois casos, a fila com job atrasado/repetível pendente
+// fica presa 24/7 no teto de 10s de bloqueio do BullMQ — desperdício
+// grande pra algo que roda raramente por fila (1x/semana) ou que não
+// precisa de precisão ao minuto (reengajamento de onboarding). As quatro
 // agora rodam direto dentro do sweep horário já existente
-// (apps/worker/src/handlers/insights-sweep.ts), gated por dia/hora UTC.
+// (apps/worker/src/handlers/insights-sweep.ts), gated por dia/hora UTC ou
+// por janela de horas desde o cadastro. reminder-dispatch continua com
+// delay nativo do BullMQ — lembrete precisa disparar na hora exata que a
+// pessoa marcou, decisão explícita do dono do produto de manter a
+// precisão em troca do teto de 10s nessa fila.
 export const QUEUE_NAMES = {
   audioTranscription: 'audio-transcription',
   incomingMessage: 'incoming-message',
@@ -44,7 +51,6 @@ export const QUEUE_NAMES = {
   insightsGenerate: 'insights-generate',
   webhookDispatch: 'webhook-dispatch',
   weeklyDigestGenerate: 'weekly-digest-generate',
-  onboardingNudge: 'onboarding-nudge',
   morningDigestGenerate: 'morning-digest-generate',
   importantDateReminder: 'important-date-reminder',
 } as const;
@@ -107,19 +113,6 @@ export interface MorningDigestGenerateJob {
 export type OnboardingNudgeStage = '2h' | '24h';
 
 /**
- * Reengajamento de onboarding travado (ADR 0005). whatsappNumber vai no job
- * (não só userId) pra mandar a mensagem sem precisar reconsultar o usuário
- * quando ele ainda está incompleto — o handler ainda revalida
- * onboarding_completed_at antes de mandar, pra não disparar se a pessoa já
- * terminou entre o agendamento e a execução.
- */
-export interface OnboardingNudgeJob {
-  userId: string;
-  whatsappNumber: string;
-  stage: OnboardingNudgeStage;
-}
-
-/**
  * Enfileirado pelo sweep horário (insights-sweep.ts) quando detecta que o
  * dia de hoje, no fuso da conta, bate com o month/day de uma important_date
  * — mesmo padrão de insights-generate/weekly-digest-generate (sweep decide
@@ -140,7 +133,6 @@ let insightsSweepQueue: Queue<InsightsSweepJob> | null = null;
 let insightsGenerateQueue: Queue<InsightsGenerateJob> | null = null;
 let webhookDispatchQueue: Queue<WebhookDispatchJob> | null = null;
 let weeklyDigestGenerateQueue: Queue<WeeklyDigestGenerateJob> | null = null;
-let onboardingNudgeQueue: Queue<OnboardingNudgeJob> | null = null;
 let morningDigestGenerateQueue: Queue<MorningDigestGenerateJob> | null = null;
 let importantDateReminderQueue: Queue<ImportantDateReminderJob> | null = null;
 
@@ -206,14 +198,6 @@ export function getWeeklyDigestGenerateQueue(): Queue<WeeklyDigestGenerateJob> {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return weeklyDigestGenerateQueue;
-}
-
-export function getOnboardingNudgeQueue(): Queue<OnboardingNudgeJob> {
-  onboardingNudgeQueue ??= new Queue(QUEUE_NAMES.onboardingNudge, {
-    connection: getRedisConnection(),
-    defaultJobOptions: DEFAULT_JOB_OPTIONS,
-  });
-  return onboardingNudgeQueue;
 }
 
 export function getMorningDigestGenerateQueue(): Queue<MorningDigestGenerateJob> {

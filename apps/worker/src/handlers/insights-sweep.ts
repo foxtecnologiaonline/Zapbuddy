@@ -22,6 +22,7 @@ import {
 import { handleProactiveResearch } from './proactive-research.js';
 import { handleInterpretationFeedback } from './interpretation-feedback.js';
 import { handleLogsRetention } from './logs-retention.js';
+import { handleOnboardingNudge } from './onboarding-nudge.js';
 
 // 19h local — fim de tarde/começo de noite, momento plausível de "ver como
 // foi o dia" sem acordar ninguém (ADR 0003, decisão 2). Granularidade de
@@ -111,6 +112,15 @@ async function runWeeklyMaintenance(): Promise<void> {
  */
 export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<void> {
   await runWeeklyMaintenance();
+
+  // Reengajamento de onboarding (2026-10: sem fila própria — ver nota em
+  // queues/definitions.ts) — checado em toda passada do sweep horário,
+  // nunca derruba o resto se falhar.
+  try {
+    await handleOnboardingNudge();
+  } catch (error) {
+    logger.error('onboarding_nudge_sweep_failed', { error: error instanceof Error ? error.message : String(error) });
+  }
 
   const accounts = await listAccountsForInsightsSweep();
 

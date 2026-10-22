@@ -117,6 +117,24 @@ Migration `0019_personal_assistant.sql` precisa ser aplicada no Supabase antes d
     Não resolve a cota do Eco Mode já estourada neste ciclo (isso continua sendo a troca de plano
     já pedida ao dono do produto) — reduz o consumo estrutural pra frente, pra não estourar de
     novo assim que o plano for trocado.
+  - **Amendamento 2026-10 (motivo documentado, pedido explícito "aumentar todos os tetos de 10s
+    pra 1h"):** `drainDelay` subido de 55s pra 1h (`apps/worker/src/worker.ts`) — só afeta filas
+    sem job atrasado pendente, segue não atrasando job real (mesmo mecanismo de marker). O teto de
+    10s em si (`maximumBlockTimeout`, hardcoded dentro do `node_modules/bullmq`, não uma opção de
+    `WorkerOptions`) **não foi alterado** — perguntado ao dono do produto como proceder com as 3
+    filas ainda presas nele (`reminder-dispatch`/`onboarding-nudge`/`insights-sweep`), já que
+    patchar a lib de terceiro reintroduziria o mesmo risco de "Tom não responde" que motivou essa
+    investigação (Worker bloqueado até 1h sem perceber que a conexão caiu). Decisão: **só
+    `onboarding-nudge` foi convertida** pra rodar dentro do sweep horário (mesmo padrão dos 3 jobs
+    semanais acima) — `listUsersPendingOnboardingNudge` (`packages/db/src/repositories/users.ts`)
+    substitui o delay nativo do BullMQ por usuário (2h/24h exatos) por uma checagem de janela
+    horária `[from, to)` sobre `users.created_at`/`onboarding_completed_at IS NULL`, chamada em
+    toda passada do sweep. Precisão vira "dentro da hora" em vez de no minuto exato — aceito
+    explicitamente, nudge é reengajamento best-effort, não uma promessa de horário como lembrete.
+    `reminder-dispatch` e `insights-sweep` continuam com delay/repeat nativo do BullMQ, presas no
+    teto de 10s sempre que têm algo pendente (quase sempre) — decisão explícita de manter a
+    precisão exata do lembrete e aceitar esse piso de consumo nessas duas, já bem menor (2 filas,
+    não 14) que o estado original.
 - **Canal:** WhatsApp Cloud API oficial (Meta) é o canal **padrão e obrigatório** para qualquer usuário real/dados financeiros.
   - **Amendamento 2026-10 (motivo documentado):** suporte opcional à Evolution API (gateway Baileys self-hosted, mesma usada pelo ZapScript em `deploy/evolution-oci`) como canal alternativo via `WHATSAPP_CHANNEL_PROVIDER=evolution`, só para ambientes de teste/staging ou contingência operacional (ex.: aprovação do número oficial atrasada). Risco de ban e fragilidade para dado financeiro continuam valendo para esse caminho — por isso ele nunca é o default (`WHATSAPP_CHANNEL_PROVIDER` default é `cloud-api`) e qualquer deploy de produção com usuários reais deve permanecer em `cloud-api`. Não é dual-send automático: é uma troca manual de canal via env var.
 - **LLM:** Claude (Anthropic), via tool use/function calling — cada "assessor" é um conjunto de tools, não um serviço separado.
