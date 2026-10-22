@@ -4,9 +4,16 @@ export interface UpcomingBill {
   dueDay: number;
 }
 
+export interface OverdueTaskFollowUp {
+  title: string;
+  daysOverdue: number;
+}
+
 export interface MorningDigestInput {
   agendaLines: string[];
   taskTitles: string[];
+  /** Tarefas atrasadas cuja pergunta de conclusão ainda não foi feita (ver migration 0022). */
+  followUpTasks: OverdueTaskFollowUp[];
   bills: Array<UpcomingBill & { daysUntilDue: number }>;
 }
 
@@ -34,6 +41,18 @@ export function daysUntilDueDay(dueDay: number, todayYear: number, todayMonth: n
   return Math.round((nextMonthDue - today) / 86_400_000);
 }
 
+/**
+ * Dias de atraso de uma tarefa (1 = venceu ontem). Mesma mecânica de
+ * `daysUntilDueDay`, só que entre duas datas quaisquer (due_at já passado
+ * não tem "próximo mês" pra calcular) — usada pelo resumo matinal pra saber
+ * há quanto tempo uma tarefa pendente está parada antes de perguntar.
+ */
+export function daysOverdue(dueYear: number, dueMonth: number, dueDay: number, todayYear: number, todayMonth: number, todayDay: number): number {
+  const due = Date.UTC(dueYear, dueMonth - 1, dueDay);
+  const today = Date.UTC(todayYear, todayMonth - 1, todayDay);
+  return Math.round((today - due) / 86_400_000);
+}
+
 export const BILL_ALERT_WINDOW_DAYS = 3;
 
 /** Contas com vencimento dentro da janela de aviso, já com a contagem de dias. */
@@ -56,6 +75,11 @@ function describeDue(daysUntilDue: number): string {
   return `vence em ${daysUntilDue} dias`;
 }
 
+function describeOverdue(daysOverdueCount: number): string {
+  if (daysOverdueCount === 1) return 'era pra ontem';
+  return `está atrasada há ${daysOverdueCount} dias`;
+}
+
 /**
  * Resumo matinal: uma mensagem só, com o que existe pra hoje. Devolve null
  * quando não há nada — não manda mensagem vazia (proatividade sem ruído).
@@ -68,6 +92,12 @@ export function formatMorningDigest(input: MorningDigestInput): string | null {
   }
   if (input.taskTitles.length > 0) {
     sections.push(`✅ Tarefas de hoje e atrasadas:\n${input.taskTitles.map((title) => `• ${title}`).join('\n')}`);
+  }
+  if (input.followUpTasks.length > 0) {
+    const lines = input.followUpTasks.map(
+      (task) => `• ${task.title} (${describeOverdue(task.daysOverdue)}) — já aconteceu? me conta que eu atualizo`,
+    );
+    sections.push(`❓ Preciso confirmar com você:\n${lines.join('\n')}`);
   }
   if (input.bills.length > 0) {
     const lines = input.bills.map(

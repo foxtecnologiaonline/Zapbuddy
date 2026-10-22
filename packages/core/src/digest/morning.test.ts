@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billsDueWithin, daysUntilDueDay, formatMorningDigest } from './morning.js';
+import { billsDueWithin, daysOverdue, daysUntilDueDay, formatMorningDigest } from './morning.js';
 
 describe('daysUntilDueDay', () => {
   it('dia de vencimento ainda não passou neste mês', () => {
@@ -36,15 +36,26 @@ describe('billsDueWithin', () => {
   });
 });
 
+describe('daysOverdue', () => {
+  it('venceu ontem', () => {
+    expect(daysOverdue(2026, 10, 20, 2026, 10, 21)).toBe(1);
+  });
+
+  it('venceu há vários dias', () => {
+    expect(daysOverdue(2026, 10, 20, 2026, 10, 22)).toBe(2);
+  });
+});
+
 describe('formatMorningDigest', () => {
   it('retorna null quando não há nada pra hoje (sem mensagem vazia)', () => {
-    expect(formatMorningDigest({ agendaLines: [], taskTitles: [], bills: [] })).toBeNull();
+    expect(formatMorningDigest({ agendaLines: [], taskTitles: [], followUpTasks: [], bills: [] })).toBeNull();
   });
 
   it('monta as seções que têm conteúdo', () => {
     const text = formatMorningDigest({
       agendaLines: ['09:00 Dentista'],
       taskTitles: ['Pagar IPTU'],
+      followUpTasks: [],
       bills: [{ name: 'Aluguel', amountCents: 120000, dueDay: 20, daysUntilDue: 1 }],
     });
     expect(text).toContain('📅 Agenda de hoje:');
@@ -55,9 +66,20 @@ describe('formatMorningDigest', () => {
   });
 
   it('omite seções vazias', () => {
-    const text = formatMorningDigest({ agendaLines: [], taskTitles: ['Ligar pro banco'], bills: [] });
+    const text = formatMorningDigest({ agendaLines: [], taskTitles: ['Ligar pro banco'], followUpTasks: [], bills: [] });
     expect(text).not.toContain('Agenda');
     expect(text).not.toContain('Contas a vencer');
     expect(text).toContain('Ligar pro banco');
+  });
+
+  it('pergunta, uma vez, sobre tarefa atrasada ainda não perguntada', () => {
+    const text = formatMorningDigest({
+      agendaLines: [],
+      taskTitles: [],
+      followUpTasks: [{ title: 'Reunião do Colegiado', daysOverdue: 2 }],
+      bills: [],
+    });
+    expect(text).toContain('❓ Preciso confirmar com você:');
+    expect(text).toContain('• Reunião do Colegiado (está atrasada há 2 dias) — já aconteceu? me conta que eu atualizo');
   });
 });

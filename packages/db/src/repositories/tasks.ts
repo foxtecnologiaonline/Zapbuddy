@@ -47,6 +47,22 @@ export async function completeTask(accountId: string, taskId: string): Promise<T
 }
 
 /**
+ * Marca que o resumo matinal já perguntou, uma vez, se essa tarefa atrasada
+ * foi concluída — pra não repetir a mesma pergunta todo dia (ver migration
+ * 0022). Não muda `status`/`completed_at`: a resposta da pessoa é quem
+ * decide isso, via `complete_task` numa mensagem normal.
+ */
+export async function markTaskFollowUpAsked(accountId: string, taskId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('tasks')
+    .update({ follow_up_asked_at: new Date().toISOString() })
+    .eq('id', taskId)
+    .eq('account_id', accountId);
+
+  if (error) throw error;
+}
+
+/**
  * Remove de verdade (não soft-delete): tarefa criada por engano/duplicada não
  * tem valor histórico igual transação/lembrete tem — ao contrário de
  * completeTask, não existe "desfazer" nem consulta futura sobre uma tarefa

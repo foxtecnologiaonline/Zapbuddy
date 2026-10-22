@@ -35,6 +35,17 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
 
 - **Resumo matinal** (fila `morning-digest-generate`, 8h local): agenda do dia, tarefas de hoje e atrasadas, contas a
   vencer em até 3 dias. Uma mensagem só; sem nada pra mostrar, não manda nada.
+  - **Amendamento 2026-10 (motivo documentado, reportado pelo usuário em produção):** tarefa com
+    `due_at` no passado ficava na lista "tarefas de hoje e atrasadas" indefinidamente — o Tom
+    nunca perguntava se ela de fato aconteceu, só repetia a mesma linha todo dia. Corrigido
+    (`tasks.follow_up_asked_at`, migration `0022`): na primeira manhã em que uma tarefa pendente
+    aparece com `due_at` de um dia anterior, ela sai da listagem simples e vira uma pergunta
+    explícita numa seção própria ("❓ Preciso confirmar com você: ... já aconteceu?"),
+    marcada como perguntada pra nunca repetir a pergunta (mesma lógica de "nunca duas vezes" já
+    usada em outros fluxos proativos). A resposta da pessoa segue o fluxo normal de conversa já
+    existente (`list_tasks` + `complete_task`, resolução por contexto) — nenhuma tool nova.
+    Resolve só tarefas (`tasks.due_at`); evento de calendário (`create_calendar_event`) não tem
+    conceito de conclusão hoje — fora desta rodada.
 - **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
   só o que a pessoa informou. Nunca vira pagamento sozinho.
 - **Metas com valor** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor-alvo e valor guardado são
