@@ -1,6 +1,13 @@
 import type { Job } from 'bullmq';
 import { findUserById, logger } from '@zapbuddy/db';
-import { orchestrateTurn, sendWhatsappTextMessage, getCachedReply, setCachedReply, type IncomingMessageJob } from '@zapbuddy/core';
+import {
+  orchestrateTurn,
+  sendWhatsappTextMessage,
+  breakLinesAfterSentences,
+  getCachedReply,
+  setCachedReply,
+  type IncomingMessageJob,
+} from '@zapbuddy/core';
 
 export async function handleIncomingMessage(job: Job<IncomingMessageJob>): Promise<void> {
   const { userId, text, waMessageId } = job.data;
@@ -21,5 +28,7 @@ export async function handleIncomingMessage(job: Job<IncomingMessageJob>): Promi
     await setCachedReply(waMessageId, replyText);
   }
 
-  await sendWhatsappTextMessage(user.whatsapp_number, replyText);
+  // Formatado só no envio, não no cache: a resposta crua continua sendo a
+  // mesma pra reentrega, e a quebra de linha vale mesmo quando vem do cache.
+  await sendWhatsappTextMessage(user.whatsapp_number, breakLinesAfterSentences(replyText));
 }
