@@ -2,6 +2,7 @@ export * from './client.js';
 export * from './logger.js';
 export * from './types.js';
 export * from './timezone-from-ddd.js';
+export * from './location-from-ddd.js';
 export * from './onboarding-variant.js';
 export * from './repositories/users.js';
 export * from './repositories/accounts.js';

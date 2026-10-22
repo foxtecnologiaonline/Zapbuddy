@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { billsDueWithin, daysUntilDueDay, formatMorningDigest } from './morning.js';
+import {
+  billsDueWithin,
+  daysUntilDueDay,
+  formatMorningNarrative,
+  formatTodayAgendaMessage,
+  formatTodayFinanceMessage,
+} from './morning.js';
 
 describe('daysUntilDueDay', () => {
   it('dia de vencimento ainda não passou neste mês', () => {
@@ -34,30 +40,104 @@ describe('billsDueWithin', () => {
     expect(due.map((b) => b.name)).toEqual(['Aluguel']);
     expect(due[0]?.daysUntilDue).toBe(1);
   });
+
+  it('default (sem windowDays): só contas que vencem hoje', () => {
+    const bills = [
+      { name: 'Aluguel', amountCents: 120000, dueDay: 19 },
+      { name: 'Internet', amountCents: 9900, dueDay: 20 },
+    ];
+    const due = billsDueWithin(bills, 2026, 10, 19);
+    expect(due.map((b) => b.name)).toEqual(['Aluguel']);
+  });
 });
 
-describe('formatMorningDigest', () => {
-  it('retorna null quando não há nada pra hoje (sem mensagem vazia)', () => {
-    expect(formatMorningDigest({ agendaLines: [], taskTitles: [], bills: [] })).toBeNull();
+describe('formatMorningNarrative', () => {
+  const base = {
+    weekdayLabel: 'quinta-feira',
+    dateLabel: '22 de outubro',
+    season: 'primavera' as const,
+    weather: null,
+    holiday: null,
+  };
+
+  it('narrativa mínima: só dia/data/estação, sem clima nem feriado', () => {
+    const text = formatMorningNarrative(base);
+    expect(text).toContain('Bom dia! Hoje é quinta-feira, 22 de outubro');
+    expect(text).toContain('primavera');
+    expect(text).not.toContain('previsão');
+    expect(text).not.toContain('feriado');
+  });
+
+  it('inclui clima quando disponível, sem aviso de chuva se não houver chance', () => {
+    const text = formatMorningNarrative({
+      ...base,
+      weather: { minTempC: 18, maxTempC: 27, description: 'céu limpo', rainExpected: false },
+    });
+    expect(text).toContain('18°C a 27°C');
+    expect(text).toContain('céu limpo');
+    expect(text).not.toContain('guarda-chuva');
+  });
+
+  it('avisa sobre guarda-chuva quando chuva é esperada', () => {
+    const text = formatMorningNarrative({
+      ...base,
+      weather: { minTempC: 18, maxTempC: 24, description: 'chuva leve', rainExpected: true },
+    });
+    expect(text).toContain('guarda-chuva');
+  });
+
+  it('feriado nacional oficial', () => {
+    const text = formatMorningNarrative({
+      ...base,
+      holiday: { name: 'Tiradentes', official: true, scope: 'nacional' },
+    });
+    expect(text).toContain('feriado nacional: Tiradentes');
+  });
+
+  it('feriado estadual oficial', () => {
+    const text = formatMorningNarrative({
+      ...base,
+      holiday: { name: 'Revolução Constitucionalista', official: true, scope: 'estadual' },
+    });
+    expect(text).toContain('feriado por aqui: Revolução Constitucionalista');
+  });
+
+  it('ponto facultativo (não oficial)', () => {
+    const text = formatMorningNarrative({
+      ...base,
+      holiday: { name: 'Carnaval', official: false, scope: 'nacional' },
+    });
+    expect(text).toContain('Carnaval — ponto facultativo');
+  });
+});
+
+describe('formatTodayAgendaMessage', () => {
+  it('retorna null quando não há agenda nem tarefa', () => {
+    expect(formatTodayAgendaMessage({ agendaLines: [], taskTitles: [] })).toBeNull();
   });
 
   it('monta as seções que têm conteúdo', () => {
-    const text = formatMorningDigest({
-      agendaLines: ['09:00 Dentista'],
-      taskTitles: ['Pagar IPTU'],
-      bills: [{ name: 'Aluguel', amountCents: 120000, dueDay: 20, daysUntilDue: 1 }],
-    });
-    expect(text).toContain('📅 Agenda de hoje:');
+    const text = formatTodayAgendaMessage({ agendaLines: ['09:00 Dentista'], taskTitles: ['Pagar IPTU'] });
+    expect(text).toContain('📅 Compromissos de hoje:');
     expect(text).toContain('• 09:00 Dentista');
-    expect(text).toContain('✅ Tarefas de hoje e atrasadas:');
+    expect(text).toContain('✅ Tarefas de hoje:');
     expect(text).toContain('• Pagar IPTU');
-    expect((text ?? '').replace(/\u00a0/g, ' ')).toContain('• Aluguel (R$ 1.200,00) vence amanhã');
   });
 
-  it('omite seções vazias', () => {
-    const text = formatMorningDigest({ agendaLines: [], taskTitles: ['Ligar pro banco'], bills: [] });
-    expect(text).not.toContain('Agenda');
-    expect(text).not.toContain('Contas a vencer');
+  it('omite seção vazia', () => {
+    const text = formatTodayAgendaMessage({ agendaLines: [], taskTitles: ['Ligar pro banco'] });
+    expect(text).not.toContain('Compromissos de hoje');
     expect(text).toContain('Ligar pro banco');
+  });
+});
+
+describe('formatTodayFinanceMessage', () => {
+  it('retorna null quando não há conta vencendo hoje', () => {
+    expect(formatTodayFinanceMessage({ bills: [] })).toBeNull();
+  });
+
+  it('lista as contas de hoje', () => {
+    const text = formatTodayFinanceMessage({ bills: [{ name: 'Aluguel', amountCents: 120000, dueDay: 19 }] });
+    expect((text ?? '').replace(/ /g, ' ')).toContain('• Aluguel — R$ 1.200,00');
   });
 });

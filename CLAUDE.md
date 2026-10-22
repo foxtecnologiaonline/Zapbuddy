@@ -33,8 +33,27 @@ Itens de negócio (fluxo de caixa de MEI/PJ, DAS, nota fiscal) não são nicho d
 
 Entram no código, por pedido explícito, mesmo fora da ordem de fases:
 
-- **Resumo matinal** (fila `morning-digest-generate`, 8h local): agenda do dia, tarefas de hoje e atrasadas, contas a
-  vencer em até 3 dias. Uma mensagem só; sem nada pra mostrar, não manda nada.
+- **Resumo matinal** (fila `morning-digest-generate`, 8h local): agora em **3 mensagens separadas** (2026-10,
+  amendamento, motivo documentado — pedido do dono do produto):
+  1. Narrativa (dia da semana, data, estação do ano, previsão do tempo e feriado nacional/estadual de hoje, se
+     houver) — escrita como frase corrida, não lista de bullet, e **sempre enviada** (diferente das duas seguintes,
+     que só saem se houver algo). Estação do ano assume hemisfério sul pro Brasil inteiro (mesma aproximação
+     nacional de `timezone-from-ddd.ts`, mesmo nos estados mais próximos do Equador onde a variação é pequena).
+     Previsão do tempo via **OpenWeatherMap** (`OPENWEATHERMAP_API_KEY`, endpoint gratuito "5 day/3h forecast", sem
+     cartão) — escolhido em vez do Open-Meteo porque o Open-Meteo proíbe uso comercial no tier sem chave, e o
+     ZapBuddy é pago. Opcional: sem a chave, ou se a busca falhar, a narrativa sai sem a frase de clima — nunca com
+     dado inventado. Localização (cidade/UF/coordenadas) é inferida do DDD do WhatsApp
+     (`location-from-ddd.ts`, packages/db) — mesma mecânica/aproximação de `inferTimezoneFromWhatsappNumber`, só
+     que cobrindo todos os DDDs (não só as 8 exceções de fuso), porque aqui o erro afeta temperatura e feriado
+     estadual, não só fuso. Feriado estadual é tabela de melhor esforço (`digest/holidays.ts`, packages/core):
+     cobre 21 das 27 UFs com uma data confirmada em pesquisa; AC, MT e PR ficam de fora de propósito (fonte
+     divergente ou nenhum feriado estadual vigente encontrado) — mesmo princípio de nunca inventar dado, estendido
+     aqui a fato.
+  2. Agenda do dia (Google Agenda, se conectada) + tarefas com entrega **hoje** — tarefa atrasada não entra mais
+     aqui (decisão explícita do dono do produto nesta rodada: resumo matinal narrativo foca no dia, não cobra
+     atraso). Só enviada se houver algo.
+  3. Contas recorrentes que vencem **hoje** (não mais a janela de até 3 dias de antes — decisão explícita desta
+     rodada: "compromissos financeiros do dia"). Só enviada se houver alguma.
 - **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
   só o que a pessoa informou. Nunca vira pagamento sozinho.
 - **Metas com valor** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor-alvo e valor guardado são
