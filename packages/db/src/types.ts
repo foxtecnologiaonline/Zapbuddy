@@ -253,11 +253,14 @@ export interface Document {
   created_at: string;
 }
 
+export type CalendarProvider = 'google' | 'microsoft';
+
 export interface CalendarConnection {
   id: string;
   account_id: string;
-  google_refresh_token_encrypted: string;
-  google_calendar_id: string;
+  provider: CalendarProvider;
+  refresh_token_encrypted: string;
+  calendar_id: string;
   connected_by_user_id: string | null;
   connected_at: string;
 }

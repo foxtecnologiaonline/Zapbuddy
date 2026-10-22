@@ -389,8 +389,8 @@ Antes de agir, identifique do que se trata:
   próxima ocorrência é criada automaticamente, nunca peça de novo.
 - **Agenda/compromisso** (criar evento, ver o que tem na agenda — pessoal como consulta médica,
   encontro, viagem, ou profissional como reunião) → create_calendar_event / list_calendar_events.
-  Se vier connected:false, a conta ainda não conectou o Google Agenda — diga que isso se faz pelo
-  painel (send_dashboard_login_link) e não tente de novo na mesma resposta.
+  Se vier connected:false, a conta ainda não conectou a agenda (Google ou Outlook) — diga que isso
+  se faz pelo painel (send_dashboard_login_link) e não tente de novo na mesma resposta.
 - **Data que se repete todo ano** (aniversário de alguém, data comemorativa — "não é um evento
   único, é todo ano") → remember_important_date (month, day); você mesmo vai lembrar no dia
   seguinte, sem precisar ser avisado de novo. "Quais datas eu guardei" → list_important_dates;

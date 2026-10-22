@@ -13,8 +13,7 @@ const db = vi.hoisted(() => ({
 }));
 
 vi.mock('@zapbuddy/db', () => db);
-vi.mock('../../google/calendar.js', () => ({ deleteGoogleCalendarEvent: vi.fn() }));
-vi.mock('../../google/calendar-access.js', () => ({ getFreshCalendarAccess: vi.fn() }));
+vi.mock('../../calendar/calendar-access.js', () => ({ deleteCalendarEvent: vi.fn(), getFreshCalendarAccess: vi.fn() }));
 
 import { undoLastActionTool } from './undo.js';
 

@@ -25,14 +25,15 @@ export {
 } from './whatsapp/evolution-channel.js';
 export type { EvolutionInstanceStatus } from './whatsapp/evolution-channel.js';
 export * from './security/crypto.js';
-export * from './google/oauth.js';
-export * from './google/calendar.js';
+export * from './calendar/types.js';
+export * from './calendar/providers/google.js';
+export * from './calendar/providers/microsoft.js';
+export * from './calendar/calendar-access.js';
 export * from './insights/signals.js';
 export * from './insights/message.js';
 export * from './digest/message.js';
 export * from './webhooks/dispatch.js';
 export * from './onboarding/nudge-message.js';
-export * from './google/calendar-access.js';
 export * from './time/quiet-hours.js';
 export * from './digest/morning.js';
 export * from './important-dates/message.js';

@@ -71,10 +71,14 @@ deploy/
   em retry)
 - `audio/` — interface de transcrição (implementação real fica em
   `apps/worker/src/audio`)
-- `google/` — OAuth + Calendar API do Google via fetch direto (sem SDK),
-  usado pela tool de agenda e pela rota de callback do dashboard
-- `security/crypto.ts` — AES-256-GCM pra criptografar o refresh token do
-  Google em repouso (`TOKEN_ENCRYPTION_KEY`)
+- `calendar/` — camada de agenda multi-provider (2026-10, ver `CLAUDE.md`):
+  `providers/google.ts`/`providers/microsoft.ts` fazem OAuth + chamada de
+  API via fetch direto (sem SDK), `calendar-access.ts` despacha pro
+  provider certo da conta (`calendar_connections.provider`) — tools e rotas
+  do dashboard só chamam as funções genéricas daqui, nunca um provider
+  específico direto
+- `security/crypto.ts` — AES-256-GCM pra criptografar o refresh token da
+  agenda conectada (Google ou Microsoft) em repouso (`TOKEN_ENCRYPTION_KEY`)
 - `insights/` — detecção de sinal financeiro (agregação SQL
   determinística) + template de mensagem proativa (Fase 3, sem chamada
   nova ao LLM — ver `docs/adr/0003-*.md`)
@@ -152,7 +156,11 @@ assinatura via Asaas, R$ 27,90/mês, ver amendamento 2026-10 em
 `preferred_payment_method` — cadastro progressivo ao longo do teste de 7
 dias via `update_occupation`/`set_email`/`set_quiet_hours`; método de
 pagamento salvo sozinho pelo webhook da Asaas, nunca perguntado em
-conversa — ver `CLAUDE.md`).
+conversa — ver `CLAUDE.md`) →
+`0022_calendar_multi_provider.sql` (`calendar_connections.provider` +
+renomeia `google_refresh_token_encrypted`/`google_calendar_id` pra
+`refresh_token_encrypted`/`calendar_id` — integração com Outlook além do
+Google, uma agenda conectada por conta, ver `CLAUDE.md`).
 Rodar em ordem, manualmente, no
 SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das
@@ -270,8 +278,9 @@ obrigatório:
 | `GROQ_API_KEY` e/ou `OPENAI_API_KEY` | Transcrição de áudio (pelo menos uma) |
 | `WEB_APP_URL`, `SESSION_SECRET` | Dashboard e magic link |
 | `ADMIN_PASSWORD` | Login do painel admin (`/admin`) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Fase 2 — OAuth do Google Agenda. Sem isso, `create_calendar_event`/`list_calendar_events` sempre retornam `connected: false` e o botão "Conectar Google Agenda" do dashboard falha |
-| `TOKEN_ENCRYPTION_KEY` | Fase 2 — criptografa o refresh token do Google em repouso (obrigatório se Google Agenda for usado) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Fase 2 — OAuth do Google Agenda. Sem isso, o botão "Conectar Google Agenda" do dashboard falha |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_REDIRECT_URI` | 2026-10 — OAuth do Outlook. Sem isso, o botão "Conectar Outlook" falha de forma controlada, sem afetar o Google |
+| `TOKEN_ENCRYPTION_KEY` | Criptografa o refresh token da agenda conectada (Google ou Microsoft) em repouso — obrigatório se qualquer uma for usada. Sem nenhuma conectada, `create_calendar_event`/`list_calendar_events` sempre retornam `connected: false` |
 
 ## Deploy
 

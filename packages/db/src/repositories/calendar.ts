@@ -1,23 +1,30 @@
 import { getSupabaseClient } from '../client.js';
-import type { CalendarConnection } from '../types.js';
+import type { CalendarConnection, CalendarProvider } from '../types.js';
 
 export interface SaveCalendarConnectionInput {
   accountId: string;
+  provider: CalendarProvider;
   /** Já criptografado pelo caller (packages/core/src/security/crypto.ts) — esta camada nunca vê o token em claro. */
   refreshTokenEncrypted: string;
   calendarId?: string;
   connectedByUserId: string;
 }
 
-/** Upsert por account_id: reconectar (ex.: revogou e autorizou de novo) substitui a conexão anterior. */
+/**
+ * Upsert por account_id: reconectar substitui a conexão anterior — seja
+ * reautorizar o MESMO provider, seja trocar pro outro (ex.: tinha Google
+ * conectado, conecta o Outlook) — uma conta tem um calendário conectado por
+ * vez, decisão explícita do dono do produto (2026-10, ver CLAUDE.md).
+ */
 export async function saveCalendarConnection(input: SaveCalendarConnectionInput): Promise<CalendarConnection> {
   const { data, error } = await getSupabaseClient()
     .from('calendar_connections')
     .upsert(
       {
         account_id: input.accountId,
-        google_refresh_token_encrypted: input.refreshTokenEncrypted,
-        google_calendar_id: input.calendarId ?? 'primary',
+        provider: input.provider,
+        refresh_token_encrypted: input.refreshTokenEncrypted,
+        calendar_id: input.calendarId ?? 'primary',
         connected_by_user_id: input.connectedByUserId,
         connected_at: new Date().toISOString(),
       },
