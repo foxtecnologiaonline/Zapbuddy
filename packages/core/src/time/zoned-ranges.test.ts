@@ -8,6 +8,9 @@ import {
   getPriorFourWeeksRange,
   getLocalHour,
   getLocalWeekday,
+  getTomorrowRange,
+  getNext7DaysRange,
+  getDateKeyRange,
 } from './zoned-ranges.js';
 
 describe('getTodayRange', () => {
@@ -109,22 +112,29 @@ describe('getLocalWeekday (resumo semanal proativo)', () => {
   });
 });
 
-describe('getTomorrowRange / getNext7DaysRange', () => {
-  it('amanhã no fuso do usuário, não em UTC (já é dia 10 em UTC, mas ainda dia 9 em São Paulo)', async () => {
-    const { getTomorrowRange } = await import('./zoned-ranges.js');
-    const reference = new Date('2026-05-10T01:00:00.000Z'); // 2026-05-09 22:00 em São Paulo
-    const { startIso, endIso } = getTomorrowRange('America/Sao_Paulo', reference);
+describe('getTomorrowRange / getNext7DaysRange / getDateKeyRange', () => {
+  const reference = new Date('2026-05-10T01:00:00.000Z'); // 2026-05-09 22:00 em São Paulo
 
+  it('amanhã é o dia local seguinte, não o dia UTC seguinte', () => {
+    const { startIso, endIso } = getTomorrowRange('America/Sao_Paulo', reference);
     expect(startIso).toBe('2026-05-10T03:00:00.000Z');
     expect(endIso).toBe('2026-05-11T02:59:59.000Z');
   });
 
-  it('próximos 7 dias cobre hoje + 6 à frente e atravessa virada de mês', async () => {
-    const { getNext7DaysRange } = await import('./zoned-ranges.js');
-    const reference = new Date('2026-05-28T15:00:00.000Z'); // 2026-05-28 12:00 em São Paulo
+  it('próximos 7 dias cobrem hoje + 6 dias à frente', () => {
     const { startIso, endIso } = getNext7DaysRange('America/Sao_Paulo', reference);
+    expect(startIso).toBe('2026-05-09T03:00:00.000Z');
+    expect(endIso).toBe('2026-05-16T02:59:59.000Z');
+  });
 
-    expect(startIso).toBe('2026-05-28T03:00:00.000Z');
-    expect(endIso).toBe('2026-06-04T02:59:59.000Z'); // fim do dia 03/06 em São Paulo
+  it('janela por datas locais é inclusiva nas duas pontas', () => {
+    const { startIso, endIso } = getDateKeyRange('America/Sao_Paulo', '2026-05-30', '2026-05-31');
+    expect(startIso).toBe('2026-05-30T03:00:00.000Z');
+    expect(endIso).toBe('2026-06-01T02:59:59.000Z');
+  });
+
+  it('rejeita formato inválido e intervalo invertido', () => {
+    expect(() => getDateKeyRange('America/Sao_Paulo', '30/05/2026', '2026-05-31')).toThrow(/YYYY-MM-DD/);
+    expect(() => getDateKeyRange('America/Sao_Paulo', '2026-05-31', '2026-05-30')).toThrow(/anterior/);
   });
 });

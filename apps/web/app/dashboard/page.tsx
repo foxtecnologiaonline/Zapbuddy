@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError } from '@zapbuddy/core';
+import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError, computeHabitStats, localDateKey } from '@zapbuddy/core';
 import {
   findUserById,
   listTransactions,
@@ -15,6 +15,8 @@ import {
   listNotes,
   listImportantDates,
   listPersonalGoals,
+  listActiveHabits,
+  listHabitCheckinDates,
   listActiveRecurringBills,
   listGoals,
 } from '@zapbuddy/db';
@@ -84,6 +86,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     personalGoals,
     recurringBills,
     savingsGoals,
+    habits,
+    habitCheckinDates,
   ] = await Promise.all([
     summarizeTransactions(account.accountId, startIso, endIso),
     listTransactions(account.accountId, startIso, endIso, {
@@ -106,6 +110,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listPersonalGoals(account.accountId, 'pending'),
     listActiveRecurringBills(account.accountId),
     listGoals(account.accountId, 'active'),
+    listActiveHabits(account.accountId),
+    listHabitCheckinDates(account.accountId, localDateKey(user.timezone)),
   ]);
 
   let referralLink: string | null = null;
@@ -163,10 +169,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </form>
       </header>
 
-      {calendarStatus === 'connected' && <p className="notice">Google Agenda conectado com sucesso.</p>}
-      {calendarStatus === 'error' && (
-        <p className="notice notice-error">Não deu pra conectar o Google Agenda. Tenta de novo?</p>
-      )}
+      {calendarStatus === 'connected' && <p className="notice">Agenda conectada com sucesso.</p>}
+      {calendarStatus === 'error' && <p className="notice notice-error">Não deu pra conectar a agenda. Tenta de novo?</p>}
 
       <section className="kpis" aria-label="Resumo do mês">
         <div className="kpi">
@@ -325,6 +329,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         <section className="card">
+          <h2>Hábitos</h2>
+          <p className="muted-sm">Conta pro Tom quando fizer — ex.: &quot;fui pra academia hoje&quot; — e ele acompanha a sequência.</p>
+          {habits.length === 0 ? (
+            <p className="muted">Nenhum hábito ainda — manda &quot;quero criar o hábito de [algo]&quot; pro Tom no WhatsApp.</p>
+          ) : (
+            <ul className="item-list">
+              {habits.map((habit) => {
+                const stats = computeHabitStats(habitCheckinDates[habit.id] ?? [], localDateKey(user.timezone));
+                return (
+                  <li key={habit.id}>
+                    <span>
+                      {habit.name}
+                      {stats.doneToday && ' ✓'}
+                    </span>
+                    <span className="muted">
+                      {stats.currentStreak} dia(s) seguido(s) · {stats.last7Days}/7 na semana
+                    </span>
+                    <span className="item-actions">
+                      <form action={`/api/dashboard/habits/${habit.id}/archive`} method="POST">
+                        <button type="submit" className="btn btn-sm btn-danger">
+                          arquivar
+                        </button>
+                      </form>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="card">
           <h2>Datas importantes</h2>
           <p className="muted-sm">Aniversários e datas que se repetem todo ano — o Tom avisa sozinho no dia.</p>
           {importantDates.length === 0 ? (
@@ -426,13 +462,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         <section className="card">
-          <h2>Google Agenda</h2>
+          <h2>Agenda</h2>
           {calendarConnection ? (
-            <p className="muted">Conectado.</p>
+            <>
+              <p className="muted">Conectado: {calendarConnection.provider === 'microsoft' ? 'Outlook' : 'Google Agenda'}.</p>
+              <p style={{ opacity: 0.6, fontSize: 13 }}>
+                Conectar {calendarConnection.provider === 'microsoft' ? 'o Google Agenda' : 'o Outlook'} substitui esta conexão — só dá
+                pra ter uma agenda conectada por vez.
+              </p>
+            </>
           ) : (
-            <a href="/api/calendar/connect" className="btn">
-              Conectar Google Agenda
-            </a>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <a href="/api/calendar/connect" className="btn">
+                Conectar Google Agenda
+              </a>
+              <a href="/api/calendar/microsoft/connect" className="btn">
+                Conectar Outlook
+              </a>
+            </div>
           )}
         </section>
 

@@ -156,6 +156,15 @@ export interface AccountOwnerForSweep {
   ownerTimezone: string;
   quietHoursStart: number;
   quietHoursEnd: number;
+  /** Nome pra saudação do resumo matinal: preferred_name, senão o primeiro nome. */
+  displayName: string | null;
+  cityUf: string | null;
+  cityLatitude: number | null;
+  cityLongitude: number | null;
+  morningDigestEnabled: boolean;
+  morningDigestHour: number;
+  morningDigestAgenda: boolean;
+  morningDigestFinance: boolean;
 }
 
 /**
@@ -167,7 +176,9 @@ export interface AccountOwnerForSweep {
 export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSweep[]> {
   const { data, error } = await getSupabaseClient()
     .from('account_members')
-    .select('account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end)')
+    .select(
+      'account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end, name, preferred_name, city_uf, city_latitude, city_longitude, morning_digest_enabled, morning_digest_hour, morning_digest_agenda, morning_digest_finance)',
+    )
     .eq('role', 'owner');
 
   if (error) throw error;
@@ -178,6 +189,15 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
       timezone: string;
       quiet_hours_start: number;
       quiet_hours_end: number;
+      name: string | null;
+      preferred_name: string | null;
+      city_uf: string | null;
+      city_latitude: number | null;
+      city_longitude: number | null;
+      morning_digest_enabled: boolean;
+      morning_digest_hour: number;
+      morning_digest_agenda: boolean;
+      morning_digest_finance: boolean;
     };
     return {
       accountId: row.account_id as string,
@@ -186,6 +206,14 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
       ownerTimezone: user.timezone,
       quietHoursStart: user.quiet_hours_start,
       quietHoursEnd: user.quiet_hours_end,
+      displayName: user.preferred_name ?? user.name?.trim().split(/\s+/)[0] ?? null,
+      cityUf: user.city_uf,
+      cityLatitude: user.city_latitude,
+      cityLongitude: user.city_longitude,
+      morningDigestEnabled: user.morning_digest_enabled,
+      morningDigestHour: user.morning_digest_hour,
+      morningDigestAgenda: user.morning_digest_agenda,
+      morningDigestFinance: user.morning_digest_finance,
     };
   });
 }

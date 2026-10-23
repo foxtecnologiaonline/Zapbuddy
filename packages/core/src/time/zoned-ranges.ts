@@ -101,11 +101,31 @@ export function getTomorrowRange(timeZone: string, referenceDate: Date = new Dat
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
-/** Hoje + 6 dias à frente (7 dias corridos pra frente) NO FUSO DO USUÁRIO — espelho de `getLast7DaysRange`. */
+/** Próximos 7 dias corridos (hoje + 6 dias seguintes) NO FUSO DO USUÁRIO — o espelho de `getLast7DaysRange`, pra "o que tenho essa semana". */
 export function getNext7DaysRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
   const { year, month, day } = datePartsInZone(timeZone, referenceDate);
   const start = zonedWallTimeToUtc(year, month, day, 0, 0, 0, timeZone);
   const end = zonedWallTimeToUtc(year, month, day + 6, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/**
+ * Janela entre duas datas locais (YYYY-MM-DD, inclusive nas duas pontas) NO
+ * FUSO DO USUÁRIO — pra "o que tenho dia 30" ou "mês que vem" sem deixar o
+ * modelo montar timestamps UTC à mão. Lança em formato inválido ou fim
+ * anterior ao início.
+ */
+export function getDateKeyRange(timeZone: string, fromDate: string, toDate: string): DateRange {
+  const parse = (value: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) throw new Error(`Data inválida "${value}" — use o formato YYYY-MM-DD.`);
+    return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+  };
+  const from = parse(fromDate);
+  const to = parse(toDate);
+  const start = zonedWallTimeToUtc(from.year, from.month, from.day, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(to.year, to.month, to.day, 23, 59, 59, timeZone);
+  if (end.getTime() < start.getTime()) throw new Error('A data final não pode ser anterior à inicial.');
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 

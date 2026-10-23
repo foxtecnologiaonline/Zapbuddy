@@ -89,6 +89,43 @@ export async function completeOnboarding(userId: string, name: string, occupatio
   return data as User;
 }
 
+export interface UserPendingOnboardingNudge {
+  id: string;
+  whatsapp_number: string;
+}
+
+/**
+ * 2026-10 (análise de consumo de Redis, ver CLAUDE.md): substitui o
+ * agendamento nativo do BullMQ (delay 2h/24h por usuário) — qualquer fila
+ * com job atrasado pendente fica presa 24/7 num teto de bloqueio de 10s do
+ * próprio BullMQ, e isso valia pra TODO usuário com onboarding incompleto.
+ * Agora é uma checagem dentro do sweep horário (insights-sweep.ts):
+ * `createdAtHoursAgo` é meia-aberta `[from, to)` — cada usuário cai nela
+ * uma vez só, já que o sweep roda 1x/hora (mesma lógica de idempotência do
+ * próprio sweep, sem tabela nova). Troca de precisão aceita explicitamente
+ * (2h/24h exatos viram "dentro da hora", não mais no minuto certo) — nudge
+ * não é uma promessa de horário exato como lembrete, é reengajamento
+ * best-effort.
+ */
+export async function listUsersPendingOnboardingNudge(
+  hoursAgoFrom: number,
+  hoursAgoTo: number,
+  now: Date = new Date(),
+): Promise<UserPendingOnboardingNudge[]> {
+  const sinceIso = new Date(now.getTime() - hoursAgoTo * 60 * 60 * 1000).toISOString();
+  const untilIso = new Date(now.getTime() - hoursAgoFrom * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .select('id, whatsapp_number')
+    .is('onboarding_completed_at', null)
+    .gte('created_at', sinceIso)
+    .lt('created_at', untilIso);
+
+  if (error) throw error;
+  return (data ?? []) as UserPendingOnboardingNudge[];
+}
+
 export async function countUsers(): Promise<number> {
   const { count, error } = await getSupabaseClient().from('users').select('*', { count: 'exact', head: true });
   if (error) throw error;
@@ -274,6 +311,45 @@ export async function setOccupation(userId: string, occupation: string): Promise
 
 export async function saveUserEmail(userId: string, email: string): Promise<User> {
   const { data, error } = await getSupabaseClient().from('users').update({ email }).eq('id', userId).select('*').single();
+  if (error) throw error;
+  return data as User;
+}
+
+export interface UserCityInput {
+  city: string;
+  uf: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** Cidade já geocodificada (ver geocodeBrazilianCity) — guardar coordenada junto evita geocodificar de novo todo dia. */
+export async function saveUserCity(userId: string, input: UserCityInput): Promise<User> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .update({ city: input.city, city_uf: input.uf, city_latitude: input.latitude, city_longitude: input.longitude })
+    .eq('id', userId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as User;
+}
+
+export interface MorningDigestPreferencesInput {
+  enabled?: boolean;
+  hour?: number;
+  includeAgenda?: boolean;
+  includeFinance?: boolean;
+}
+
+/** Só grava o que veio (undefined = não mexe) — a pessoa costuma mudar uma coisa por vez. */
+export async function saveMorningDigestPreferences(userId: string, input: MorningDigestPreferencesInput): Promise<User> {
+  const update: Record<string, unknown> = {};
+  if (input.enabled !== undefined) update.morning_digest_enabled = input.enabled;
+  if (input.hour !== undefined) update.morning_digest_hour = input.hour;
+  if (input.includeAgenda !== undefined) update.morning_digest_agenda = input.includeAgenda;
+  if (input.includeFinance !== undefined) update.morning_digest_finance = input.includeFinance;
+
+  const { data, error } = await getSupabaseClient().from('users').update(update).eq('id', userId).select('*').single();
   if (error) throw error;
   return data as User;
 }

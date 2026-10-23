@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createReminder, cancelReminder, listAccountReminders, findAccountReminderById } from '@zapbuddy/db';
+import { createReminder, cancelReminder, updateReminder, listPendingReminders } from '@zapbuddy/db';
 import { getReminderDispatchQueue } from '../../queues/definitions.js';
 import { defineTool } from '../tool-types.js';
 import { assertFutureDate } from '../date-sanity.js';
@@ -67,65 +67,60 @@ export const cancelReminderTool = defineTool({
 export const listRemindersTool = defineTool({
   name: 'list_reminders',
   description:
-    'Lista os lembretes da conta: os próximos (pending) e os últimos que já dispararam (sent), cada um com ' +
-    'reminder_id. Use pra achar o id antes de cancelar ou adiar ("adia aquele lembrete", "o que você vai ' +
-    'me lembrar essa semana?") — o lembrete que acabou de disparar também aparece aqui.',
+    'Lista os lembretes ainda pendentes da pessoa, do mais próximo pro mais distante, com o reminder_id de cada ' +
+    'um — use pra "quais lembretes eu tenho" e pra achar o reminder_id antes de cancel_reminder ou ' +
+    'update_reminder.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
-    const [pending, sent] = await Promise.all([
-      listAccountReminders(ctx.accountId, 'pending', 20),
-      listAccountReminders(ctx.accountId, 'sent', 5),
-    ]);
-    const view = (r: (typeof pending)[number]) => ({
-      reminder_id: r.id,
-      message: r.message,
-      remind_at: r.remind_at,
-      status: r.status,
-      recurrence: r.recurrence,
-    });
-    return { reminders: [...pending.map(view), ...sent.map(view)] };
+    const reminders = await listPendingReminders(ctx.accountId);
+    return {
+      reminders: reminders.map((reminder) => ({
+        reminder_id: reminder.id,
+        message: reminder.message,
+        remind_at: reminder.remind_at,
+        recurrence: reminder.recurrence,
+      })),
+    };
   },
 });
 
-export const rescheduleReminderTool = defineTool({
-  name: 'reschedule_reminder',
+export const updateReminderTool = defineTool({
+  name: 'update_reminder',
   description:
-    'Adia/remarca um lembrete para um novo horário futuro, dado o reminder_id (pegue em list_reminders) — ' +
-    'funciona tanto pra um lembrete ainda pendente quanto pra um que já disparou e a pessoa quer que ' +
-    'avise de novo ("adia pra amanhã às 9", "me lembra de novo daqui a 1 hora"). Se o id não existir ' +
-    'mais ou já foi cancelado, retorna rescheduled: false.',
-  schema: z.object({
-    reminder_id: z.string().uuid(),
-    remind_at: z.string().datetime(),
-  }),
+    'Altera um lembrete ainda pendente (mudar o horário, o texto ou a recorrência), dado o reminder_id de ' +
+    'list_reminders. Informe só o que muda; recurrence: "none" torna o lembrete único. NUNCA crie um lembrete ' +
+    'novo pra "remarcar" — ficariam dois avisos. Se não existir mais / já tiver disparado, retorna ' +
+    'updated: false (aí pergunte se quer criar um novo).',
+  schema: z
+    .object({
+      reminder_id: z.string().uuid(),
+      message: z.string().min(1).optional(),
+      remind_at: z.string().datetime().optional(),
+      recurrence: z.enum(['daily', 'weekly', 'monthly', 'none']).optional(),
+    })
+    .refine((value) => value.message !== undefined || value.remind_at !== undefined || value.recurrence !== undefined, {
+      message: 'Informe ao menos um campo pra alterar (message, remind_at ou recurrence).',
+    }),
   execute: async (params, ctx) => {
-    assertFutureDate(params.remind_at, 'remind_at');
+    if (params.remind_at) assertFutureDate(params.remind_at, 'remind_at');
 
-    const original = await findAccountReminderById(ctx.accountId, params.reminder_id);
-    if (!original || original.status === 'cancelled') return { rescheduled: false };
+    const reminder = await updateReminder(ctx.accountId, params.reminder_id, {
+      message: params.message,
+      remindAtIso: params.remind_at,
+      recurrence: params.recurrence === undefined ? undefined : params.recurrence === 'none' ? null : params.recurrence,
+    });
+    if (!reminder) return { updated: false };
 
-    // Pendente: move o lembrete (e a série, se recorrente) — cancela o antigo
-    // e cria um novo. Já disparado: a repetição recorrente já foi encadeada
-    // pelo próprio disparo, então o novo é avulso (sem recurrence).
-    const wasPending = original.status === 'pending';
-    if (wasPending) {
-      await cancelReminder(ctx.accountId, original.id);
-      await getReminderDispatchQueue()
-        .remove(original.id)
-        .catch(() => undefined);
+    if (params.remind_at) {
+      // Remarcar = trocar o job atrasado do BullMQ (mesmo jobId = reminder.id,
+      // que é o que cancel_reminder também usa pra achar o job). O guard em
+      // reminder-dispatch.ts cobre o caso do job antigo sobreviver ao remove.
+      const queue = getReminderDispatchQueue();
+      await queue.remove(reminder.id).catch(() => undefined);
+      const delay = Math.max(0, new Date(reminder.remind_at).getTime() - Date.now());
+      await queue.add('dispatch', { reminderId: reminder.id }, { delay, jobId: reminder.id });
     }
 
-    const next = await createReminder(
-      ctx.accountId,
-      ctx.userId,
-      original.message,
-      params.remind_at,
-      original.task_id ?? undefined,
-      wasPending ? (original.recurrence ?? undefined) : undefined,
-    );
-    const delay = Math.max(0, new Date(params.remind_at).getTime() - Date.now());
-    await getReminderDispatchQueue().add('dispatch', { reminderId: next.id }, { delay, jobId: next.id });
-
-    return { rescheduled: true, reminder_id: next.id, remind_at: params.remind_at };
+    return { updated: true, reminder_id: reminder.id, remind_at: reminder.remind_at, recurrence: reminder.recurrence };
   },
 });

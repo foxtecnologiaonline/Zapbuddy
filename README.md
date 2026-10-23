@@ -71,10 +71,14 @@ deploy/
   em retry)
 - `audio/` — interface de transcrição (implementação real fica em
   `apps/worker/src/audio`)
-- `google/` — OAuth + Calendar API do Google via fetch direto (sem SDK),
-  usado pela tool de agenda e pela rota de callback do dashboard
-- `security/crypto.ts` — AES-256-GCM pra criptografar o refresh token do
-  Google em repouso (`TOKEN_ENCRYPTION_KEY`)
+- `calendar/` — camada de agenda multi-provider (2026-10, ver `CLAUDE.md`):
+  `providers/google.ts`/`providers/microsoft.ts` fazem OAuth + chamada de
+  API via fetch direto (sem SDK), `calendar-access.ts` despacha pro
+  provider certo da conta (`calendar_connections.provider`) — tools e rotas
+  do dashboard só chamam as funções genéricas daqui, nunca um provider
+  específico direto
+- `security/crypto.ts` — AES-256-GCM pra criptografar o refresh token da
+  agenda conectada (Google ou Microsoft) em repouso (`TOKEN_ENCRYPTION_KEY`)
 - `insights/` — detecção de sinal financeiro (agregação SQL
   determinística) + template de mensagem proativa (Fase 3, sem chamada
   nova ao LLM — ver `docs/adr/0003-*.md`)
@@ -86,17 +90,22 @@ deploy/
   e aprendizado contínuo" no `CLAUDE.md`
 
 ### `apps/worker/src`
-- `worker.ts` — os 11 workers BullMQ (mensagem recebida, transcrição de
+- `worker.ts` — os 10 workers BullMQ (mensagem recebida, transcrição de
   áudio, disparo de lembrete, upload de documento, sweep + geração de
-  insight proativo, disparo de webhook, resumo semanal/matinal,
-  reengajamento de onboarding, lembrete de data importante) — registra
-  também o job repetível de sweep de insights (1x/hora) no boot
-- `handlers/` — lógica de cada fila. `insights-sweep.ts` também roda a
-  manutenção semanal (pesquisa proativa, feedback de interpretação,
-  expurgo de logs) direto, gated por dia/hora UTC — **sem fila/Worker
-  própria pra cada uma** (2026-10, análise de consumo de Redis: uma fila
-  `repeat` do BullMQ fica presa 24/7 num teto de bloqueio de 10s mesmo
-  rodando 1x/semana — ver `CLAUDE.md`)
+  insight proativo, disparo de webhook, resumo semanal/matinal, lembrete
+  de data importante) — registra também o job repetível de sweep de
+  insights (1x/hora) no boot
+- `handlers/` — lógica de cada fila. `insights-sweep.ts` também roda,
+  direto (sem fila/Worker própria), a manutenção semanal (pesquisa
+  proativa, feedback de interpretação, expurgo de logs — gated por
+  dia/hora UTC) e o reengajamento de onboarding (checado toda hora, gated
+  por horas desde o cadastro) — 2026-10, análise de consumo de Redis: uma
+  fila com job atrasado/repetível pendente fica presa 24/7 num teto de
+  bloqueio de 10s do próprio BullMQ, desperdício grande pra algo que roda
+  raro (semanal) ou não precisa de precisão ao minuto (nudge). Exceção:
+  `reminder-dispatch` continua com delay nativo do BullMQ — lembrete
+  precisa disparar na hora exata, decisão explícita do dono do produto.
+  Detalhe completo em `CLAUDE.md`.
 - `audio/` — pipeline Whisper (Groq → Groq full → OpenAI, com detector
   de alucinação) e conversão de áudio via ffmpeg
 
@@ -147,7 +156,14 @@ assinatura via Asaas, R$ 27,90/mês, ver amendamento 2026-10 em
 `preferred_payment_method` — cadastro progressivo ao longo do teste de 7
 dias via `update_occupation`/`set_email`/`set_quiet_hours`; método de
 pagamento salvo sozinho pelo webhook da Asaas, nunca perguntado em
-conversa — ver `CLAUDE.md`).
+conversa — ver `CLAUDE.md`) →
+`0022_calendar_multi_provider.sql` (`calendar_connections.provider` +
+renomeia `google_refresh_token_encrypted`/`google_calendar_id` pra
+`refresh_token_encrypted`/`calendar_id` — integração com Outlook além do
+Google, uma agenda conectada por conta, ver `CLAUDE.md`) →
+`0023_trial_3_dias.sql` (`users.trial_ends_at` — trial vira 3 dias com
+bloqueio real de uso fora do LLM, era 7 dias sem bloqueio nenhum; ver
+`packages/core/src/payments/trial-gate.ts` e `CLAUDE.md`).
 Rodar em ordem, manualmente, no
 SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das
@@ -265,8 +281,9 @@ obrigatório:
 | `GROQ_API_KEY` e/ou `OPENAI_API_KEY` | Transcrição de áudio (pelo menos uma) |
 | `WEB_APP_URL`, `SESSION_SECRET` | Dashboard e magic link |
 | `ADMIN_PASSWORD` | Login do painel admin (`/admin`) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Fase 2 — OAuth do Google Agenda. Sem isso, `create_calendar_event`/`list_calendar_events` sempre retornam `connected: false` e o botão "Conectar Google Agenda" do dashboard falha |
-| `TOKEN_ENCRYPTION_KEY` | Fase 2 — criptografa o refresh token do Google em repouso (obrigatório se Google Agenda for usado) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Fase 2 — OAuth do Google Agenda. Sem isso, o botão "Conectar Google Agenda" do dashboard falha |
+| `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_REDIRECT_URI` | 2026-10 — OAuth do Outlook. Sem isso, o botão "Conectar Outlook" falha de forma controlada, sem afetar o Google |
+| `TOKEN_ENCRYPTION_KEY` | Criptografa o refresh token da agenda conectada (Google ou Microsoft) em repouso — obrigatório se qualquer uma for usada. Sem nenhuma conectada, `create_calendar_event`/`list_calendar_events` sempre retornam `connected: false` |
 
 ## Deploy
 

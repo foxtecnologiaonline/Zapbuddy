@@ -29,6 +29,7 @@ function baseUser(overrides: Partial<User> = {}): User {
     plan_status_updated_at: null,
     plan_intent: null,
     plan_intent_requested_at: null,
+    trial_ends_at: '2026-01-04T00:00:00.000Z',
     created_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -75,8 +76,8 @@ const SCENARIOS: Scenario[] = [
     userMessage: 'me lembra de pagar o aluguel dia 5',
   },
   {
-    label: 'Momento de venda — teste encerrado (convite único, certeza real)',
-    user: baseUser({ plan_status: 'trial', created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() }),
+    label: 'Teste quase no fim (último dia dos 3 de trial — avisa sem forçar convite)',
+    user: baseUser({ plan_status: 'trial', created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() }),
     userMessage: 'qual foi meu resumo da semana?',
   },
   {

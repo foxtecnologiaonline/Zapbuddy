@@ -22,6 +22,8 @@ import {
 import { handleProactiveResearch } from './proactive-research.js';
 import { handleInterpretationFeedback } from './interpretation-feedback.js';
 import { handleLogsRetention } from './logs-retention.js';
+import { handleOnboardingNudge } from './onboarding-nudge.js';
+import { handleEmbeddingsBackfill } from './embeddings-backfill.js';
 
 // 19h local — fim de tarde/começo de noite, momento plausível de "ver como
 // foi o dia" sem acordar ninguém (ADR 0003, decisão 2). Granularidade de
@@ -34,10 +36,9 @@ const TARGET_LOCAL_HOUR = 19;
 const DIGEST_LOCAL_WEEKDAY = 5; // sexta
 const DIGEST_LOCAL_HOUR = 18;
 
-// 8h local — primeira coisa do dia. Janela de silêncio padrão (22h–7h) não
-// cobre esse horário, então por padrão sempre chega; quem configurar silêncio
-// nessa faixa simplesmente não recebe o resumo matinal naquele dia.
-const MORNING_DIGEST_LOCAL_HOUR = 8;
+// Resumo matinal: hora local e liga/desliga vêm das preferências da pessoa
+// (users.morning_digest_*, default 8h). Janela de silêncio continua valendo:
+// hora dentro do silêncio = não recebe naquele dia.
 
 // 9h local — manhã, horário distinto dos outros dois (18h/19h) pra não
 // competir por conexão com o Supabase na mesma janela (mesmo raciocínio dos
@@ -112,6 +113,18 @@ async function runWeeklyMaintenance(): Promise<void> {
 export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<void> {
   await runWeeklyMaintenance();
 
+  // Reengajamento de onboarding (2026-10: sem fila própria — ver nota em
+  // queues/definitions.ts) — checado em toda passada do sweep horário,
+  // nunca derruba o resto se falhar.
+  try {
+    await handleOnboardingNudge();
+  } catch (error) {
+    logger.error('onboarding_nudge_sweep_failed', { error: error instanceof Error ? error.message : String(error) });
+  }
+
+  // Vetores de notas/documentos que ficaram pendentes (busca semântica) — manutenção leve, nunca lança.
+  await handleEmbeddingsBackfill();
+
   const accounts = await listAccountsForInsightsSweep();
 
   await Promise.all(
@@ -119,11 +132,23 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
       const localHour = getLocalHour(account.ownerTimezone);
       const quiet = isWithinQuietHours(localHour, account.quietHoursStart, account.quietHoursEnd);
 
-      if (localHour === MORNING_DIGEST_LOCAL_HOUR && !quiet) {
+      if (account.morningDigestEnabled && localHour === account.morningDigestHour && !quiet) {
         const today = getTodayRange(account.ownerTimezone);
         await getMorningDigestGenerateQueue().add(
           'generate',
-          { accountId: account.accountId, ownerWhatsappNumber: account.ownerWhatsappNumber, ownerTimezone: account.ownerTimezone },
+          {
+            accountId: account.accountId,
+            ownerWhatsappNumber: account.ownerWhatsappNumber,
+            ownerTimezone: account.ownerTimezone,
+            displayName: account.displayName,
+            city:
+              account.cityUf && account.cityLatitude !== null && account.cityLongitude !== null
+                ? { uf: account.cityUf, latitude: account.cityLatitude, longitude: account.cityLongitude }
+                : null,
+            digestHour: localHour,
+            includeAgenda: account.morningDigestAgenda,
+            includeFinance: account.morningDigestFinance,
+          },
           { jobId: `morning:${account.accountId}:${today.startIso.slice(0, 10)}` },
         );
       }

@@ -33,6 +33,44 @@ export async function listTasks(
   return (data ?? []) as Task[];
 }
 
+/**
+ * Tarefas pendentes com entrega dentro de [fromIso, toIso], filtradas no
+ * banco — listTasks corta em 50 por criação, então numa conta com muitas
+ * pendentes uma tarefa de hoje podia ficar de fora do resumo matinal.
+ */
+/**
+ * Tarefas pendentes com prazo vencido (antes de `beforeIso`) que o resumo
+ * matinal ainda não perguntou se foram concluídas (migration 0022). As mais
+ * recentes primeiro e com teto: um acúmulo antigo não vira uma parede de
+ * perguntas num dia só — o resto fica pros dias seguintes.
+ */
+export async function listOverdueTasksAwaitingFollowUp(accountId: string, beforeIso: string, limit = 5): Promise<Task[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .lt('due_at', beforeIso)
+    .is('follow_up_asked_at', null)
+    .order('due_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Task[];
+}
+
+export async function listPendingTasksDueBetween(accountId: string, fromIso: string, toIso: string): Promise<Task[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .gte('due_at', fromIso)
+    .lte('due_at', toIso)
+    .order('due_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Task[];
+}
+
 export async function completeTask(accountId: string, taskId: string): Promise<Task> {
   const { data, error } = await getSupabaseClient()
     .from('tasks')
@@ -44,36 +82,6 @@ export async function completeTask(accountId: string, taskId: string): Promise<T
 
   if (error) throw error;
   return data as Task;
-}
-
-/**
- * Edita título e/ou prazo de uma tarefa (`dueAt: null` remove o prazo).
- * Mudar o prazo zera `follow_up_asked_at`: com data nova, vale perguntar de
- * novo se ela foi concluída quando essa data passar (migration 0022).
- * `maybeSingle()` — id de outra conta ou já excluído devolve null.
- */
-export async function updateTask(
-  accountId: string,
-  taskId: string,
-  changes: { title?: string; dueAt?: string | null },
-): Promise<Task | null> {
-  const patch: Record<string, unknown> = {};
-  if (changes.title !== undefined) patch.title = changes.title;
-  if (changes.dueAt !== undefined) {
-    patch.due_at = changes.dueAt;
-    patch.follow_up_asked_at = null;
-  }
-
-  const { data, error } = await getSupabaseClient()
-    .from('tasks')
-    .update(patch)
-    .eq('id', taskId)
-    .eq('account_id', accountId)
-    .select('*')
-    .maybeSingle();
-
-  if (error) throw error;
-  return (data as Task | null) ?? null;
 }
 
 /**
@@ -103,6 +111,34 @@ export async function deleteTask(accountId: string, taskId: string): Promise<Tas
   const { data, error } = await getSupabaseClient()
     .from('tasks')
     .delete()
+    .eq('id', taskId)
+    .eq('account_id', accountId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Task | null) ?? null;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  /** `null` remove o prazo; `undefined` deixa como está. */
+  dueAt?: string | null;
+}
+
+/** Edita título e/ou prazo de uma tarefa da conta. Null se o id não existe nessa conta. */
+export async function updateTask(accountId: string, taskId: string, input: UpdateTaskInput): Promise<Task | null> {
+  const patch: Record<string, unknown> = {};
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.dueAt !== undefined) {
+    patch.due_at = input.dueAt;
+    // Prazo novo: vale perguntar de novo se foi concluída quando essa data passar (migration 0022).
+    patch.follow_up_asked_at = null;
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .update(patch)
     .eq('id', taskId)
     .eq('account_id', accountId)
     .select('*')

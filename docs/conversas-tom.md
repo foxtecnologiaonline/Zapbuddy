@@ -312,17 +312,13 @@ automaticamente.
 > conversa, mas não há vínculo formal entre esse lembrete e essa transação, nem atualização
 > automática do `reminder` associado.
 
-### 4.3 Usuário quer adiar o lembrete
+### 4.3 Usuário ainda não pagou ⚠️ não implementado
 
 **Usuário:** "ainda não"
 
-**Consequência (2026-10):** `list_reminders` acha o `reminder_id` (o que acabou de disparar também
-aparece) e `reschedule_reminder` agenda um lembrete novo no horário pedido. Continua **sem status
-`snoozed`** (`pending`, `sent`, `cancelled`, `failed`): adiar = criar outro lembrete, não reabrir o
-antigo.
-
-**Resposta:**
-> Fechado, te aviso de novo amanhã às 9h.
+> ⚠️ **Não existe status `snoozed`.** Os status possíveis de `reminders` são `pending`, `sent`,
+> `cancelled`, `failed` — não há como "adiar" um lembrete já disparado. Fica registrado aqui
+> como lacuna de produto.
 
 ---
 

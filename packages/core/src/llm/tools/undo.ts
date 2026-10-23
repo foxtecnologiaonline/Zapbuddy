@@ -3,6 +3,8 @@ import {
   cancelGoal,
   cancelReminder,
   deactivateRecurringBill,
+  deleteHabit,
+  deleteHabitCheckin,
   deleteImportantDate,
   deleteNote,
   deletePersonalGoal,
@@ -11,8 +13,7 @@ import {
   findLastSuccessfulToolCall,
 } from '@zapbuddy/db';
 import { defineTool, type ToolContext } from '../tool-types.js';
-import { deleteGoogleCalendarEvent } from '../../google/calendar.js';
-import { getFreshCalendarAccess } from '../../google/calendar-access.js';
+import { deleteCalendarEvent, getFreshCalendarAccess } from '../../calendar/calendar-access.js';
 
 const UNDO_WINDOW_MINUTES = 10;
 
@@ -27,7 +28,28 @@ const UNDOABLE_ACTIONS: Record<string, string> = {
   create_calendar_event: 'event_id',
   remember_important_date: 'important_date_id',
   create_personal_goal: 'goal_id',
+  create_habit: 'habit_id',
+  log_habit_checkin: 'checkin_id',
 };
+
+/**
+ * Ações que mudam ou apagam algo que já existia e que o desfazer NÃO sabe
+ * reverter. Se uma delas é mais recente que a última criação, "desfaz" pode
+ * estar se referindo a ela — apagar a criação anterior seria destrutivo e
+ * surpreendente (ex.: editar uma tarefa e pedir "desfaz" apagaria a tarefa).
+ */
+const NON_UNDOABLE_ACTIONS = [
+  'update_task',
+  'update_note',
+  'update_reminder',
+  'update_calendar_event',
+  'delete_calendar_event',
+  'complete_task',
+  'delete_task',
+  'delete_note',
+  'cancel_reminder',
+  'correct_last_transaction',
+];
 
 async function revertAction(toolName: string, resultId: string, ctx: ToolContext): Promise<boolean> {
   switch (toolName) {
@@ -46,13 +68,17 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
     case 'create_calendar_event': {
       const access = await getFreshCalendarAccess(ctx.accountId);
       if (!access) return false;
-      await deleteGoogleCalendarEvent(access.accessToken, access.calendarId, resultId);
+      await deleteCalendarEvent(access, resultId);
       return true;
     }
     case 'remember_important_date':
       return (await deleteImportantDate(ctx.accountId, resultId)) !== null;
     case 'create_personal_goal':
       return (await deletePersonalGoal(ctx.accountId, resultId)) !== null;
+    case 'create_habit':
+      return (await deleteHabit(ctx.accountId, resultId)) !== null;
+    case 'log_habit_checkin':
+      return deleteHabitCheckin(ctx.accountId, resultId);
     default:
       return false;
   }
@@ -61,7 +87,7 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
 /**
  * Desfaz a última criação feita pela própria pessoa nos últimos 10 minutos
  * (lançamento, tarefa, lembrete, nota, conta recorrente, meta com valor,
- * meta pessoal, data importante ou evento). Usa o log de tool calls como
+ * meta pessoal, data importante, hábito, check-in de hábito ou evento). Usa o log de tool calls como
  * fonte: nada novo é guardado. Só volta uma ação por vez, e nunca desfaz a
  * mesma duas vezes.
  */
@@ -69,17 +95,24 @@ export const undoLastActionTool = defineTool({
   name: 'undo_last_action',
   description:
     'Desfaz a última coisa que a pessoa acabou de criar (lançamento, tarefa, lembrete, nota, conta recorrente, meta ' +
-    'com valor, meta pessoal, data importante ou evento), se for dos últimos 10 minutos. Use quando ela disser ' +
+    'com valor, meta pessoal, data importante, hábito, check-in de hábito ou evento), se for dos últimos 10 minutos. Use quando ela disser ' +
     '"desfaz", "cancela isso", "foi engano". Nunca desfaz algo mais antigo e não desfaz duas vezes seguidas — se ' +
-    'não houver nada, diga isso.',
+    'não houver nada, diga isso. Se a última coisa foi uma edição, conclusão ou exclusão (reason: ' +
+    'last_action_not_undoable), diga que isso não dá pra desfazer por aqui e ofereça corrigir na conversa.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const sinceIso = new Date(Date.now() - UNDO_WINDOW_MINUTES * 60 * 1000).toISOString();
     const candidate = await findLastSuccessfulToolCall(ctx.userId, Object.keys(UNDOABLE_ACTIONS), sinceIso);
     if (!candidate) return { undone: false, reason: 'nothing_to_undo' };
 
-    const lastUndo = await findLastSuccessfulToolCall(ctx.userId, ['undo_last_action'], sinceIso);
+    const [lastUndo, lastNonUndoable] = await Promise.all([
+      findLastSuccessfulToolCall(ctx.userId, ['undo_last_action'], sinceIso),
+      findLastSuccessfulToolCall(ctx.userId, NON_UNDOABLE_ACTIONS, sinceIso),
+    ]);
     if (lastUndo && lastUndo.created_at > candidate.created_at) return { undone: false, reason: 'nothing_to_undo' };
+    if (lastNonUndoable && lastNonUndoable.created_at > candidate.created_at) {
+      return { undone: false, reason: 'last_action_not_undoable', last_action: lastNonUndoable.tool_name };
+    }
 
     const resultKey = UNDOABLE_ACTIONS[candidate.tool_name];
     const result = (candidate.result ?? {}) as Record<string, unknown>;

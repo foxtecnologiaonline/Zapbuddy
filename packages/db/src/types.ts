@@ -22,6 +22,16 @@ export interface User {
   /** Preenchido quando a pessoa confirma via set_quiet_hours — diferente de quiet_hours_start/end, que sempre têm um valor (default 22/7) mesmo sem confirmação. */
   quiet_hours_confirmed_at: string | null;
   email: string | null;
+  /** Cidade informada pela pessoa (set_city) — null = ainda usa a aproximação pelo DDD. Ver migration 0024. */
+  city: string | null;
+  city_uf: string | null;
+  city_latitude: number | null;
+  city_longitude: number | null;
+  /** Preferências do resumo matinal (migration 0024). */
+  morning_digest_enabled: boolean;
+  morning_digest_hour: number;
+  morning_digest_agenda: boolean;
+  morning_digest_finance: boolean;
   /** Só a preferência declarada (nunca dado de pagamento real) — ver migration 0021. */
   preferred_payment_method: PreferredPaymentMethod | null;
   /** Exigência da Asaas (POST /customers) pra gerar checkout real — ver migration 0020. */
@@ -29,6 +39,8 @@ export interface User {
   asaas_customer_id: string | null;
   asaas_subscription_id: string | null;
   asaas_payment_link: string | null;
+  /** Fim do teste grátis de 3 dias (migration 0023) — passado isso sem `plan_status = 'active'`, o Tom bloqueia antes de chamar a IA (ver payments/trial-gate.ts). */
+  trial_ends_at: string;
   created_at: string;
 }
 
@@ -157,6 +169,26 @@ export interface PersonalGoal {
   completed_at: string | null;
 }
 
+export interface Habit {
+  id: string;
+  account_id: string;
+  name: string;
+  active: boolean;
+  created_by_user_id: string;
+  created_at: string;
+  archived_at: string | null;
+}
+
+export interface HabitCheckin {
+  id: string;
+  habit_id: string;
+  account_id: string;
+  /** Data local da pessoa (YYYY-MM-DD) — ver migration 0025. */
+  checkin_date: string;
+  created_by_user_id: string | null;
+  created_at: string;
+}
+
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
 export type ReminderRecurrence = 'daily' | 'weekly' | 'monthly';
 
@@ -251,14 +283,21 @@ export interface Document {
   file_name: string;
   mime_type: string;
   caption: string | null;
+  /** O que o modelo leu no arquivo (descrição curta em pt-BR) — null enquanto não analisado ou quando o tipo não é analisável. */
+  extracted_text: string | null;
+  /** Campos estruturados lidos (tipo, estabelecimento, valor, datas) — ver ExtractedDocumentData em core. */
+  extracted_data: Record<string, unknown> | null;
   created_at: string;
 }
+
+export type CalendarProvider = 'google' | 'microsoft';
 
 export interface CalendarConnection {
   id: string;
   account_id: string;
-  google_refresh_token_encrypted: string;
-  google_calendar_id: string;
+  provider: CalendarProvider;
+  refresh_token_encrypted: string;
+  calendar_id: string;
   connected_by_user_id: string | null;
   connected_at: string;
 }

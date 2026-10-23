@@ -33,19 +33,62 @@ Itens de negócio (fluxo de caixa de MEI/PJ, DAS, nota fiscal) não são nicho d
 
 Entram no código, por pedido explícito, mesmo fora da ordem de fases:
 
-- **Resumo matinal** (fila `morning-digest-generate`, 8h local): agenda do dia, tarefas de hoje e atrasadas, contas a
-  vencer em até 3 dias. Uma mensagem só; sem nada pra mostrar, não manda nada.
-  - **Amendamento 2026-10 (motivo documentado, reportado pelo usuário em produção):** tarefa com
-    `due_at` no passado ficava na lista "tarefas de hoje e atrasadas" indefinidamente — o Tom
-    nunca perguntava se ela de fato aconteceu, só repetia a mesma linha todo dia. Corrigido
-    (`tasks.follow_up_asked_at`, migration `0022`): na primeira manhã em que uma tarefa pendente
-    aparece com `due_at` de um dia anterior, ela sai da listagem simples e vira uma pergunta
-    explícita numa seção própria ("❓ Preciso confirmar com você: ... já aconteceu?"),
-    marcada como perguntada pra nunca repetir a pergunta (mesma lógica de "nunca duas vezes" já
-    usada em outros fluxos proativos). A resposta da pessoa segue o fluxo normal de conversa já
-    existente (`list_tasks` + `complete_task`, resolução por contexto) — nenhuma tool nova.
-    Resolve só tarefas (`tasks.due_at`); evento de calendário (`create_calendar_event`) não tem
-    conceito de conclusão hoje — fora desta rodada.
+- **Resumo matinal** (fila `morning-digest-generate`, hora local configurável por pessoa, default 8h): agora em **3 mensagens separadas** (2026-10,
+  amendamento, motivo documentado — pedido do dono do produto):
+  1. Narrativa (dia da semana, data, estação do ano, previsão do tempo e feriado nacional/estadual de hoje, se
+     houver) — escrita como frase corrida, não lista de bullet, e **sempre enviada** (diferente das duas seguintes,
+     que só saem se houver algo). Estação do ano assume hemisfério sul pro Brasil inteiro (mesma aproximação
+     nacional de `timezone-from-ddd.ts`, mesmo nos estados mais próximos do Equador onde a variação é pequena).
+     Previsão do tempo via **OpenWeatherMap** (`OPENWEATHERMAP_API_KEY`, endpoint gratuito "5 day/3h forecast", sem
+     cartão) — escolhido em vez do Open-Meteo porque o Open-Meteo proíbe uso comercial no tier sem chave, e o
+     ZapBuddy é pago. Opcional: sem a chave, ou se a busca falhar, a narrativa sai sem a frase de clima — nunca com
+     dado inventado. Localização (cidade/UF/coordenadas) é inferida do DDD do WhatsApp
+     (`location-from-ddd.ts`, packages/db) — mesma mecânica/aproximação de `inferTimezoneFromWhatsappNumber`, só
+     que cobrindo todos os DDDs (não só as 8 exceções de fuso), porque aqui o erro afeta temperatura e feriado
+     estadual, não só fuso. Feriado estadual é tabela de melhor esforço (`digest/holidays.ts`, packages/core):
+     cobre 21 das 27 UFs com uma data confirmada em pesquisa; AC, MT e PR ficam de fora de propósito (fonte
+     divergente ou nenhum feriado estadual vigente encontrado) — mesmo princípio de nunca inventar dado, estendido
+     aqui a fato.
+  2. Agenda do dia (Google Agenda, se conectada) + tarefas com entrega **hoje** — tarefa atrasada não entra mais
+     aqui (decisão explícita do dono do produto nesta rodada: resumo matinal narrativo foca no dia, não cobra
+     atraso). Só enviada se houver algo.
+  3. Contas recorrentes que vencem **hoje** (não mais a janela de até 3 dias de antes — decisão explícita desta
+     rodada: "compromissos financeiros do dia"). Só enviada se houver alguma.
+  **Refinamento (2026-10, pedido do dono do produto, 10 melhorias — migration `0024_morning_digest_prefs.sql`
+  precisa ser aplicada no Supabase ANTES do deploy: o sweep horário passou a selecionar colunas novas de `users`):**
+  - Montagem das mensagens separada do IO: `composeMorningDigest` (`digest/morning.ts`, puro e testado); o handler só
+    busca (tudo em `Promise.all`, cada fonte com fallback próprio) e envia, com pausa de 1,5s entre as mensagens
+    (ordem 1-2-3 garantida). Se agenda+tarefas e financeiro somam até 2 itens, viram uma mensagem só.
+  - Saudação com nome (`preferred_name` ou primeiro nome) e bom dia/boa tarde/boa noite pela hora; abertura varia por
+    dia da semana, de forma determinística (mesmo dia → mesma frase, retry não muda o texto). Sem LLM — template, como
+    nos insights (ADR 0003). Dicas práticas do clima (`digest/weather-tips.ts`: guarda-chuva, casaco, protetor) e
+    emoji pela condição; formatação do WhatsApp (`*negrito*`), próximo compromisso destacado, hora nas tarefas
+    quando for uma hora de verdade, CTA no fim de cada mensagem, linha de "dia livre" só quando agenda e financeiro
+    estão ligados e vazios **e todas as buscas deram certo** (se agenda/tarefas/contas falharam, "vazio" não é "livre" e a
+    frase não aparece — nunca afirma "agenda livre" sem saber).
+  - Clima: cache em **memória do worker** (não Redis — a cota do Upstash já estourou por comando), chave = coordenada
+    arredondada + dia local, com dedupe de pedidos simultâneos e cache negativo de 5 min; uma chamada por lugar em vez
+    de uma por usuário. Corrigido junto: a detecção de chuva usava faixas da escala WMO (Open-Meteo) em vez dos IDs do
+    OpenWeatherMap (2xx/3xx/5xx), então só `pop >= 0.4` detectava chuva.
+  - Tarefas de hoje filtradas no banco (`listPendingTasksDueBetween`): `listTasks` corta em 50 por criação, e numa
+    conta com muitas pendentes uma tarefa de hoje podia ficar de fora.
+  - Cidade real: tool `set_city` (geocoding do OpenWeatherMap, mesma chave) guarda cidade/UF/coordenadas e passa a
+    valer no lugar da aproximação pelo DDD (clima + UF do feriado estadual); entra no cadastro progressivo.
+    **Feriado municipal NÃO foi implementado**: a pesquisa não achou fonte confiável (datas divergentes entre fontes,
+    ex.: aniversário vs. padroeiro) — mesmo princípio de não informar data errada. Só municipal confirmado entraria.
+  - Preferências da pessoa via `set_morning_digest_preferences`: ligar/desligar, horário local (0-23) e se inclui
+    agenda/tarefas e financeiro. Horário dentro do silêncio é recusado na hora (a mensagem nunca sairia).
+  - Log `morning_digest_sent` por envio (partes presentes, se havia clima/feriado, se a cidade era conhecida) para
+    medir quanto o clima falha e quais seções as pessoas realmente recebem.
+  - **Pergunta de conclusão de tarefa atrasada** (2026-10, reportado pelo usuário em produção; `tasks.follow_up_asked_at`,
+    migration `0022_task_follow_up.sql`): como o resumo só lista tarefas de HOJE, uma tarefa que passou do prazo e
+    ficou pendente sumia sem o Tom nunca perguntar se aconteceu. Agora o resumo manda, depois das outras mensagens,
+    uma extra "❓ Preciso confirmar com você" com as tarefas pendentes de dia anterior ainda não perguntadas (as 5
+    mais recentes por dia; o resto fica pros dias seguintes), oferecendo concluir OU remarcar. Marca como
+    perguntada só DEPOIS de entregue (se falhar, tenta no dia seguinte) e nunca repete a pergunta pela mesma tarefa.
+    Remarcar (`update_task` com `due_at` novo) zera a marca: a data nova volta a valer. A resposta segue o fluxo
+    normal (`list_tasks` + `complete_task`/`update_task`/`delete_task`). Existem dois arquivos com prefixo `0022`
+    (`0022_calendar_multi_provider.sql` e `0022_task_follow_up.sql`) — são independentes e idempotentes.
 - **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
   só o que a pessoa informou. Nunca vira pagamento sozinho.
 - **Metas com valor** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor-alvo e valor guardado são
@@ -128,6 +171,24 @@ Migration `0019_personal_assistant.sql` precisa ser aplicada no Supabase antes d
     Não resolve a cota do Eco Mode já estourada neste ciclo (isso continua sendo a troca de plano
     já pedida ao dono do produto) — reduz o consumo estrutural pra frente, pra não estourar de
     novo assim que o plano for trocado.
+  - **Amendamento 2026-10 (motivo documentado, pedido explícito "aumentar todos os tetos de 10s
+    pra 1h"):** `drainDelay` subido de 55s pra 1h (`apps/worker/src/worker.ts`) — só afeta filas
+    sem job atrasado pendente, segue não atrasando job real (mesmo mecanismo de marker). O teto de
+    10s em si (`maximumBlockTimeout`, hardcoded dentro do `node_modules/bullmq`, não uma opção de
+    `WorkerOptions`) **não foi alterado** — perguntado ao dono do produto como proceder com as 3
+    filas ainda presas nele (`reminder-dispatch`/`onboarding-nudge`/`insights-sweep`), já que
+    patchar a lib de terceiro reintroduziria o mesmo risco de "Tom não responde" que motivou essa
+    investigação (Worker bloqueado até 1h sem perceber que a conexão caiu). Decisão: **só
+    `onboarding-nudge` foi convertida** pra rodar dentro do sweep horário (mesmo padrão dos 3 jobs
+    semanais acima) — `listUsersPendingOnboardingNudge` (`packages/db/src/repositories/users.ts`)
+    substitui o delay nativo do BullMQ por usuário (2h/24h exatos) por uma checagem de janela
+    horária `[from, to)` sobre `users.created_at`/`onboarding_completed_at IS NULL`, chamada em
+    toda passada do sweep. Precisão vira "dentro da hora" em vez de no minuto exato — aceito
+    explicitamente, nudge é reengajamento best-effort, não uma promessa de horário como lembrete.
+    `reminder-dispatch` e `insights-sweep` continuam com delay/repeat nativo do BullMQ, presas no
+    teto de 10s sempre que têm algo pendente (quase sempre) — decisão explícita de manter a
+    precisão exata do lembrete e aceitar esse piso de consumo nessas duas, já bem menor (2 filas,
+    não 14) que o estado original.
 - **Canal:** WhatsApp Cloud API oficial (Meta) é o canal **padrão e obrigatório** para qualquer usuário real/dados financeiros.
   - **Amendamento 2026-10 (motivo documentado):** suporte opcional à Evolution API (gateway Baileys self-hosted, mesma usada pelo ZapScript em `deploy/evolution-oci`) como canal alternativo via `WHATSAPP_CHANNEL_PROVIDER=evolution`, só para ambientes de teste/staging ou contingência operacional (ex.: aprovação do número oficial atrasada). Risco de ban e fragilidade para dado financeiro continuam valendo para esse caminho — por isso ele nunca é o default (`WHATSAPP_CHANNEL_PROVIDER` default é `cloud-api`) e qualquer deploy de produção com usuários reais deve permanecer em `cloud-api`. Não é dual-send automático: é uma troca manual de canal via env var.
 - **LLM:** Claude (Anthropic), via tool use/function calling — cada "assessor" é um conjunto de tools, não um serviço separado.
@@ -203,6 +264,33 @@ provedor pra não virar uma simulação enganosa (cobrança que não move dinhei
 fiscal é documento regulado, não algo pra simular). Continuam não implementados até haver
 provedor + decisão explícita — não revisitar esse recorte sem pedido explícito.
 
+**Amendamento 2026-10 (motivo documentado, pedido explícito do dono do produto):** "Google Agenda"
+generalizada pra suportar **Outlook/Microsoft 365** também — a integração deixou de ser
+Google-específica. `packages/core/src/google/` virou `packages/core/src/calendar/` (`types.ts`
+genéricos; `providers/google.ts` e `providers/microsoft.ts`, cada um fazendo OAuth + chamada de
+API via fetch direto, sem SDK, mesmo padrão de antes; `calendar-access.ts` despacha pro provider
+certo da conta — tools/`undo_last_action`/resumo matinal só chamam essas funções genéricas, nunca
+um provider específico). Migration `0022_calendar_multi_provider.sql` adiciona
+`calendar_connections.provider` e renomeia as colunas (`google_refresh_token_encrypted` →
+`refresh_token_encrypted`, `google_calendar_id` → `calendar_id`).
+
+Decisões explícitas (perguntadas ao dono do produto antes de implementar):
+- **Uma agenda conectada por conta, nunca as duas juntas** — conectar o Outlook com o Google já
+  conectado substitui a conexão (mesmo upsert por `account_id` que já existia, só precisava
+  aceitar `provider`). Evita a complexidade de decidir em qual calendário criar um evento, ou de
+  checar conflito em dois calendários ao mesmo tempo.
+- **Rotas do Google (`/api/calendar/connect`, `/api/calendar/callback`) não foram movidas** —
+  mexer nelas quebraria o redirect URI já registrado no Google Cloud Console em produção. O
+  Outlook ganhou rotas próprias (`/api/calendar/microsoft/connect`, `.../callback`).
+- **Credencial do Azure AD ainda não existe** — implementado mesmo assim, mesmo padrão já usado
+  pro Asaas/Tavily: sem `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`/`MICROSOFT_REDIRECT_URI`
+  preenchidos, o botão "Conectar Outlook" falha de forma controlada (`?calendar=error`), nunca
+  afeta o Google. Passo a passo de criação do app no Azure Portal documentado no `.env.example`.
+- **Nenhuma outra integração entrou nesta rodada** — Apple/iCloud Calendar foi avaliado e
+  descartado: sem OAuth de consumidor de verdade (só CalDAV + senha de app específica do iCloud),
+  fricção e risco de segurança altos pra pouco ganho. Open Finance/banco continua explicitamente
+  fora de escopo (decisão anterior, não revisitada).
+
 ## Pesquisa autônoma e aprendizado contínuo (2026-10, motivo documentado)
 
 **Exceção explícita ao gating de fases abaixo** ("nenhuma feature de Fase
@@ -270,9 +358,10 @@ venda). Detalhe completo em `docs/adr/0004-vendas-onboarding-indicacao.md` — r
   mantida aqui só pra contexto histórico): nenhum provedor de pagamento decidido. O Tom capturava
   intenção via tool `register_plan_intent`, nunca cobrava nem cancelava nada sozinho; um humano
   tratava manualmente pelo admin (mesmo padrão já usado por `plan_status`).
-- **Trial de 7 dias**, calculado a partir de `users.created_at` — sem convite de venda antes do
+- ~~**Trial de 7 dias**, calculado a partir de `users.created_at` — sem convite de venda antes do
   5º dia, "prepara o terreno" entre o 5º e o 7º, convite direto a partir do 7º (só pra quem
-  continua em `plan_status = 'trial'`).
+  continua em `plan_status = 'trial'`).~~ (decisão original, revertida pelo amendamento no fim
+  desta seção: trial virou 3 dias, com bloqueio real — não só convite — a partir do fim do trial.)
 - **Straight Line System (Jordan Belfort) adaptado, não copiado**: aproveita certeza construída em
   fato real + convite único + loop de objeção limitado a uma volta; descarta de propósito urgência
   fabricada, prova social inventada e insistência além da segunda recusa — isso violaria a regra
@@ -282,6 +371,35 @@ venda). Detalhe completo em `docs/adr/0004-vendas-onboarding-indicacao.md` — r
   promete prêmio/desconto que não existe.
 - **Cancelamento**: uma tentativa de retenção genuína, nunca duas — simetria com a regra do
   convite de venda.
+
+**Amendamento 2026-10 (motivo documentado — reversão explícita do "nunca bloqueia" da decisão 1
+original do ADR 0004):** trial vira **3 dias** (era 7) e passa a ter **bloqueio real** de uso —
+pedido explícito do dono do produto. Diferente de antes (onde `plan_status = 'trial'` nunca
+impedia nada, só mudava o texto que o Tom mandava), agora `users.trial_ends_at` (migration `0023`)
+marca o fim do trial e, passado isso sem `plan_status = 'active'`, a mensagem da pessoa **nem chega
+a rodar o LLM** — `orchestrateTurn` intercepta antes (`packages/core/src/payments/trial-gate.ts`).
+`plan_status = 'canceled'` também bloqueia (não tinha sentido deixar de fora). O que acontece:
+- **Mensagem fixa, repetida em toda mensagem enquanto bloqueado** (decisão explícita — mais
+  insistente que o convite único do ADR 0004 original, porque aqui é bloqueio de verdade, não
+  convite): pede CPF/CNPJ pra gerar o link de pagamento. Única "porta" que passa pelo bloqueio é
+  uma mensagem que seja só um CPF/CNPJ plausível (nunca gerada pela IA — ver `messages.ts`).
+- **Dashboard web continua acessível** mesmo bloqueado (decisão explícita) — só o WhatsApp
+  trava; a pessoa não perde acesso aos próprios dados já registrados por falta de pagamento.
+- **Quem já estava em trial quando a migration `0023` rodou ganhou 3 dias novos a partir daquele
+  momento** (não do `created_at` original) — decisão explícita do dono do produto, pra não travar
+  ninguém de surpresa sob a regra antiga. O default da coluna é volátil (`now() + interval '3
+  days'`) de propósito: reavalia pra cada linha já existente no momento da migration E pra cada
+  INSERT novo depois — mesmo efeito, sem precisar de coluna calculada nem lógica em `createUser()`.
+- **Lógica de checkout extraída** pra `packages/core/src/payments/upgrade-flow.ts`
+  (`generateUpgradeCheckout`) — reaproveitada pela tool `register_plan_intent` (pessoa topa durante
+  uma conversa normal, ainda dentro do trial) e pelo bloqueio (pessoa só consegue mandar CPF/CNPJ).
+  Mesma regra de negócio, dois pontos de entrada — nunca duplicada.
+- `system-prompt.ts` (`buildUpgradeSection`) perdeu o branch de "convite direto" forçado depois do
+  trial — ficou inalcançável (quem chega lá sempre ainda está dentro do trial, já que o bloqueio
+  intercepta antes do LLM pra quem já passou). Sobrou só um aviso suave no último dia + a
+  disposição de seguir o fluxo de assinatura se a PRÓPRIA pessoa trouxer o assunto antes do
+  bloqueio agir — o convite único/loop de objeção limitado do ADR 0004 original continua valendo
+  nesse caso oportunista, só não é mais forçado pelo Tom por conta própria.
 
 ## Onboarding turbinado (2026-10, motivo documentado)
 
@@ -306,9 +424,12 @@ Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboard
   (par/ímpar do último dígito, nunca aleatório) entre "nome primeiro" (controle) e "ação primeiro"
   — decisão de qual vence fica pra quando a amostra crescer, lida manualmente no funil.
   **Amendamento 2026-10 (motivo documentado, decisão do dono do produto): este teste A/B foi
-  encerrado antes de ter amostra** — a abertura do onboarding virou um script fixo em 2 frases
-  (ver seção "Cadastro progressivo" abaixo): 1) o Tom se apresenta, 2) pergunta nome E e-mail
-  juntos, numa frase só (`buildOnboardingSection`, sem mais ramificação por `onboarding_variant`).
+  encerrado antes de ter amostra** — a abertura do onboarding virou um script fixo em 3 frases
+  (ver seção "Cadastro progressivo" abaixo): 1) o Tom se apresenta, 2) avisa que o teste grátis
+  começa hoje e vale 3 dias (adicionada com o trial de 3 dias; a mensagem de bloqueio no fim do
+  trial é fixa e **não cita preço** — decisão do dono do produto, o valor aparece na página da
+  Asaas), 3) pergunta nome E e-mail juntos, numa frase só (`buildOnboardingSection`, sem mais
+  ramificação por `onboarding_variant`).
   A coluna `onboarding_variant` e a atribuição determinística continuam existindo (não apagadas) só
   pra manter o dado histórico do funil do admin legível — a partir desta decisão ela não influencia
   mais o texto que o Tom manda, então os números das duas variantes devem convergir pra frente.
@@ -483,14 +604,38 @@ script fixo. Resumo:
 - **Mensagens automáticas** (fora do LLM): mais variações no lembrete, na abertura do resumo matinal e no
   reengajamento do onboarding. Template fixo continua sendo escolha deliberada (sem chamada ao LLM).
 
-- **Lacunas de capacidade fechadas** (achadas ao listar 20 pedidos possíveis): resumo financeiro de
-  `this_month`/`last_month`; agenda com `tomorrow`/`next_7_days` (antes `list_calendar_events` só olhava
-  pra TRÁS apesar de a descrição dizer "próximos"); `update_task` (remarcar/renomear tarefa);
-  `list_reminders` + `reschedule_reminder` (adiar). "O que tenho amanhã" junta Google Agenda e tarefas
-  com `due_at` — compromisso salvo como tarefa (agenda desconectada) não pode ficar invisível.
+- **Lacunas de capacidade** (achadas ao listar 20 pedidos possíveis): resumo financeiro de `this_month`/`last_month`
+  (`get_financial_summary`) é meu; agenda futura (`tomorrow`/`next_7_days`), `update_task` e `list_reminders`/
+  `update_reminder` foram feitos em paralelo por outra sessão (seção "Alcance do Tom" abaixo) e prevalecem. "O que
+  tenho amanhã" junta agenda e tarefas com `due_at` — compromisso salvo como tarefa (agenda desconectada) não pode
+  ficar invisível. Lacuna que continua: adiar um lembrete que JÁ disparou (`update_reminder` só edita pendente; o
+  Tom pergunta o que adiar e cria um novo).
 
 Não validado contra eval real (não existe um neste projeto): monitorar nas conversas reais se a resposta
 ficou longa e quais piadas o pessoal mais pede — o banco cresce/troca conforme o retorno.
+
+## Alcance do Tom — edição, hábitos, pesquisa ampliada, busca semântica e leitura de arquivos (2026-10, motivo documentado)
+
+Decisão do dono do produto: implementar as 6 lacunas levantadas num mapeamento de alcance. Detalhe e
+trade-offs em `docs/adr/0006-alcance-do-tom-edicao-habitos-pesquisa-visao.md` — resumo:
+
+- **Edição**: `update_task`/`update_note`/`update_reminder`/`update_calendar_event`/`delete_calendar_event`/
+  `list_reminders`; agenda ganha `tomorrow`/`next_7_days`/intervalo por data. Remarcar nunca é apagar e recriar.
+- **Hábitos** (`habits`/`habit_checkins`, migration `0025`, antes `0023` — renumerada por colisão com `0023_trial_3_dias`): check-in diário por data local, sequência calculada em
+  código. **Reverte** o corte "Hábitos/rotina com acompanhamento" da rodada de expansão B2C acima (pedido explícito).
+  Sem cobrança proativa de check-in ainda.
+- **Pesquisa**: `web_search` com `current_info` (notícia/resultado, cache de 20 min), `get_weather` (qualquer cidade
+  do BR) e `get_market_rate` (dólar/euro/libra/Selic/CDI/IPCA do Banco Central, sem chave). Dado que a fonte não
+  trouxe = "não consegui checar", nunca chute.
+- **Busca semântica** em notas e documentos (migration `0026`, antes `0024` — renumerada por colisão, pgvector): híbrida, exato primeiro e parecido marcado
+  `related`. Vetor é bônus — sem `OPENAI_API_KEY` a busca por texto continua; backfill horário no sweep.
+- **Leitura de foto/PDF**: o Tom lê comprovante/conta/foto (visão do Claude), guarda o que leu (entra na busca) e
+  responde. **Nunca registra gasto sozinho a partir do arquivo** — pergunta, salvo se a legenda já pedir. Não
+  transcreve CPF/RG/cartão/PIX. Arquivos antigos não são relidos retroativamente.
+
+Migrations `0025_habits.sql` e `0026_semantic_search_and_document_reading.sql` precisam ser aplicadas no Supabase
+antes do deploy. Tools registradas: 43 → 55 (~28,5KB de schema, ~7,1K tokens estimados; perto do patamar de ~10K
+onde `tool_search`/`defer_loading` compensa — remedir na próxima rodada que adicionar tools).
 
 ## Métricas por fase
 

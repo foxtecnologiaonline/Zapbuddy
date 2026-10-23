@@ -10,6 +10,8 @@ import {
   type ReminderDispatchJob,
 } from '@zapbuddy/core';
 
+const STALE_JOB_TOLERANCE_MS = 60_000;
+
 /**
  * Limitação conhecida da WhatsApp Cloud API (não corrigível em código): fora
  * da janela de 24h desde a última mensagem do usuário, a Meta só aceita
@@ -26,6 +28,10 @@ export async function handleReminderDispatch(job: Job<ReminderDispatchJob>): Pro
 
   const reminder = await findPendingReminderById(reminderId);
   if (!reminder) return; // já enviado ou cancelado
+
+  // Job velho de um lembrete que foi remarcado (update_reminder): o horário
+  // novo é no futuro e já tem seu próprio job — este só chegou antes da hora.
+  if (new Date(reminder.remind_at).getTime() - Date.now() > STALE_JOB_TOLERANCE_MS) return;
 
   const user = await findUserById(reminder.user_id);
   if (!user) return;
