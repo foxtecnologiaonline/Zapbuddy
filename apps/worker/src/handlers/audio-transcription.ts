@@ -4,6 +4,7 @@ import {
   orchestrateTurn,
   sendWhatsappTextMessage,
   downloadWhatsappMedia,
+  isAccessBlocked,
   getCachedReply,
   setCachedReply,
   MESSAGES,
@@ -25,6 +26,13 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
   const user = await findUserById(userId);
   if (!user) {
     logger.error('audio_transcription_user_not_found', { userId, waMessageId });
+    return;
+  }
+
+  // Bloqueado (trial encerrado/cancelado): nem baixa nem transcreve — áudio
+  // é o caminho mais caro (Whisper) e o bloqueio só aceita CPF/CNPJ em texto.
+  if (isAccessBlocked(user)) {
+    await sendWhatsappTextMessage(user.whatsapp_number, MESSAGES.trialBlocked);
     return;
   }
 

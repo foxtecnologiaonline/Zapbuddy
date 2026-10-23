@@ -65,16 +65,19 @@ export async function updateCalendarEvent(access: CalendarAccess, eventId: strin
     : updateGoogleCalendarEvent(access.accessToken, access.calendarId, eventId, patch);
 }
 
-function formatHourInZone(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat('pt-BR', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
+export interface TodayAgendaEvent {
+  startIso: string;
+  title: string;
 }
 
-/** Linhas "HH:MM Título" dos eventos de hoje no fuso da pessoa; vazio quando não há agenda conectada. */
-export async function getTodayAgendaLines(accountId: string, timeZone: string): Promise<string[]> {
+/** Eventos de hoje (fuso da pessoa) em ordem de horário; vazio quando não há agenda conectada. */
+export async function getTodayAgendaEvents(accountId: string, timeZone: string): Promise<TodayAgendaEvent[]> {
   const access = await getFreshCalendarAccess(accountId);
   if (!access) return [];
 
   const range = getTodayRange(timeZone);
   const events = await listCalendarEvents(access, range.startIso, range.endIso);
-  return events.map((event) => `${formatHourInZone(event.startIso, timeZone)} ${event.summary}`);
+  return events
+    .map((event) => ({ startIso: event.startIso, title: event.summary }))
+    .sort((a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime());
 }

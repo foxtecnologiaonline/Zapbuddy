@@ -84,7 +84,7 @@ export async function listRecentDocuments(accountId: string, limit = DEFAULT_DOC
 
 /**
  * Busca textual por nome do arquivo + legenda + o que o modelo leu no
- * conteúdo (extracted_text, migration 0024) via tsvector do Postgres. A
+ * conteúdo (extracted_text, migration 0026) via tsvector do Postgres. A
  * busca por significado é `searchDocumentsBySimilarity`; a tool junta as duas.
  */
 export async function searchDocuments(accountId: string, query: string, limit = DEFAULT_DOCUMENTS_LIMIT): Promise<DocumentWithUrl[]> {

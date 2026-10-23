@@ -6,7 +6,9 @@ import { assertPlausibleTimestamp } from '../date-sanity.js';
 
 export const createTaskTool = defineTool({
   name: 'create_task',
-  description: 'Cria uma nova tarefa para o usuário.',
+  description:
+    'Cria uma nova tarefa para o usuário. due_at é opcional: se a pessoa só deu o DIA (sem hora), use 23:59:59 daquele ' +
+    'dia no fuso dela — o Tom entende isso como "o dia todo" e não mostra hora; só ponha uma hora específica se ela disse.',
   schema: z.object({
     title: z.string().min(1),
     due_at: z.string().datetime().optional(),

@@ -26,6 +26,14 @@ function baseUser(overrides: Partial<User> = {}): User {
     quiet_hours_start: 22,
     quiet_hours_end: 7,
     quiet_hours_confirmed_at: null,
+    city: null,
+    city_uf: null,
+    city_latitude: null,
+    city_longitude: null,
+    morning_digest_enabled: true,
+    morning_digest_hour: 8,
+    morning_digest_agenda: true,
+    morning_digest_finance: true,
     email: null,
     preferred_payment_method: null,
     plan_status_updated_at: null,
@@ -386,6 +394,14 @@ describe('buildSystemPrompt — cadastro progressivo (primeiros 7 dias)', () => 
     expect(section).toContain('set_email');
   });
 
+  it('pede a cidade (set_city) enquanto não foi informada', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(3) }));
+    expect(extractSection(prompt)).toContain('set_city');
+
+    const withCity = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(3), city: 'Uberlândia' }));
+    expect(extractSection(withCity)).not.toContain('set_city');
+  });
+
   it('não aparece depois de passar os 7 dias', () => {
     const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(8) }));
 
@@ -399,6 +415,7 @@ describe('buildSystemPrompt — cadastro progressivo (primeiros 7 dias)', () => 
         occupation: 'designer',
         quiet_hours_confirmed_at: createdDaysAgo(1),
         email: 'marina@example.com',
+        city: 'Uberlândia',
       }),
     );
 

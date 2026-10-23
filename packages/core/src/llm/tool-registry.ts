@@ -15,7 +15,13 @@ import { rememberFactTool, forgetFactTool } from './tools/memory.js';
 import { createNoteTool, listNotesTool, deleteNoteTool, updateNoteTool } from './tools/notes.js';
 import { createRecurringBillTool, listRecurringBillsTool, cancelRecurringBillTool } from './tools/bills.js';
 import { createGoalTool, addGoalProgressTool, listGoalsTool } from './tools/savings-goals.js';
-import { setQuietHoursTool, updateOccupationTool, setEmailTool } from './tools/preferences.js';
+import {
+  setQuietHoursTool,
+  updateOccupationTool,
+  setEmailTool,
+  setCityTool,
+  setMorningDigestPreferencesTool,
+} from './tools/preferences.js';
 import { createHabitTool, logHabitCheckinTool, listHabitsTool, archiveHabitTool } from './tools/habits.js';
 import { getWeatherTool } from './tools/weather.js';
 import { getMarketRateTool } from './tools/markets.js';
@@ -67,6 +73,8 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   setQuietHoursTool,
   updateOccupationTool,
   setEmailTool,
+  setCityTool,
+  setMorningDigestPreferencesTool,
   undoLastActionTool,
   rememberImportantDateTool,
   listImportantDatesTool,

@@ -20,12 +20,12 @@ import {
   embedText,
   extractDocumentContent,
   getAnalyzableKind,
-  isAccessBlocked,
   formatExtractionForConversation,
   buildExtractedText,
   buildDocumentEmbeddingText,
   toStoredExtraction,
   MESSAGES,
+  isAccessBlocked,
   INVITE_CODE_MESSAGE_PATTERN,
   type DocumentUploadJob,
 } from '@zapbuddy/core';

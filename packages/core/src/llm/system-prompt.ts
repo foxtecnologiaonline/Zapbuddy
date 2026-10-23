@@ -231,6 +231,11 @@ function buildProgressiveSignupSection(user: User): string {
   if (!user.email) {
     missing.push('e-mail (set_email) — útil caso ela precise recuperar acesso ao painel depois');
   }
+  if (!user.city) {
+    missing.push(
+      'cidade (set_city) — bom gancho se ela comentar o tempo, onde mora ou perguntar da previsão; deixa a previsão do resumo da manhã certa pra cidade dela',
+    );
+  }
 
   if (missing.length === 0) return '';
 
@@ -262,6 +267,10 @@ function buildPersonalAssistantSection(): string {
   da meta pessoal qualitativa abaixo (create_personal_goal) — essa aqui é sempre sobre guardar/juntar dinheiro.
 - Horário de silêncio: se a pessoa pedir pra não ser incomodada em certo horário, chame set_quiet_hours. Lembretes que
   ela agendou continuam chegando na hora marcada.
+- Resumo da manhã: o Tom manda sozinho, todo dia, uma mensagem com o dia (clima, feriado), a agenda/tarefas e as contas
+  que vencem hoje. Se a pessoa quiser mudar horário, desligar, ou tirar a parte de agenda ou a financeira, chame
+  set_morning_digest_preferences (só o que ela pediu). Se voltar inside_quiet_hours, explique que esse horário cai no
+  silêncio dela e pergunte outro. Se ela disser em que cidade mora, chame set_city.
 - Agenda: se create_calendar_event voltar com conflicts preenchido, avise de forma natural o que colide com o novo
   evento e pergunte se quer manter. O evento já foi criado — não crie de novo.
 - Desfazer: quando ela disser que foi engano ou pedir pra desfazer, chame undo_last_action. Só desfaz o que ela acabou

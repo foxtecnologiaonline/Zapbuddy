@@ -88,7 +88,7 @@ export interface RelatedNote extends Pick<Note, 'id' | 'content' | 'created_at'>
   similarity: number;
 }
 
-/** Notas parecidas em significado com a busca (RPC match_notes, migration 0024). Vazio — nunca erro — se o RPC falhar: é bônus sobre a busca por texto. */
+/** Notas parecidas em significado com a busca (RPC match_notes, migration 0026). Vazio — nunca erro — se o RPC falhar: é bônus sobre a busca por texto. */
 export async function searchNotesBySimilarity(
   accountId: string,
   embedding: number[],

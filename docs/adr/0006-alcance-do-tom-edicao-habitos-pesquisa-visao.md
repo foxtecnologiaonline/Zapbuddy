@@ -41,7 +41,7 @@ numa conversa nova (o histórico curto guarda só texto).
   dia de referência, não cotação ao vivo; o `reference_date` vai junto. Cripto/ação ficam no `web_search`.
 - Fora: trânsito/rota (sem fonte gratuita confiável).
 
-### 4. Busca semântica em notas e documentos (migration 0024)
+### 4. Busca semântica em notas e documentos (migration 0026, renumerada da 0024 por colisão com a do resumo matinal)
 - Reaproveita pgvector + `text-embedding-3-small` da base de conhecimento. Busca **híbrida**: texto exato é a fonte de
   verdade (`match: "exact"`), parecidos por significado entram marcados `related` (cosseno ≥ 0.30, máx. 5) para o Tom
   não apresentar palpite como achado.
@@ -50,7 +50,7 @@ numa conversa nova (o histórico curto guarda só texto).
 - Repos usam colunas explícitas (nunca `select('*')`) para o vetor não vazar para o dashboard, o export e o contexto do
   LLM.
 
-### 5. Leitura de comprovante/conta/foto (migration 0024)
+### 5. Leitura de comprovante/conta/foto (migration 0026, renumerada da 0024 por colisão com a do resumo matinal)
 - Fluxo: upload (mecânico, como antes) → uma chamada de visão SEM tools devolve campos estruturados (tipo,
   estabelecimento, valor em centavos, datas, resumo) → grava em `documents.extracted_*` (entra na busca) → o
   orquestrador normal responde, recebendo a leitura como TEXTO marcado como dado extraído. Assim o fallback OpenAI e o
@@ -71,5 +71,5 @@ numa conversa nova (o histórico curto guarda só texto).
 - 12 tools novas (43 → 55 no registro): o schema serializado passa de ~18KB para ~28,5KB (~7,1K tokens estimados,
   chars/4) — ainda abaixo do patamar de ~10K onde `tool_search`/`defer_loading` compensa, mas já perto. Próxima rodada
   que adicionar tools deve remedir e avaliar `defer_loading` antes.
-- Migrations `0025` (hábitos) e `0024` precisam ser aplicadas no Supabase antes do deploy.
+- Migrations `0025` (hábitos) e `0026` (busca semântica) precisam ser aplicadas no Supabase antes do deploy.
 - Duas chamadas de LLM por arquivo legível (visão + resposta). Acompanhar custo pelos logs `llm_call_completed`.

@@ -41,6 +41,10 @@ function extractCpfCnpjAttempt(messageText: string): string | undefined {
 export async function handleBlockedMessage(user: User, messageText: string): Promise<{ replyText: string }> {
   const cpfCnpjAttempt = extractCpfCnpjAttempt(messageText);
   if (!cpfCnpjAttempt) {
+    // Já gerou o link antes (mandou CPF e não pagou): reenvia direto em vez de pedir CPF de novo.
+    if (user.asaas_payment_link) {
+      return { replyText: MESSAGES.trialBlockedCheckoutReady(user.asaas_payment_link) };
+    }
     return { replyText: MESSAGES.trialBlocked };
   }
 

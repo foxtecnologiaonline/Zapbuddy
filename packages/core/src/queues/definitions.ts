@@ -108,6 +108,14 @@ export interface MorningDigestGenerateJob {
   accountId: string;
   ownerWhatsappNumber: string;
   ownerTimezone: string;
+  /** Saudação com nome (preferred_name ou primeiro nome); ausente = sem nome. */
+  displayName?: string | null;
+  /** Cidade informada pela pessoa (set_city); ausente = aproximação pelo DDD. */
+  city?: { uf: string; latitude: number; longitude: number } | null;
+  /** Hora local em que o sweep disparou o resumo — define bom dia/boa tarde/boa noite. */
+  digestHour?: number;
+  includeAgenda?: boolean;
+  includeFinance?: boolean;
 }
 
 export type OnboardingNudgeStage = '2h' | '24h';
