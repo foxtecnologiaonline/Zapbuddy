@@ -17,6 +17,8 @@ import { createRecurringBillTool, listRecurringBillsTool, cancelRecurringBillToo
 import { createGoalTool, addGoalProgressTool, listGoalsTool } from './tools/savings-goals.js';
 import { setQuietHoursTool, updateOccupationTool, setEmailTool } from './tools/preferences.js';
 import { createHabitTool, logHabitCheckinTool, listHabitsTool, archiveHabitTool } from './tools/habits.js';
+import { getWeatherTool } from './tools/weather.js';
+import { getMarketRateTool } from './tools/markets.js';
 import { undoLastActionTool } from './tools/undo.js';
 import { rememberImportantDateTool, listImportantDatesTool, forgetImportantDateTool } from './tools/important-dates.js';
 import { createPersonalGoalTool, listPersonalGoalsTool, completePersonalGoalTool, deletePersonalGoalTool } from './tools/goals.js';
@@ -48,6 +50,8 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   updateCalendarEventTool,
   deleteCalendarEventTool,
   webSearchTool,
+  getWeatherTool,
+  getMarketRateTool,
   rememberFactTool,
   forgetFactTool,
   createNoteTool,

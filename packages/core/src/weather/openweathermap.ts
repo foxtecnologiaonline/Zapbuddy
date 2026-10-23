@@ -102,3 +102,109 @@ export async function getTodayWeatherSummary(input: {
     return null;
   }
 }
+
+export interface DailyForecast {
+  /** Data local da previsão (YYYY-MM-DD) no fuso informado. */
+  date: string;
+  minTempC: number;
+  maxTempC: number;
+  description: string;
+  rainExpected: boolean;
+  /** Maior chance de chuva (0-100) entre as janelas de 3h do dia, como o provedor informa. */
+  rainChancePercent: number;
+}
+
+/** Entradas da previsão de 3h agrupadas por data local — pura, testável sem rede. */
+export function groupForecastByLocalDay(entries: OpenWeatherMapForecastEntry[], timezone: string): DailyForecast[] {
+  const byDay = new Map<string, OpenWeatherMapForecastEntry[]>();
+  for (const entry of entries) {
+    const parts = datePartsInZone(timezone, new Date(entry.dt * 1000));
+    const key = `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+    byDay.set(key, [...(byDay.get(key) ?? []), entry]);
+  }
+
+  return [...byDay.entries()].map(([date, dayEntries]) => {
+    let middayEntry = dayEntries[0]!;
+    let smallestHourDiff = Infinity;
+    for (const entry of dayEntries) {
+      const hourDiff = Math.abs(getLocalHour(timezone, new Date(entry.dt * 1000)) - 12);
+      if (hourDiff < smallestHourDiff) {
+        smallestHourDiff = hourDiff;
+        middayEntry = entry;
+      }
+    }
+    return {
+      date,
+      minTempC: Math.round(Math.min(...dayEntries.map((entry) => entry.main.temp_min))),
+      maxTempC: Math.round(Math.max(...dayEntries.map((entry) => entry.main.temp_max))),
+      description: middayEntry.weather[0]?.description ?? 'tempo variável',
+      rainExpected: dayEntries.some(entryMeansRain),
+      rainChancePercent: Math.round(Math.max(...dayEntries.map((entry) => entry.pop)) * 100),
+    };
+  });
+}
+
+export type WeatherLookup =
+  | { status: 'ok'; place: string; days: DailyForecast[] }
+  | { status: 'not_configured' }
+  | { status: 'place_not_found' }
+  | { status: 'unavailable' };
+
+interface GeocodeHit {
+  name: string;
+  state?: string;
+  country: string;
+  lat: number;
+  lon: number;
+}
+
+/** Cidade → coordenadas via geocoding do OpenWeatherMap. País fixo BR: o produto é brasileiro e "Santos" não deve cair em Portugal. */
+async function geocodeBrazilianCity(city: string, apiKey: string): Promise<GeocodeHit | null> {
+  const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(`${city},BR`)}&limit=1&appid=${apiKey}`;
+  const response = await fetchWithRetry(url, { method: 'GET' }, 8_000);
+  if (!response.ok) throw new Error(`geocoding http ${response.status}`);
+  const hits = (await response.json()) as GeocodeHit[];
+  return hits[0] ?? null;
+}
+
+/**
+ * Previsão dos próximos dias (até 5) pra tool get_weather — qualquer cidade
+ * do Brasil (`city`) ou o ponto do DDD da pessoa (`fallback`). Nunca lança
+ * nem inventa: sem chave, cidade desconhecida ou falha de rede devolve um
+ * status explícito, e o Tom diz que não conseguiu checar.
+ */
+export async function getWeatherForecast(input: {
+  city?: string;
+  fallback: { city: string; latitude: number; longitude: number };
+  timezone: string;
+  days: number;
+}): Promise<WeatherLookup> {
+  const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+  if (!apiKey) return { status: 'not_configured' };
+
+  try {
+    let place = input.fallback.city;
+    let latitude = input.fallback.latitude;
+    let longitude = input.fallback.longitude;
+    if (input.city) {
+      const hit = await geocodeBrazilianCity(input.city, apiKey);
+      if (!hit) return { status: 'place_not_found' };
+      place = hit.state ? `${hit.name} - ${hit.state}` : hit.name;
+      latitude = hit.lat;
+      longitude = hit.lon;
+    }
+
+    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=pt_br`;
+    const response = await fetchWithRetry(url, { method: 'GET' }, 8_000);
+    if (!response.ok) {
+      logger.error('weather_forecast_http_error', { status: response.status, latitude, longitude });
+      return { status: 'unavailable' };
+    }
+    const body = (await response.json()) as OpenWeatherMapForecastResponse;
+    const days = groupForecastByLocalDay(body.list ?? [], input.timezone).slice(0, input.days);
+    return days.length === 0 ? { status: 'unavailable' } : { status: 'ok', place, days };
+  } catch (error) {
+    logger.error('weather_lookup_failed', { error: error instanceof Error ? error.message : String(error) });
+    return { status: 'unavailable' };
+  }
+}

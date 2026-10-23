@@ -6,6 +6,8 @@ export interface WebSearchResult {
   title: string;
   url: string;
   snippet: string;
+  /** Data de publicação quando a fonte informa (busca de notícias) — entra no resumo pra o modelo não apresentar notícia velha como atual. */
+  publishedDate?: string;
 }
 
 export interface SearchWebOptions {
@@ -14,6 +16,12 @@ export interface SearchWebOptions {
   maxResults?: number;
   /** Quão "fresco" um resultado em cache precisa ser pra ser reaproveitado sem buscar de novo. */
   maxCacheAgeMs?: number;
+  /**
+   * 'current' = informação que muda no dia (notícia, resultado, evento): busca
+   * no índice de notícias recentes da Tavily e só reaproveita cache de poucos
+   * minutos. Sem isso, a resposta de ontem era servida como se fosse de hoje.
+   */
+  freshness?: 'current';
 }
 
 export interface SearchWebResult {
@@ -23,6 +31,9 @@ export interface SearchWebResult {
 }
 
 const DEFAULT_MAX_RESULTS = 5;
+/** Janela de cache da busca "current": curta o bastante pra não servir manchete velha, longa o bastante pra duas pessoas perguntando a mesma coisa não pagarem duas buscas. */
+export const CURRENT_INFO_MAX_CACHE_AGE_MS = 20 * 60 * 1000;
+const CURRENT_INFO_NEWS_WINDOW_DAYS = 3;
 // 7 dias: cobre bem o cadenciamento semanal da pesquisa proativa e buscas
 // repetidas de categorização (mesmo estabelecimento aparecendo de novo em
 // pouco tempo) sem deixar o conteúdo velho demais pra dúvida geral do
@@ -39,10 +50,10 @@ function normalizeQuery(query: string): string {
 }
 
 interface TavilyResponse {
-  results?: { title?: string; url?: string; content?: string }[];
+  results?: { title?: string; url?: string; content?: string; published_date?: string }[];
 }
 
-async function fetchFromTavily(query: string, maxResults: number): Promise<WebSearchResult[]> {
+async function fetchFromTavily(query: string, maxResults: number, freshness?: 'current'): Promise<WebSearchResult[]> {
   const apiKey = process.env.WEB_SEARCH_API_KEY;
   if (!apiKey) {
     throw new Error('WEB_SEARCH_API_KEY não configurada — busca na web indisponível');
@@ -56,6 +67,7 @@ async function fetchFromTavily(query: string, maxResults: number): Promise<WebSe
       query,
       max_results: maxResults,
       search_depth: 'basic',
+      ...(freshness === 'current' ? { topic: 'news', days: CURRENT_INFO_NEWS_WINDOW_DAYS } : {}),
     }),
   });
 
@@ -68,11 +80,14 @@ async function fetchFromTavily(query: string, maxResults: number): Promise<WebSe
     title: result.title ?? '',
     url: result.url ?? '',
     snippet: result.content ?? '',
+    publishedDate: result.published_date,
   }));
 }
 
-function summarize(results: WebSearchResult[]): string {
-  return results.map((result) => `- ${result.title}: ${result.snippet}`).join('\n');
+export function summarize(results: WebSearchResult[]): string {
+  return results
+    .map((result) => `- ${result.publishedDate ? `[${result.publishedDate}] ` : ''}${result.title}: ${result.snippet}`)
+    .join('\n');
 }
 
 /**
@@ -89,7 +104,7 @@ function summarize(results: WebSearchResult[]): string {
  */
 export async function searchWeb(query: string, options: SearchWebOptions): Promise<SearchWebResult> {
   const normalizedQuery = normalizeQuery(query);
-  const maxCacheAgeMs = options.maxCacheAgeMs ?? DEFAULT_MAX_CACHE_AGE_MS;
+  const maxCacheAgeMs = options.maxCacheAgeMs ?? (options.freshness === 'current' ? CURRENT_INFO_MAX_CACHE_AGE_MS : DEFAULT_MAX_CACHE_AGE_MS);
 
   const exactMatch = await findFreshKnowledgeEntryByQuery(normalizedQuery, maxCacheAgeMs);
   if (exactMatch) {
@@ -114,7 +129,7 @@ export async function searchWeb(query: string, options: SearchWebOptions): Promi
     }
   }
 
-  const results = await fetchFromTavily(query, options.maxResults ?? DEFAULT_MAX_RESULTS);
+  const results = await fetchFromTavily(query, options.maxResults ?? DEFAULT_MAX_RESULTS, options.freshness);
   const summary = summarize(results) || 'Nenhum resultado encontrado.';
   const sourceUrls = results.map((result) => result.url).filter(Boolean);
 

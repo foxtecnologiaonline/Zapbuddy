@@ -4,7 +4,7 @@ vi.mock('@zapbuddy/db', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { getTodayWeatherSummary } from './openweathermap.js';
+import { getTodayWeatherSummary, getWeatherForecast, groupForecastByLocalDay } from './openweathermap.js';
 
 const originalEnv = { ...process.env };
 const originalFetch = global.fetch;
@@ -93,5 +93,69 @@ describe('getTodayWeatherSummary', () => {
     const result = await getTodayWeatherSummary({ latitude: -23.55, longitude: -46.63, timezone: TZ });
 
     expect(result).toBeNull();
+  });
+});
+
+describe('groupForecastByLocalDay', () => {
+  const entry = (dt: number, tempMin: number, tempMax: number, description: string, pop: number, id = 800) => ({
+    dt,
+    main: { temp_min: tempMin, temp_max: tempMax },
+    weather: [{ id, description }],
+    pop,
+  });
+
+  it('agrupa pela data LOCAL (22h em SP já é o dia seguinte em UTC) e usa a condição do meio-dia', () => {
+    const days = groupForecastByLocalDay(
+      [
+        entry(utcSecondsForLocalHour(9), 15, 18, 'nublado', 0.1),
+        entry(utcSecondsForLocalHour(12), 17, 24, 'céu limpo', 0.0),
+        entry(utcSecondsForLocalHour(22), 14, 16, 'céu limpo', 0.0),
+        entry(utcSecondsForLocalHour(24 + 12), 16, 21, 'chuva leve', 0.8, 500),
+      ],
+      TZ,
+    );
+
+    expect(days).toHaveLength(2);
+    expect(days[0]).toMatchObject({ date: '2026-10-22', minTempC: 14, maxTempC: 24, description: 'céu limpo', rainExpected: false });
+    expect(days[1]).toMatchObject({ date: '2026-10-23', description: 'chuva leve', rainExpected: true, rainChancePercent: 80 });
+  });
+});
+
+describe('getWeatherForecast', () => {
+  const fallback = { city: 'São Paulo', latitude: -23.55, longitude: -46.63 };
+
+  it('sem chave, devolve not_configured sem chamar a API', async () => {
+    delete process.env.OPENWEATHERMAP_API_KEY;
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    expect(await getWeatherForecast({ fallback, timezone: TZ, days: 2 })).toEqual({ status: 'not_configured' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('cidade que o geocoding não acha vira place_not_found', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [] }) as unknown as typeof fetch;
+    expect(await getWeatherForecast({ city: 'Xyzland', fallback, timezone: TZ, days: 2 })).toEqual({ status: 'place_not_found' });
+  });
+
+  it('com cidade, geocodifica em BR e usa as coordenadas achadas', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ name: 'Curitiba', state: 'Paraná', country: 'BR', lat: -25.43, lon: -49.27 }] })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ list: [{ dt: utcSecondsForLocalHour(12), main: { temp_min: 10, temp_max: 19 }, weather: [{ id: 801, description: 'poucas nuvens' }], pop: 0 }] }),
+      });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const lookup = await getWeatherForecast({ city: 'Curitiba', fallback, timezone: TZ, days: 2 });
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('q=Curitiba%2CBR');
+    expect(String(fetchSpy.mock.calls[1]![0])).toContain('lat=-25.43');
+    expect(lookup).toMatchObject({ status: 'ok', place: 'Curitiba - Paraná' });
+  });
+
+  it('em falha de rede devolve unavailable sem lançar', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('rede')) as unknown as typeof fetch;
+    expect(await getWeatherForecast({ fallback, timezone: TZ, days: 2 })).toEqual({ status: 'unavailable' });
   });
 });

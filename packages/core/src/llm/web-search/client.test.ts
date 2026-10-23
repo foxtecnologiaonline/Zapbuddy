@@ -138,3 +138,33 @@ describe('searchWeb', () => {
     );
   });
 });
+
+describe('searchWeb com freshness current', () => {
+  it('usa o índice de notícias, cache curto e inclui a data de publicação no resumo', async () => {
+    vi.mocked(findFreshKnowledgeEntryByQuery).mockResolvedValue(null);
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ title: 'Final hoje', url: 'https://x.com/1', content: 'Time A 2 x 1 Time B', published_date: '2026-10-23' }] }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await searchWeb('resultado da final', { origin: 'user_query', freshness: 'current' });
+
+    const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
+    expect(body.topic).toBe('news');
+    expect(body.days).toBe(3);
+    expect(vi.mocked(findFreshKnowledgeEntryByQuery).mock.calls[0]![1]).toBe(20 * 60 * 1000);
+    expect(result.summary).toContain('[2026-10-23] Final hoje');
+  });
+
+  it('busca geral continua sem topic de notícia e com cache de 7 dias', async () => {
+    vi.mocked(findFreshKnowledgeEntryByQuery).mockResolvedValue(null);
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ results: [] }) });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    await searchWeb('o que é mei', { origin: 'user_query' });
+
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1].body as string)).not.toHaveProperty('topic');
+    expect(vi.mocked(findFreshKnowledgeEntryByQuery).mock.calls[0]![1]).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+});
