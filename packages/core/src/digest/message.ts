@@ -13,6 +13,8 @@ export interface WeeklyDigestExtras {
   pendingTasksCount?: number;
   activeGoalsCount?: number;
   notesThisWeekCount?: number;
+  /** Check-ins de hábito feitos na semana (todos os hábitos ativos). */
+  habitCheckinsThisWeekCount?: number;
   /** Semana anterior pra comparar gasto — ausente = sem linha de comparação. */
   previousSummary?: TransactionSummary;
 }
@@ -34,6 +36,7 @@ function formatExtrasLine(extras: WeeklyDigestExtras): string {
   if (extras.pendingTasksCount) parts.push(`${extras.pendingTasksCount} tarefa(s) pendente(s)`);
   if (extras.activeGoalsCount) parts.push(`${extras.activeGoalsCount} meta(s) em andamento`);
   if (extras.notesThisWeekCount) parts.push(`${extras.notesThisWeekCount} nota(s) nova(s)`);
+  if (extras.habitCheckinsThisWeekCount) parts.push(`${extras.habitCheckinsThisWeekCount} check-in(s) de hábito`);
 
   return parts.length === 0 ? '' : `\nAlém disso: ${parts.join(', ')}.`;
 }

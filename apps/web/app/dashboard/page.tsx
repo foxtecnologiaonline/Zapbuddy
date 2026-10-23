@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError } from '@zapbuddy/core';
+import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError, computeHabitStats, localDateKey } from '@zapbuddy/core';
 import {
   findUserById,
   listTransactions,
@@ -15,6 +15,8 @@ import {
   listNotes,
   listImportantDates,
   listPersonalGoals,
+  listActiveHabits,
+  listHabitCheckinDates,
   listActiveRecurringBills,
   listGoals,
 } from '@zapbuddy/db';
@@ -84,6 +86,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     personalGoals,
     recurringBills,
     savingsGoals,
+    habits,
+    habitCheckinDates,
   ] = await Promise.all([
     summarizeTransactions(account.accountId, startIso, endIso),
     listTransactions(account.accountId, startIso, endIso, {
@@ -106,6 +110,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listPersonalGoals(account.accountId, 'pending'),
     listActiveRecurringBills(account.accountId),
     listGoals(account.accountId, 'active'),
+    listActiveHabits(account.accountId),
+    listHabitCheckinDates(account.accountId, localDateKey(user.timezone)),
   ]);
 
   let referralLink: string | null = null;
@@ -318,6 +324,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </span>
                 </li>
               ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="card">
+          <h2>Hábitos</h2>
+          <p className="muted-sm">Conta pro Tom quando fizer — ex.: &quot;fui pra academia hoje&quot; — e ele acompanha a sequência.</p>
+          {habits.length === 0 ? (
+            <p className="muted">Nenhum hábito ainda — manda &quot;quero criar o hábito de [algo]&quot; pro Tom no WhatsApp.</p>
+          ) : (
+            <ul className="item-list">
+              {habits.map((habit) => {
+                const stats = computeHabitStats(habitCheckinDates[habit.id] ?? [], localDateKey(user.timezone));
+                return (
+                  <li key={habit.id}>
+                    <span>
+                      {habit.name}
+                      {stats.doneToday && ' ✓'}
+                    </span>
+                    <span className="muted">
+                      {stats.currentStreak} dia(s) seguido(s) · {stats.last7Days}/7 na semana
+                    </span>
+                    <span className="item-actions">
+                      <form action={`/api/dashboard/habits/${habit.id}/archive`} method="POST">
+                        <button type="submit" className="btn btn-sm btn-danger">
+                          arquivar
+                        </button>
+                      </form>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

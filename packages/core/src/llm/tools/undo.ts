@@ -3,6 +3,8 @@ import {
   cancelGoal,
   cancelReminder,
   deactivateRecurringBill,
+  deleteHabit,
+  deleteHabitCheckin,
   deleteImportantDate,
   deleteNote,
   deletePersonalGoal,
@@ -26,6 +28,8 @@ const UNDOABLE_ACTIONS: Record<string, string> = {
   create_calendar_event: 'event_id',
   remember_important_date: 'important_date_id',
   create_personal_goal: 'goal_id',
+  create_habit: 'habit_id',
+  log_habit_checkin: 'checkin_id',
 };
 
 async function revertAction(toolName: string, resultId: string, ctx: ToolContext): Promise<boolean> {
@@ -52,6 +56,10 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
       return (await deleteImportantDate(ctx.accountId, resultId)) !== null;
     case 'create_personal_goal':
       return (await deletePersonalGoal(ctx.accountId, resultId)) !== null;
+    case 'create_habit':
+      return (await deleteHabit(ctx.accountId, resultId)) !== null;
+    case 'log_habit_checkin':
+      return deleteHabitCheckin(ctx.accountId, resultId);
     default:
       return false;
   }
@@ -60,7 +68,7 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
 /**
  * Desfaz a última criação feita pela própria pessoa nos últimos 10 minutos
  * (lançamento, tarefa, lembrete, nota, conta recorrente, meta com valor,
- * meta pessoal, data importante ou evento). Usa o log de tool calls como
+ * meta pessoal, data importante, hábito, check-in de hábito ou evento). Usa o log de tool calls como
  * fonte: nada novo é guardado. Só volta uma ação por vez, e nunca desfaz a
  * mesma duas vezes.
  */
@@ -68,7 +76,7 @@ export const undoLastActionTool = defineTool({
   name: 'undo_last_action',
   description:
     'Desfaz a última coisa que a pessoa acabou de criar (lançamento, tarefa, lembrete, nota, conta recorrente, meta ' +
-    'com valor, meta pessoal, data importante ou evento), se for dos últimos 10 minutos. Use quando ela disser ' +
+    'com valor, meta pessoal, data importante, hábito, check-in de hábito ou evento), se for dos últimos 10 minutos. Use quando ela disser ' +
     '"desfaz", "cancela isso", "foi engano". Nunca desfaz algo mais antigo e não desfaz duas vezes seguidas — se ' +
     'não houver nada, diga isso.',
   schema: z.object({}),

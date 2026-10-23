@@ -16,6 +16,7 @@ import { createNoteTool, listNotesTool, deleteNoteTool, updateNoteTool } from '.
 import { createRecurringBillTool, listRecurringBillsTool, cancelRecurringBillTool } from './tools/bills.js';
 import { createGoalTool, addGoalProgressTool, listGoalsTool } from './tools/savings-goals.js';
 import { setQuietHoursTool, updateOccupationTool, setEmailTool } from './tools/preferences.js';
+import { createHabitTool, logHabitCheckinTool, listHabitsTool, archiveHabitTool } from './tools/habits.js';
 import { undoLastActionTool } from './tools/undo.js';
 import { rememberImportantDateTool, listImportantDatesTool, forgetImportantDateTool } from './tools/important-dates.js';
 import { createPersonalGoalTool, listPersonalGoalsTool, completePersonalGoalTool, deletePersonalGoalTool } from './tools/goals.js';
@@ -70,6 +71,10 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   listPersonalGoalsTool,
   completePersonalGoalTool,
   deletePersonalGoalTool,
+  createHabitTool,
+  logHabitCheckinTool,
+  listHabitsTool,
+  archiveHabitTool,
 ];
 
 export function getToolByName(name: string) {

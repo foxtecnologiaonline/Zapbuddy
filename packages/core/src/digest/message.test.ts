@@ -74,3 +74,15 @@ describe('formatWeeklyDigestMessage com semana anterior', () => {
     expect(formatWeeklyDigestMessage(current, { previousSummary: previous })).not.toContain('semana anterior');
   });
 });
+
+describe('formatWeeklyDigestMessage com hábitos', () => {
+  it('menciona os check-ins de hábito da semana quando houver', () => {
+    const summary: TransactionSummary = { totalIncomeCents: 0, totalExpenseCents: 0, byCategory: {}, count: 0 };
+    expect(formatWeeklyDigestMessage(summary, { habitCheckinsThisWeekCount: 5 })).toContain('5 check-in(s) de hábito');
+  });
+
+  it('não menciona nada quando não houve check-in', () => {
+    const summary: TransactionSummary = { totalIncomeCents: 0, totalExpenseCents: 0, byCategory: {}, count: 0 };
+    expect(formatWeeklyDigestMessage(summary, { habitCheckinsThisWeekCount: 0 })).not.toContain('hábito');
+  });
+});

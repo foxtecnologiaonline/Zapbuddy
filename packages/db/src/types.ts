@@ -156,6 +156,26 @@ export interface PersonalGoal {
   completed_at: string | null;
 }
 
+export interface Habit {
+  id: string;
+  account_id: string;
+  name: string;
+  active: boolean;
+  created_by_user_id: string;
+  created_at: string;
+  archived_at: string | null;
+}
+
+export interface HabitCheckin {
+  id: string;
+  habit_id: string;
+  account_id: string;
+  /** Data local da pessoa (YYYY-MM-DD) — ver migration 0023. */
+  checkin_date: string;
+  created_by_user_id: string | null;
+  created_at: string;
+}
+
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
 export type ReminderRecurrence = 'daily' | 'weekly' | 'monthly';
 

@@ -16,6 +16,8 @@ export async function exportAccountData(accountId: string): Promise<Record<strin
     'personal_goals',
     'recurring_bills',
     'goals',
+    'habits',
+    'habit_checkins',
   ] as const;
 
   const results = await Promise.all(

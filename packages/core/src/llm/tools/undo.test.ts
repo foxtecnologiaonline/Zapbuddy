@@ -10,6 +10,8 @@ const db = vi.hoisted(() => ({
   cancelGoal: vi.fn(),
   deleteImportantDate: vi.fn(),
   deletePersonalGoal: vi.fn(),
+  deleteHabit: vi.fn(),
+  deleteHabitCheckin: vi.fn(),
 }));
 
 vi.mock('@zapbuddy/db', () => db);
@@ -93,6 +95,26 @@ describe('undo_last_action', () => {
 
     expect(db.deletePersonalGoal).toHaveBeenCalledWith('account-1', 'pgoal-1');
     expect(result).toEqual({ undone: true, undone_action: 'create_personal_goal' });
+  });
+
+  it('desfaz um check-in de hábito pelo checkin_id', async () => {
+    db.findLastSuccessfulToolCall
+      .mockResolvedValueOnce(toolCall('log_habit_checkin', { checkin_id: 'chk-1', logged: true }, minutesAgo(1)))
+      .mockResolvedValueOnce(null);
+    db.deleteHabitCheckin.mockResolvedValueOnce(true);
+
+    const result = await undoLastActionTool.execute({}, ctx);
+
+    expect(db.deleteHabitCheckin).toHaveBeenCalledWith('account-1', 'chk-1');
+    expect(result).toEqual({ undone: true, undone_action: 'log_habit_checkin' });
+  });
+
+  it('check-in repetido (already_logged) não tem alvo pra desfazer', async () => {
+    db.findLastSuccessfulToolCall
+      .mockResolvedValueOnce(toolCall('log_habit_checkin', { already_logged: true, logged: false }, minutesAgo(1)))
+      .mockResolvedValueOnce(null);
+
+    expect(await undoLastActionTool.execute({}, ctx)).toEqual({ undone: false, reason: 'unknown_target' });
   });
 
   it('informa quando o item já não existe mais', async () => {

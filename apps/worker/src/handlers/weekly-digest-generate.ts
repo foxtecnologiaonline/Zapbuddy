@@ -1,10 +1,12 @@
 import type { Job } from 'bullmq';
-import { summarizeTransactions, logWeeklyDigest, listTasks, listPersonalGoals, countNotesSince } from '@zapbuddy/db';
+import { summarizeTransactions, logWeeklyDigest, listTasks, listPersonalGoals, countNotesSince, countHabitCheckinsSince } from '@zapbuddy/db';
 import {
   sendWhatsappTextMessage,
   formatWeeklyDigestMessage,
   getLast7DaysRange,
   getPreviousWeekRange,
+  localDateKey,
+  shiftDateKey,
   type WeeklyDigestGenerateJob,
 } from '@zapbuddy/core';
 
@@ -23,12 +25,14 @@ export async function handleWeeklyDigestGenerate(job: Job<WeeklyDigestGenerateJo
 
   const range = getLast7DaysRange(ownerTimezone);
   const previousRange = getPreviousWeekRange(ownerTimezone);
-  const [summary, previousSummary, pendingTasks, activeGoals, notesThisWeekCount] = await Promise.all([
+  const weekStartDateKey = shiftDateKey(localDateKey(ownerTimezone), -6);
+  const [summary, previousSummary, pendingTasks, activeGoals, notesThisWeekCount, habitCheckinsThisWeekCount] = await Promise.all([
     summarizeTransactions(accountId, range.startIso, range.endIso),
     summarizeTransactions(accountId, previousRange.startIso, previousRange.endIso),
     listTasks(accountId, 'pending'),
     listPersonalGoals(accountId, 'pending'),
     countNotesSince(accountId, range.startIso),
+    countHabitCheckinsSince(accountId, weekStartDateKey),
   ]);
 
   await sendWhatsappTextMessage(
@@ -37,6 +41,7 @@ export async function handleWeeklyDigestGenerate(job: Job<WeeklyDigestGenerateJo
       pendingTasksCount: pendingTasks.length,
       activeGoalsCount: activeGoals.length,
       notesThisWeekCount,
+      habitCheckinsThisWeekCount,
       previousSummary,
     }),
   );
