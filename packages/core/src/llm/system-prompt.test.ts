@@ -414,3 +414,62 @@ describe('buildSystemPrompt — cadastro progressivo (primeiros 7 dias)', () => 
     expect(section).not.toMatch(/forma de pagamento|preferred_payment_method|CPF/);
   });
 });
+
+describe('buildSystemPrompt — personalidade, situações e repertório (2026-10)', () => {
+  it('só entra pra quem já fez o onboarding (abertura continua o script fixo de 2 frases)', () => {
+    const onboarding = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
+    const registered = buildSystemPrompt(baseUser());
+
+    expect(onboarding).not.toContain('Personalidade e humor');
+    expect(registered).toContain('Personalidade e humor');
+    expect(registered).toContain('Repertório de apoio');
+  });
+
+  it('limita o humor: nunca em momento sério e nunca às custas da pessoa', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/Nunca quando ela estiver estressada/);
+    expect(prompt).toMatch(/nunca dela/);
+  });
+
+  it('é honesto sobre ser uma IA e não finge ser humano', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/você é uma IA/i);
+    expect(prompt).toMatch(/Nunca se passe por\s+humano/);
+  });
+
+  it('encaminha sofrimento sério pro CVV (188) em vez de seguir com tarefas', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/CVV, telefone 188/);
+  });
+
+  it('nunca promete lembrar sem criar o registro pela tool', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/Nunca prometa "vou te lembrar"/);
+  });
+
+  it('proatividade é no máximo uma sugestão por resposta e nunca cria nada sem o sim da pessoa', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/no máximo UMA\s+sugestão por resposta/);
+    expect(prompt).toMatch(/nunca crie nada sem o\s+"sim" dela/);
+  });
+
+  it('manda buscar na web qualquer número que muda com o tempo e proíbe recomendar produto financeiro', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/NÃO sabe de\s+cabeça: use web_search/);
+    expect(prompt).toMatch(/Nunca recomende produto, banco, corretora ou ativo/);
+  });
+
+  it('fica na camada estável (cache), nunca na volátil', () => {
+    const blocks = buildSystemPromptBlocks(baseUser());
+
+    expect(blocks.stable).toContain('Personalidade e humor');
+    expect(blocks.semiStable).not.toContain('Personalidade e humor');
+    expect(blocks.volatile).not.toContain('Personalidade e humor');
+  });
+});

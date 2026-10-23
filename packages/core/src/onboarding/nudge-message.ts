@@ -6,11 +6,13 @@ import type { OnboardingNudgeStage } from '../queues/definitions.js';
 const NUDGE_2H_TEMPLATES = [
   'Oi! Vi que a gente começou a se conhecer mas não terminou — me diz seu nome que eu já te mostro como funciono 🙂',
   'Ei, ainda não peguei seu nome pra fechar seu cadastro. Me conta rapidinho que eu já começo a te ajudar.',
+  'Oi, sou eu de novo, o Tom 🙂 Falta só seu nome pra eu deixar tudo pronto por aqui.',
 ];
 
 const NUDGE_24H_TEMPLATES = [
   'Ainda dá tempo de organizar seus gastos e tarefas comigo — é só me mandar seu nome que eu começo. Qualquer coisa, só escrever.',
   'Fico por aqui se quiser continuar de onde paramos — só preciso do seu nome pra liberar seu cadastro.',
+  'Sem pressa, tá? Quando quiser retomar, me manda seu nome e a gente começa de onde parou — agenda, tarefas, gastos, o que for mais útil pra você.',
 ];
 
 function pickTemplate(templates: string[]): string {

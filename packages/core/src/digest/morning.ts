@@ -80,6 +80,20 @@ function describeOverdue(daysOverdueCount: number): string {
   return `está atrasada há ${daysOverdueCount} dias`;
 }
 
+// Mais de uma abertura de propósito (mesmo raciocínio de messages.ts): o
+// resumo chega todo dia às 8h, sempre idêntico palavra por palavra viraria
+// ruído que a pessoa aprende a ignorar.
+const GREETINGS = [
+  'Bom dia! Aqui está o seu dia:',
+  'Bom dia! ☀️ Olha como o seu dia está:',
+  'Bom dia! Separei o que importa pra hoje:',
+  'Bom dia! Dá uma olhada no que te espera hoje:',
+];
+
+function pickGreeting(): string {
+  return GREETINGS[Math.floor(Math.random() * GREETINGS.length)]!;
+}
+
 /**
  * Resumo matinal: uma mensagem só, com o que existe pra hoje. Devolve null
  * quando não há nada — não manda mensagem vazia (proatividade sem ruído).
@@ -107,5 +121,5 @@ export function formatMorningDigest(input: MorningDigestInput): string | null {
   }
 
   if (sections.length === 0) return null;
-  return `Bom dia! Aqui está o seu dia:\n\n${sections.join('\n\n')}`;
+  return `${pickGreeting()}\n\n${sections.join('\n\n')}`;
 }

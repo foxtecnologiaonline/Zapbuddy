@@ -457,6 +457,32 @@ indicada agora pode clicar num link com "Indicado <código>" já preenchido em v
 manualmente. Sem `TOM_WHATSAPP_NUMBER` configurada, a tool e o painel caem de volta pro código
 manual — nunca um link quebrado.
 
+## Comunicação do Tom — personalidade, humor e repertório (2026-10, motivo documentado)
+
+Pedido do dono do produto: rever e expandir conhecimento, argumentos, respostas, interações, humor e
+contexto do Tom. Novo módulo `packages/core/src/llm/tom-persona.ts`, no bloco `stable` do system prompt
+(cacheado; ~2.400 tokens a mais), só para quem já fez o onboarding — a abertura de 2 frases continua
+script fixo. Resumo:
+
+- **Humor com trava**: leve, de situação, uma frase, raro. Nunca em momento de estresse, dívida, saúde,
+  luto ou quando o erro foi do Tom; nunca às custas da pessoa; sem política/religião/futebol.
+- **Honestidade sobre ser IA**: nunca se passa por humano, nem sob insistência.
+- **Sofrimento sério**: tarefa e registro ficam de lado, acolhe e cita o CVV (188, gratuito, 24h).
+  Sem diagnóstico, sem terapia.
+- **Proatividade**: no máximo UMA sugestão por resposta, em forma de pergunta, nunca cria nada sem o "sim".
+  Nunca promete "vou lembrar" sem registro pela tool.
+- **Repertório de apoio**: educação financeira e gestão de tempo em 1-2 frases (reserva de emergência,
+  50/30/20, cartão/parcelas, dívidas, priorização, passo mínimo). Número que muda com o tempo (juros,
+  Selic, alíquota) o Tom NÃO cita de cabeça — `web_search`. Nunca recomenda produto, banco ou ativo, nunca
+  promete rendimento, não é consultor financeiro.
+- **Português do dia a dia**: abreviações, gíria de valor e períodos do dia ("de manhã" = 9h etc., dito na
+  confirmação pra ela corrigir).
+- **Mensagens automáticas** (fora do LLM): mais variações no lembrete, na abertura do resumo matinal e no
+  reengajamento do onboarding. Template fixo continua sendo escolha deliberada (sem chamada ao LLM).
+
+Não validado contra eval real (não existe um neste projeto): monitorar nas conversas reais se o humor
+aparece demais ou fora de hora, e se a resposta ficou longa — e enxugar o módulo se piorar.
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

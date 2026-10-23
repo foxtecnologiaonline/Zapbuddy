@@ -15,13 +15,20 @@ function pickTemplate<T>(templates: T[]): T {
 // worker, sem passar pela IA (ver reminder-dispatch.ts), então sem isso ele
 // seria a única mensagem do Tom que soa sempre idêntica, palavra por
 // palavra, toda vez.
-const REMINDER_TEMPLATES = [(text: string) => `⏰ Lembrete: ${text}`, (text: string) => `⏰ Ó, não esquece: ${text}`, (text: string) => `⏰ Passando pra lembrar: ${text}`];
+const REMINDER_TEMPLATES = [
+  (text: string) => `⏰ Lembrete: ${text}`,
+  (text: string) => `⏰ Ó, não esquece: ${text}`,
+  (text: string) => `⏰ Passando pra lembrar: ${text}`,
+  (text: string) => `🔔 Toc toc, olha o lembrete: ${text}`,
+  (text: string) => `📌 Tá na hora: ${text}`,
+  (text: string) => `⏰ Bora lá: ${text}`,
+];
 
 export const MESSAGES = {
   genericProcessingError:
     'Desculpa, tive um problema técnico pra processar sua última mensagem. Pode mandar de novo?',
   noReplyGenerated: 'Desculpe, não consegui processar sua mensagem agora.',
-  stillProcessing: 'Só um instante, ainda to vendo isso pra você...',
+  stillProcessing: 'Só um instante, ainda tô vendo isso pra você...',
   audioTooLong: 'Esse áudio é muito longo pra eu processar. Pode mandar um mais curto ou escrever em texto?',
   reminder: (text: string) => pickTemplate(REMINDER_TEMPLATES)(text),
   inviteCodeInvalid:
