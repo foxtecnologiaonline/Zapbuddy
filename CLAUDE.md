@@ -389,9 +389,12 @@ Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboard
   (par/ímpar do último dígito, nunca aleatório) entre "nome primeiro" (controle) e "ação primeiro"
   — decisão de qual vence fica pra quando a amostra crescer, lida manualmente no funil.
   **Amendamento 2026-10 (motivo documentado, decisão do dono do produto): este teste A/B foi
-  encerrado antes de ter amostra** — a abertura do onboarding virou um script fixo em 2 frases
-  (ver seção "Cadastro progressivo" abaixo): 1) o Tom se apresenta, 2) pergunta nome E e-mail
-  juntos, numa frase só (`buildOnboardingSection`, sem mais ramificação por `onboarding_variant`).
+  encerrado antes de ter amostra** — a abertura do onboarding virou um script fixo em 3 frases
+  (ver seção "Cadastro progressivo" abaixo): 1) o Tom se apresenta, 2) avisa que o teste grátis
+  começa hoje e vale 3 dias (adicionada com o trial de 3 dias; a mensagem de bloqueio no fim do
+  trial é fixa e **não cita preço** — decisão do dono do produto, o valor aparece na página da
+  Asaas), 3) pergunta nome E e-mail juntos, numa frase só (`buildOnboardingSection`, sem mais
+  ramificação por `onboarding_variant`).
   A coluna `onboarding_variant` e a atribuição determinística continuam existindo (não apagadas) só
   pra manter o dado histórico do funil do admin legível — a partir desta decisão ela não influencia
   mais o texto que o Tom manda, então os números das duas variantes devem convergir pra frente.

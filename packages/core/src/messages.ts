@@ -1,5 +1,3 @@
-import { formatMonthlyPriceBRL } from './payments/plan.js';
-
 /**
  * Mensagens estáticas enviadas ao usuário FORA do fluxo gerado pela IA —
  * erro técnico, limite de sistema, template de lembrete. A conversa normal
@@ -34,9 +32,10 @@ export const MESSAGES = {
   // ver CLAUDE.md). Mensagem FIXA, nunca gerada pela IA: a pessoa bloqueada
   // nem chega a chamar o LLM (trial-gate.ts intercepta antes), então essas
   // três cobrem o fluxo inteiro sem passar pelo system-prompt.
+  // Sem preço de propósito (decisão do dono do produto) — o valor aparece na página de pagamento da Asaas.
   trialBlocked:
-    `Seu teste grátis acabou! Pra continuar comigo — agenda, tarefas, financeiro, tudo — é ${formatMonthlyPriceBRL()}/mês, ` +
-    'PIX, boleto ou cartão, você escolhe na hora. Me manda seu CPF ou CNPJ que eu já te passo o link de pagamento.',
+    'Ei, os 3 dias de teste chegaram ao fim ⏰ Quer seguir com o Tom ao seu lado? ' +
+    'Você escolhe PIX, boleto ou cartão. É só me mandar seu CPF ou CNPJ que eu libero o link de pagamento 🚀',
   trialBlockedInvalidCpf: 'Esse CPF/CNPJ não tem a quantidade certa de dígitos (11 pro CPF, 14 pro CNPJ). Confirma e manda de novo?',
   trialBlockedCheckoutReady: (checkoutUrl: string) =>
     `Aqui está: ${checkoutUrl}\n\nEscolhe PIX, boleto ou cartão na página e volto a te ajudar com tudo assim que confirmar 🙂`,

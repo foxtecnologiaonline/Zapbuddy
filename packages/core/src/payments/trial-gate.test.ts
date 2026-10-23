@@ -50,7 +50,7 @@ describe('handleBlockedMessage', () => {
   it('mensagem comum (não é CPF/CNPJ) devolve o aviso fixo, sem registrar intenção nem chamar checkout', async () => {
     const result = await handleBlockedMessage(baseUser(), 'oi, quero registrar um gasto de 50 reais');
 
-    expect(result.replyText).toMatch(/teste grátis acabou/i);
+    expect(result.replyText).toMatch(/3 dias de teste chegaram ao fim/i);
     expect(db.registerPlanIntent).not.toHaveBeenCalled();
     expect(upgradeFlow.generateUpgradeCheckout).not.toHaveBeenCalled();
   });
@@ -58,7 +58,7 @@ describe('handleBlockedMessage', () => {
   it('mensagem com texto misturado a dígitos (ex.: telefone) não é tratada como CPF', async () => {
     const result = await handleBlockedMessage(baseUser(), 'meu telefone é 11999998888');
 
-    expect(result.replyText).toMatch(/teste grátis acabou/i);
+    expect(result.replyText).toMatch(/3 dias de teste chegaram ao fim/i);
     expect(upgradeFlow.generateUpgradeCheckout).not.toHaveBeenCalled();
   });
 
@@ -76,7 +76,7 @@ describe('handleBlockedMessage', () => {
     const result = await handleBlockedMessage(baseUser(), '123');
 
     expect(upgradeFlow.generateUpgradeCheckout).not.toHaveBeenCalled();
-    expect(result.replyText).toMatch(/teste grátis acabou/i);
+    expect(result.replyText).toMatch(/3 dias de teste chegaram ao fim/i);
   });
 
   it('se o checkout mesmo assim devolver invalidCpf, repassa o aviso específico', async () => {

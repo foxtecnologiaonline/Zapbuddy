@@ -159,12 +159,13 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('register_plan_intent');
   });
 
-  it('abertura é um script fixo em 2 frases (apresentação, depois nome+e-mail) — não varia mais por onboarding_variant', () => {
+  it('abertura é um script fixo em 3 frases (apresentação, aviso do teste de 3 dias, nome+e-mail) — não varia mais por onboarding_variant', () => {
     const promptA = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_name_first' }));
     const promptB = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_action_first' }));
 
     for (const prompt of [promptA, promptB]) {
       expect(prompt).toMatch(/Se apresente como o Tom/);
+      expect(prompt).toMatch(/teste grátis começa hoje e vale por 3 dias/);
       expect(prompt).toMatch(/Pergunte o nome E o e-mail dela juntos/);
     }
     expect(promptA).toBe(promptB);
