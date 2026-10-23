@@ -29,6 +29,8 @@ export interface User {
   asaas_customer_id: string | null;
   asaas_subscription_id: string | null;
   asaas_payment_link: string | null;
+  /** Fim do teste grátis de 3 dias (migration 0023) — passado isso sem `plan_status = 'active'`, o Tom bloqueia antes de chamar a IA (ver payments/trial-gate.ts). */
+  trial_ends_at: string;
   created_at: string;
 }
 

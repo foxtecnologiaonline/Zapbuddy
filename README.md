@@ -160,7 +160,10 @@ conversa — ver `CLAUDE.md`) →
 `0022_calendar_multi_provider.sql` (`calendar_connections.provider` +
 renomeia `google_refresh_token_encrypted`/`google_calendar_id` pra
 `refresh_token_encrypted`/`calendar_id` — integração com Outlook além do
-Google, uma agenda conectada por conta, ver `CLAUDE.md`).
+Google, uma agenda conectada por conta, ver `CLAUDE.md`) →
+`0023_trial_3_dias.sql` (`users.trial_ends_at` — trial vira 3 dias com
+bloqueio real de uso fora do LLM, era 7 dias sem bloqueio nenhum; ver
+`packages/core/src/payments/trial-gate.ts` e `CLAUDE.md`).
 Rodar em ordem, manualmente, no
 SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das

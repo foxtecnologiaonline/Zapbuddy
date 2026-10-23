@@ -323,9 +323,10 @@ venda). Detalhe completo em `docs/adr/0004-vendas-onboarding-indicacao.md` — r
   mantida aqui só pra contexto histórico): nenhum provedor de pagamento decidido. O Tom capturava
   intenção via tool `register_plan_intent`, nunca cobrava nem cancelava nada sozinho; um humano
   tratava manualmente pelo admin (mesmo padrão já usado por `plan_status`).
-- **Trial de 7 dias**, calculado a partir de `users.created_at` — sem convite de venda antes do
+- ~~**Trial de 7 dias**, calculado a partir de `users.created_at` — sem convite de venda antes do
   5º dia, "prepara o terreno" entre o 5º e o 7º, convite direto a partir do 7º (só pra quem
-  continua em `plan_status = 'trial'`).
+  continua em `plan_status = 'trial'`).~~ (decisão original, revertida pelo amendamento no fim
+  desta seção: trial virou 3 dias, com bloqueio real — não só convite — a partir do fim do trial.)
 - **Straight Line System (Jordan Belfort) adaptado, não copiado**: aproveita certeza construída em
   fato real + convite único + loop de objeção limitado a uma volta; descarta de propósito urgência
   fabricada, prova social inventada e insistência além da segunda recusa — isso violaria a regra
@@ -335,6 +336,35 @@ venda). Detalhe completo em `docs/adr/0004-vendas-onboarding-indicacao.md` — r
   promete prêmio/desconto que não existe.
 - **Cancelamento**: uma tentativa de retenção genuína, nunca duas — simetria com a regra do
   convite de venda.
+
+**Amendamento 2026-10 (motivo documentado — reversão explícita do "nunca bloqueia" da decisão 1
+original do ADR 0004):** trial vira **3 dias** (era 7) e passa a ter **bloqueio real** de uso —
+pedido explícito do dono do produto. Diferente de antes (onde `plan_status = 'trial'` nunca
+impedia nada, só mudava o texto que o Tom mandava), agora `users.trial_ends_at` (migration `0023`)
+marca o fim do trial e, passado isso sem `plan_status = 'active'`, a mensagem da pessoa **nem chega
+a rodar o LLM** — `orchestrateTurn` intercepta antes (`packages/core/src/payments/trial-gate.ts`).
+`plan_status = 'canceled'` também bloqueia (não tinha sentido deixar de fora). O que acontece:
+- **Mensagem fixa, repetida em toda mensagem enquanto bloqueado** (decisão explícita — mais
+  insistente que o convite único do ADR 0004 original, porque aqui é bloqueio de verdade, não
+  convite): pede CPF/CNPJ pra gerar o link de pagamento. Única "porta" que passa pelo bloqueio é
+  uma mensagem que seja só um CPF/CNPJ plausível (nunca gerada pela IA — ver `messages.ts`).
+- **Dashboard web continua acessível** mesmo bloqueado (decisão explícita) — só o WhatsApp
+  trava; a pessoa não perde acesso aos próprios dados já registrados por falta de pagamento.
+- **Quem já estava em trial quando a migration `0023` rodou ganhou 3 dias novos a partir daquele
+  momento** (não do `created_at` original) — decisão explícita do dono do produto, pra não travar
+  ninguém de surpresa sob a regra antiga. O default da coluna é volátil (`now() + interval '3
+  days'`) de propósito: reavalia pra cada linha já existente no momento da migration E pra cada
+  INSERT novo depois — mesmo efeito, sem precisar de coluna calculada nem lógica em `createUser()`.
+- **Lógica de checkout extraída** pra `packages/core/src/payments/upgrade-flow.ts`
+  (`generateUpgradeCheckout`) — reaproveitada pela tool `register_plan_intent` (pessoa topa durante
+  uma conversa normal, ainda dentro do trial) e pelo bloqueio (pessoa só consegue mandar CPF/CNPJ).
+  Mesma regra de negócio, dois pontos de entrada — nunca duplicada.
+- `system-prompt.ts` (`buildUpgradeSection`) perdeu o branch de "convite direto" forçado depois do
+  trial — ficou inalcançável (quem chega lá sempre ainda está dentro do trial, já que o bloqueio
+  intercepta antes do LLM pra quem já passou). Sobrou só um aviso suave no último dia + a
+  disposição de seguir o fluxo de assinatura se a PRÓPRIA pessoa trouxer o assunto antes do
+  bloqueio agir — o convite único/loop de objeção limitado do ADR 0004 original continua valendo
+  nesse caso oportunista, só não é mais forçado pelo Tom por conta própria.
 
 ## Onboarding turbinado (2026-10, motivo documentado)
 
@@ -359,9 +389,12 @@ Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboard
   (par/ímpar do último dígito, nunca aleatório) entre "nome primeiro" (controle) e "ação primeiro"
   — decisão de qual vence fica pra quando a amostra crescer, lida manualmente no funil.
   **Amendamento 2026-10 (motivo documentado, decisão do dono do produto): este teste A/B foi
-  encerrado antes de ter amostra** — a abertura do onboarding virou um script fixo em 2 frases
-  (ver seção "Cadastro progressivo" abaixo): 1) o Tom se apresenta, 2) pergunta nome E e-mail
-  juntos, numa frase só (`buildOnboardingSection`, sem mais ramificação por `onboarding_variant`).
+  encerrado antes de ter amostra** — a abertura do onboarding virou um script fixo em 3 frases
+  (ver seção "Cadastro progressivo" abaixo): 1) o Tom se apresenta, 2) avisa que o teste grátis
+  começa hoje e vale 3 dias (adicionada com o trial de 3 dias; a mensagem de bloqueio no fim do
+  trial é fixa e **não cita preço** — decisão do dono do produto, o valor aparece na página da
+  Asaas), 3) pergunta nome E e-mail juntos, numa frase só (`buildOnboardingSection`, sem mais
+  ramificação por `onboarding_variant`).
   A coluna `onboarding_variant` e a atribuição determinística continuam existindo (não apagadas) só
   pra manter o dado histórico do funil do admin legível — a partir desta decisão ela não influencia
   mais o texto que o Tom manda, então os números das duas variantes devem convergir pra frente.

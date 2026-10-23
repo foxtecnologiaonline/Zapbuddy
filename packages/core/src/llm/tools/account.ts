@@ -1,15 +1,7 @@
 import { z } from 'zod';
-import {
-  createAccountInvite,
-  listAccountMembers,
-  getReferralStats,
-  registerPlanIntent,
-  findUserById,
-  saveUserCpfCnpj,
-  saveAsaasSubscription,
-} from '@zapbuddy/db';
+import { createAccountInvite, listAccountMembers, getReferralStats, registerPlanIntent, findUserById } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
-import { createAsaasCustomer, createAsaasSubscription } from '../../payments/asaas-client.js';
+import { generateUpgradeCheckout } from '../../payments/upgrade-flow.js';
 import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError } from '../../whatsapp/deep-link.js';
 
 export const inviteMemberTool = defineTool({
@@ -59,16 +51,6 @@ export const getReferralInfoTool = defineTool({
   },
 });
 
-/** Só dígitos — normaliza antes de salvar/comparar/mandar pra Asaas, pra nunca gravar duas grafias (com/sem pontuação) do mesmo CPF/CNPJ como "diferentes". */
-function normalizeCpfCnpj(value: string): string {
-  return value.replace(/\D/g, '');
-}
-
-/** CPF = 11 dígitos, CNPJ = 14 — checagem de tamanho só, sem validar dígito verificador (a Asaas já faz essa validação de verdade do lado dela). */
-function isPlausibleCpfCnpj(digitsOnly: string): boolean {
-  return digitsOnly.length === 11 || digitsOnly.length === 14;
-}
-
 export const registerPlanIntentTool = defineTool({
   name: 'register_plan_intent',
   description:
@@ -97,35 +79,9 @@ export const registerPlanIntentTool = defineTool({
     const user = await findUserById(ctx.userId);
     if (!user) return { registered: true, needs_cpf: true };
 
-    if (user.asaas_subscription_id && user.asaas_payment_link) {
-      return { registered: true, checkout_url: user.asaas_payment_link };
-    }
-
-    const rawCpfCnpj = params.cpf_cnpj ?? user.cpf_cnpj ?? undefined;
-    if (!rawCpfCnpj) {
-      return { registered: true, needs_cpf: true };
-    }
-
-    const cpfCnpj = normalizeCpfCnpj(rawCpfCnpj);
-    if (!isPlausibleCpfCnpj(cpfCnpj)) {
-      return { registered: true, invalid_cpf: true };
-    }
-
-    if (params.cpf_cnpj && cpfCnpj !== user.cpf_cnpj) {
-      await saveUserCpfCnpj(ctx.userId, cpfCnpj);
-    }
-
-    const customer = user.asaas_customer_id
-      ? { id: user.asaas_customer_id }
-      : await createAsaasCustomer({
-          name: user.preferred_name ?? user.name ?? 'Cliente ZapBuddy',
-          cpfCnpj,
-          externalReference: user.id,
-        });
-
-    const subscription = await createAsaasSubscription({ customerId: customer.id, externalReference: user.id });
-    await saveAsaasSubscription(ctx.userId, customer.id, subscription.id, subscription.paymentLink);
-
-    return { registered: true, checkout_url: subscription.paymentLink };
+    const result = await generateUpgradeCheckout(user, params.cpf_cnpj);
+    if ('checkoutUrl' in result) return { registered: true, checkout_url: result.checkoutUrl };
+    if ('invalidCpf' in result) return { registered: true, invalid_cpf: true };
+    return { registered: true, needs_cpf: true };
   },
 });
