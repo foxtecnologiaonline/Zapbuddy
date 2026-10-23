@@ -382,3 +382,49 @@ export interface InterpretationInsight {
   stats: Record<string, unknown>;
   created_at: string;
 }
+
+export interface Contact {
+  id: string;
+  account_id: string;
+  name: string;
+  name_normalized: string;
+  /** Só dígitos, com 55 + DDD. */
+  whatsapp_number: string;
+  last_inbound_at: string | null;
+  opted_out_at: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+}
+
+export type OutboundStatus = 'pending_confirmation' | 'sent' | 'delivered' | 'read' | 'failed' | 'cancelled';
+export type OutboundSendMode = 'free_form' | 'template';
+
+export interface OutboundMessage {
+  id: string;
+  account_id: string;
+  user_id: string;
+  contact_id: string | null;
+  recipient_name: string;
+  recipient_number: string;
+  body: string;
+  status: OutboundStatus;
+  send_mode: OutboundSendMode | null;
+  created_turn_id: string;
+  expires_at: string;
+  wa_message_id: string | null;
+  failed_reason: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface OutboundReply {
+  id: string;
+  outbound_message_id: string;
+  account_id: string;
+  wa_message_id: string;
+  message_type: string;
+  body: string | null;
+  created_at: string;
+}

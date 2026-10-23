@@ -16,6 +16,8 @@ import {
   listImportantDates,
   listPersonalGoals,
   listActiveHabits,
+  listOutboundMessages,
+  listContacts,
   listHabitCheckinDates,
   listActiveRecurringBills,
   listGoals,
@@ -25,6 +27,7 @@ import { getCurrentMonthRange } from '@/lib/timezone';
 import { CategoryBars, Sparkline } from './charts';
 import { bucketSumsByDay, TREND_WINDOW_DAYS } from './trend';
 import { buildTimeline, type TimelineEntry } from './timeline';
+import { describeOutboundReply, describeOutboundStatus } from './outbound';
 
 const MONTH_NAMES_PT = [
   'janeiro',
@@ -88,6 +91,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     savingsGoals,
     habits,
     habitCheckinDates,
+    outboundMessages,
+    contacts,
   ] = await Promise.all([
     summarizeTransactions(account.accountId, startIso, endIso),
     listTransactions(account.accountId, startIso, endIso, {
@@ -112,6 +117,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listGoals(account.accountId, 'active'),
     listActiveHabits(account.accountId),
     listHabitCheckinDates(account.accountId, localDateKey(user.timezone)),
+    listOutboundMessages(account.accountId, 30),
+    listContacts(account.accountId),
   ]);
 
   let referralLink: string | null = null;
@@ -356,6 +363,53 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </section>
+
+        <section className="card">
+          <h2>Recados enviados pelo Tom</h2>
+          <p className="muted-sm">
+            O que você pediu pro Tom mandar a outras pessoas, se foi entregue e se a pessoa respondeu. As mensagens saem
+            do número do Tom, identificadas como suas.
+          </p>
+          {outboundMessages.length === 0 ? (
+            <p className="muted">Nada enviado ainda — peça no WhatsApp: &quot;Tom, manda um bom dia pra Aline&quot;.</p>
+          ) : (
+            <ul className="item-list">
+              {outboundMessages.map((message) => (
+                <li key={message.id}>
+                  <span>
+                    <strong>{message.recipient_name}</strong>: {message.body.length > 140 ? `${message.body.slice(0, 140)}…` : message.body}
+                  </span>
+                  <span className="muted">
+                    {describeOutboundStatus(message)} · {describeOutboundReply(message)}
+                    {message.sent_at && ` · ${new Date(message.sent_at).toLocaleString('pt-BR', { timeZone: user.timezone, dateStyle: 'short', timeStyle: 'short' })}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <h3>Contatos</h3>
+          {contacts.length === 0 ? (
+            <p className="muted">Nenhum contato salvo — diga o número pro Tom (&quot;o da Aline é 11 99999-9999&quot;) ou encaminhe o contato dela.</p>
+          ) : (
+            <ul className="item-list">
+              {contacts.map((contact) => (
+                <li key={contact.id}>
+                  <span>
+                    {contact.name}
+                    {contact.opted_out_at && ' (pediu pra não receber)'}
+                  </span>
+                  <span className="item-actions">
+                    <form action={`/api/dashboard/contacts/${contact.id}/delete`} method="POST">
+                      <button type="submit" className="btn btn-sm btn-danger">
+                        remover
+                      </button>
+                    </form>
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
         </section>

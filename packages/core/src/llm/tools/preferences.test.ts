@@ -14,7 +14,7 @@ import { findUserById, saveMorningDigestPreferences, saveUserCity } from '@zapbu
 import { geocodeBrazilianCity } from '../../weather/geocoding.js';
 import { setCityTool, setMorningDigestPreferencesTool } from './preferences.js';
 
-const ctx = { userId: 'u1', whatsappNumber: '5511999999999', messageSource: 'text', timezone: 'America/Sao_Paulo', accountId: 'a1', role: 'owner' } as const;
+const ctx = { userId: 'u1', whatsappNumber: '5511999999999', messageSource: 'text', timezone: 'America/Sao_Paulo', accountId: 'a1', role: 'owner', turnId: 'turn-test' } as const;
 
 beforeEach(() => {
   vi.mocked(findUserById).mockReset().mockResolvedValue({ quiet_hours_start: 22, quiet_hours_end: 7 } as never);

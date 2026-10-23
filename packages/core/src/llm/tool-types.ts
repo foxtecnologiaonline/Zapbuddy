@@ -12,6 +12,8 @@ export interface ToolContext {
   accountId: string;
   /** Só 'owner' pode convidar novos membros (tools/account.ts) — checado em código, nunca decidido pelo modelo. */
   role: AccountRole;
+  /** Um id novo por mensagem da pessoa. Ações que EXIGEM uma confirmação dela (recado a terceiro) comparam com o turno em que foram preparadas: confirmar no mesmo turno é impossível. */
+  turnId: string;
 }
 
 export interface ToolDefinition<Schema extends z.ZodTypeAny> {

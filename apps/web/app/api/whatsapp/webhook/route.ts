@@ -1,7 +1,17 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrCreateUser, InvalidWhatsappNumberError, logError, logWebhookEvent, logger } from '@zapbuddy/db';
-import { getAudioTranscriptionQueue, getIncomingMessageQueue, getDocumentUploadQueue, isRateLimited } from '@zapbuddy/core';
+import {
+  getAudioTranscriptionQueue,
+  getIncomingMessageQueue,
+  getDocumentUploadQueue,
+  isRateLimited,
+  routeRecipientReply,
+  applyDeliveryStatuses,
+  formatSharedContactText,
+  type DeliveryStatusLike,
+  type SharedContactLike,
+} from '@zapbuddy/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +40,9 @@ interface WhatsappWebhookPayload {
           audio?: { id: string };
           document?: { id: string; filename?: string; mime_type?: string; caption?: string };
           image?: { id: string; mime_type?: string; caption?: string };
+          contacts?: SharedContactLike[];
         }>;
+        statuses?: DeliveryStatusLike[];
       };
     }>;
   }>;
@@ -67,10 +79,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const messages = payload.entry?.flatMap((entry) => entry.changes ?? []).flatMap((change) => change.value?.messages ?? []) ?? [];
 
+  // Status de entrega dos recados a terceiros (entregue/lido/falhou). Só atualiza o log; nunca derruba o webhook.
+  const statuses = payload.entry?.flatMap((entry) => entry.changes ?? []).flatMap((change) => change.value?.statuses ?? []) ?? [];
+  if (statuses.length > 0) await applyDeliveryStatuses(statuses);
+
   for (const message of messages) {
     // Cada mensagem é tratada isoladamente: uma falha numa não deve impedir o
     // processamento das demais nem a resposta 200 rápida que a Meta exige.
     try {
+      // Resposta a um recado do Tom vindo de quem ainda NÃO é usuário: vira log + aviso a quem pediu,
+      // nunca uma conta nova com onboarding (ver packages/core/src/contacts/replies.ts).
+      if (await routeRecipientReply({ id: message.id, from: message.from, type: message.type, text: message.text?.body })) {
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: message.from, eventType: 'other', status: 'accepted' });
+        continue;
+      }
+
       const user = await getOrCreateUser(message.from);
 
       // Checado por número já resolvido (não message.from direto) pra cobrir
@@ -124,6 +147,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           { jobId: message.id },
         );
         await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'document', status: 'accepted' });
+      } else if (message.type === 'contacts' && message.contacts) {
+        // Cartão de contato encaminhado pela pessoa: o Tom oferece salvar (save_contact), pra poder mandar recados.
+        const sharedText = formatSharedContactText(message.contacts);
+        if (sharedText) {
+          await getIncomingMessageQueue().add(
+            'process',
+            { userId: user.id, whatsappNumber: user.whatsapp_number, text: sharedText, waMessageId: message.id },
+            { jobId: message.id },
+          );
+        }
+        await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'other', status: 'accepted' });
       } else {
         // Outros tipos (sticker, localização, contato, etc.) estão fora do escopo da Fase 2.
         await logWebhookEvent({ channel: 'cloud-api', whatsappNumber: user.whatsapp_number, eventType: 'other', status: 'accepted' });

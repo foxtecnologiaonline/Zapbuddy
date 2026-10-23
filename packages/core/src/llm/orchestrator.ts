@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { User } from '@zapbuddy/db';
 import {
   getAccountForUser,
@@ -109,6 +110,7 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     timezone: user.timezone,
     accountId: account.accountId,
     role: account.role,
+    turnId: randomUUID(),
   };
 
   const [history, recentCategorizations, streakDays, memoryFacts] = await Promise.all([

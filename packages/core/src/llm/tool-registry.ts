@@ -25,6 +25,14 @@ import {
 import { createHabitTool, logHabitCheckinTool, listHabitsTool, archiveHabitTool } from './tools/habits.js';
 import { getWeatherTool } from './tools/weather.js';
 import { getMarketRateTool } from './tools/markets.js';
+import {
+  saveContactTool,
+  listContactsTool,
+  deleteContactTool,
+  prepareMessageToContactTool,
+  sendPreparedMessageTool,
+  listSentMessagesTool,
+} from './tools/contacts.js';
 import { undoLastActionTool } from './tools/undo.js';
 import { rememberImportantDateTool, listImportantDatesTool, forgetImportantDateTool } from './tools/important-dates.js';
 import { createPersonalGoalTool, listPersonalGoalsTool, completePersonalGoalTool, deletePersonalGoalTool } from './tools/goals.js';
@@ -87,6 +95,12 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   logHabitCheckinTool,
   listHabitsTool,
   archiveHabitTool,
+  saveContactTool,
+  listContactsTool,
+  deleteContactTool,
+  prepareMessageToContactTool,
+  sendPreparedMessageTool,
+  listSentMessagesTool,
 ];
 
 export function getToolByName(name: string) {
