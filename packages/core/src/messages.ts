@@ -1,3 +1,5 @@
+import { formatMonthlyPriceBRL } from './payments/plan.js';
+
 /**
  * Mensagens estáticas enviadas ao usuário FORA do fluxo gerado pela IA —
  * erro técnico, limite de sistema, template de lembrete. A conversa normal
@@ -28,4 +30,14 @@ export const MESSAGES = {
     'Esse código não é válido ou expirou. Confirma com quem te convidou e manda de novo (ex.: "entrar 482913"), ' +
     'ou me conta seu nome que eu sigo com seu cadastro normal.',
   documentReceived: (fileName: string) => `📎 Salvei "${fileName}". Pode pedir pra eu procurar depois.`,
+  // Bloqueio real de trial encerrado (2026-10, pedido do dono do produto —
+  // ver CLAUDE.md). Mensagem FIXA, nunca gerada pela IA: a pessoa bloqueada
+  // nem chega a chamar o LLM (trial-gate.ts intercepta antes), então essas
+  // três cobrem o fluxo inteiro sem passar pelo system-prompt.
+  trialBlocked:
+    `Seu teste grátis acabou! Pra continuar comigo — agenda, tarefas, financeiro, tudo — é ${formatMonthlyPriceBRL()}/mês, ` +
+    'PIX, boleto ou cartão, você escolhe na hora. Me manda seu CPF ou CNPJ que eu já te passo o link de pagamento.',
+  trialBlockedInvalidCpf: 'Esse CPF/CNPJ não tem a quantidade certa de dígitos (11 pro CPF, 14 pro CNPJ). Confirma e manda de novo?',
+  trialBlockedCheckoutReady: (checkoutUrl: string) =>
+    `Aqui está: ${checkoutUrl}\n\nEscolhe PIX, boleto ou cartão na página e volto a te ajudar com tudo assim que confirmar 🙂`,
 } as const;

@@ -64,56 +64,43 @@ function daysSince(iso: string, now: Date = new Date()): number {
 }
 
 /**
- * Momento de venda (ADR 0004): adaptação do Straight Line System (Jordan
- * Belfort) nos pedaços que são honestos e reaproveitáveis — certeza
- * construída em cima de fato real (nunca número inventado), um convite
- * direto e único, e "loop" de objeção limitado a UMA volta — e descartando
- * de propósito o que é desonesto no original (urgência fabricada, prova
- * social inventada, insistência após recusa clara). Sem preço fechado nem
- * cobrança automática ainda (CLAUDE.md) — o "fechamento" aqui é a pessoa
- * topar continuar, não uma compra de verdade.
+ * Teste grátis de 3 dias (2026-10, pedido do dono do produto — ver
+ * CLAUDE.md, substitui o trial de 7 dias do ADR 0004). Diferente de antes:
+ * agora existe um bloqueio REAL fora do LLM (payments/trial-gate.ts) — a
+ * partir do fim do trial, a mensagem nem chega a rodar o orquestrador, então
+ * o "convite direto" que existia aqui (ADR 0004, decisão 1) nunca mais é
+ * alcançado por esta função: quem está lendo este bloco sempre ainda está
+ * DENTRO do trial. Por isso só sobrou o aviso suave do último dia — o
+ * convite de venda de verdade (certeza em fato real, convite único, loop de
+ * objeção limitado) só é reaproveitado aqui se a PRÓPRIA pessoa trouxer o
+ * assunto antes do bloqueio automático agir.
  */
 function buildUpgradeSection(user: User): string {
   if (user.plan_status !== 'trial') return '';
   const trialDay = daysSince(user.created_at);
-  if (trialDay < 5) return '';
-
-  if (trialDay < 7) {
-    return `
-
-# Teste quase no fim
-
-Essa pessoa está no teste grátis há ${trialDay} dia(s) (fecha com 7). Se vier a propósito — nunca
-interrompendo um gasto/tarefa no meio pra falar disso — pode mencionar de passagem que o teste tá
-chegando no fim, sem pedir nada ainda. Não é o momento do convite direto, só prepara o terreno.`;
-  }
+  if (trialDay < 2) return '';
 
   return `
 
-# Momento de venda (teste encerrado)
+# Teste quase no fim
 
-O teste grátis já passou de 7 dias e a pessoa continua em plan_status=trial — ainda não recebeu um
-convite direto pra continuar. Depois de resolver o que ela pediu na mensagem (nunca troque o
-pedido dela por isso), se ainda não rolou esse convite nessa conversa, feche a resposta com UM
-convite:
+Essa pessoa está no teste grátis há ${trialDay} dia(s) (fecha com 3). Se vier a propósito — nunca
+interrompendo um gasto/tarefa no meio pra falar disso — pode mencionar de passagem que o teste tá
+chegando no fim. NÃO force nenhum convite: quando o trial acabar de verdade, se ela mandar mensagem
+sem ter assinado, um bloqueio automático já pede o CPF/CNPJ dela e gera o link de pagamento
+sozinho — você não precisa (e não deve) tentar fechar essa venda por conta própria aqui.
 
-1. Certeza no que já aconteceu, não no que você promete: aponte algo concreto que já rolou de
-   verdade nessa conversa ou no histórico recente (ex.: já registrou gastos, já recebeu um resumo)
-   — só cite fato que você realmente tem, nunca invente número ou estatística.
-2. Um convite, não um discurso: pergunte direto se ela topa seguir com você por R$ 27,90/mês —
-   esse é o preço real, pode citar sem rodeio. Pagamento é PIX, boleto ou cartão, ela escolhe na
-   hora de fechar.
-3. Objeção → UMA volta, nunca mais que isso: se ela hesitar ("vou pensar", "tá caro", "não sei se
-   preciso"), acolha de verdade o que ela disse, devolva um ponto concreto da própria conversa
-   (não um argumento genérico de vendas) e pergunte de novo, uma vez só. Depois dessa segunda
-   resposta — seja ela qual for — aceite sem insistir, sem culpa, sem repetir o convite de novo
-   nessa mesma conversa.
-4. Se ela topar, pergunte o CPF ou CNPJ dela (exigência de quem processa o pagamento, explique em
-   uma frase se perguntar por quê) e chame register_plan_intent(intent: "upgrade", cpf_cnpj: "...").
-   Se vier needs_cpf: true sem ter mandado cpf_cnpj ainda, é porque falta pedir — peça e chame de
-   novo. Quando vier checkout_url, mande esse link na mesma resposta — é o jeito de fechar de
-   verdade. Nunca invente outro valor, desconto, prazo "que acaba hoje" ou prova social (número de
-   clientes, depoimento, nota) que você não tenha de verdade.`;
+Mas se a PRÓPRIA pessoa trouxer o assunto (perguntar quanto custa, dizer que quer continuar com
+você), responda com certeza no que já aconteceu de verdade nessa conversa/histórico (nunca invente
+número ou estatística), diga o preço real sem rodeio — R$ 27,90/mês, ela escolhe PIX/boleto/cartão
+na hora de fechar. Se ela hesitar ("vou pensar", "tá caro"), acolha de verdade e pergunte de novo
+UMA vez só — depois dessa segunda resposta, aceite sem insistir. Se ela topar, peça o CPF ou CNPJ
+(exigência de quem processa o pagamento, explique em uma frase se perguntar por quê) e chame
+register_plan_intent(intent: "upgrade", cpf_cnpj: "..."). Se vier needs_cpf: true sem ter mandado
+cpf_cnpj ainda, peça e chame de novo; se vier invalid_cpf: true, avise que a quantidade de dígitos
+não bateu e peça de novo. Quando vier checkout_url, mande esse link na mesma resposta — nunca
+invente outro valor, desconto, prazo "que acaba hoje" ou prova social que você não tenha de
+verdade.`;
 }
 
 /** Indicação como favor orgânico a um amigo, não oferta com recompensa (ADR 0004 — recompensa ainda não decidida). */

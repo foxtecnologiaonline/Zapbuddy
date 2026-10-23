@@ -35,6 +35,7 @@ function baseUser(overrides: Partial<User> = {}): User {
     asaas_customer_id: null,
     asaas_subscription_id: null,
     asaas_payment_link: null,
+    trial_ends_at: '2026-01-04T00:00:00.000Z',
     created_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -102,44 +103,41 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toMatch(/primeira interação/i);
   });
 
-  it('não inclui nada de venda nos primeiros dias de teste', () => {
-    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
+  it('não inclui nada de venda no primeiro dia de teste', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(1) }));
 
     expect(prompt).not.toContain('Teste quase no fim');
-    expect(prompt).not.toContain('Momento de venda');
   });
 
-  it('só prepara o terreno (sem convite direto) perto do fim do teste', () => {
-    const prompt = baseUser({ created_at: createdDaysAgo(6) });
-    const result = buildSystemPrompt(prompt);
+  it('avisa que o teste tá no fim no último dia (3 dias de trial), sem forçar convite', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
 
-    expect(result).toContain('Teste quase no fim');
-    expect(result).not.toContain('Momento de venda');
-    expect(result).not.toMatch(/chame register_plan_intent\(intent: "upgrade"\)/);
+    expect(prompt).toContain('Teste quase no fim');
+    expect(prompt).toMatch(/NÃO force nenhum convite/);
+    expect(prompt).not.toMatch(/chame register_plan_intent\(intent: "upgrade"\)/);
   });
 
-  it('abre o convite direto de assinatura depois de 7 dias de teste', () => {
-    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(10) }));
+  it('só segue o fluxo de assinatura se a PRÓPRIA pessoa trouxer o assunto — nunca empurra', () => {
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
 
-    expect(prompt).toContain('Momento de venda');
+    expect(prompt).toMatch(/se a PRÓPRIA pessoa trouxer o assunto/i);
     expect(prompt).toContain('register_plan_intent');
-    expect(prompt).toMatch(/UMA volta/);
+    expect(prompt).toMatch(/UMA vez só/);
   });
 
   it('cita o preço real da assinatura e pede CPF/CNPJ, mas nunca inventa desconto, urgência falsa ou prova social', () => {
-    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(10) }));
+    const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
 
     expect(prompt).toMatch(/R\$ 27,90\/mês/);
-    expect(prompt).toMatch(/pergunte o CPF ou CNPJ/i);
+    expect(prompt).toMatch(/peça o CPF ou CNPJ/i);
     expect(prompt).toMatch(/cpf_cnpj/);
     expect(prompt).toMatch(/checkout_url/);
-    expect(prompt).toMatch(/nunca invente outro valor, desconto, prazo/i);
+    expect(prompt).toMatch(/nunca\s+invente outro valor, desconto, prazo/i);
   });
 
-  it('não dispara convite de venda pra quem já é assinante ativo', () => {
+  it('não dispara nada de venda pra quem já é assinante ativo', () => {
     const prompt = buildSystemPrompt(baseUser({ plan_status: 'active', created_at: createdDaysAgo(30) }));
 
-    expect(prompt).not.toContain('Momento de venda');
     expect(prompt).not.toContain('Teste quase no fim');
   });
 

@@ -14,6 +14,7 @@ import { appendTurns, getRecentTurns } from '../context/conversation-context.js'
 import { getCurrentStreakDays } from '../streak/compute.js';
 import { runLlmWithFallback } from './providers/orchestration.js';
 import { MESSAGES } from '../messages.js';
+import { isAccessBlocked, handleBlockedMessage } from '../payments/trial-gate.js';
 
 export interface OrchestrateInput {
   user: User;
@@ -88,6 +89,13 @@ async function resolveAccount(
  */
 export async function orchestrateTurn(input: OrchestrateInput): Promise<OrchestrateResult> {
   const { user, messageText, messageSource } = input;
+
+  // Bloqueio real de trial encerrado/cancelamento (2026-10, CLAUDE.md) —
+  // roda ANTES de resolver conta ou montar prompt: ninguém bloqueado chega
+  // a custar uma chamada de LLM.
+  if (isAccessBlocked(user)) {
+    return handleBlockedMessage(user, messageText);
+  }
 
   const account = await resolveAccount(user, messageText);
   if ('replyText' in account) {
