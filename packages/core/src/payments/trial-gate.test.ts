@@ -72,6 +72,13 @@ describe('handleBlockedMessage', () => {
     expect(result.replyText).toContain('https://asaas.com/pay/abc');
   });
 
+  it('quem já tem link de pagamento gerado recebe o link de novo, em vez de ser pedido o CPF outra vez', async () => {
+    const result = await handleBlockedMessage(baseUser({ asaas_payment_link: 'https://asaas.com/pay/abc' }), 'oi');
+
+    expect(result.replyText).toContain('https://asaas.com/pay/abc');
+    expect(upgradeFlow.generateUpgradeCheckout).not.toHaveBeenCalled();
+  });
+
   it('mensagem curta demais pra ser CPF/CNPJ (ex.: "123") nem chega a chamar o checkout — cai no aviso padrão', async () => {
     const result = await handleBlockedMessage(baseUser(), '123');
 

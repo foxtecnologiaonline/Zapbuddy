@@ -4,6 +4,7 @@ import {
   downloadWhatsappMedia,
   sendWhatsappTextMessage,
   MESSAGES,
+  isAccessBlocked,
   INVITE_CODE_MESSAGE_PATTERN,
   type DocumentUploadJob,
 } from '@zapbuddy/core';
@@ -26,6 +27,11 @@ export async function handleDocumentUpload(job: Job<DocumentUploadJob>): Promise
   const user = await findUserById(userId);
   if (!user) {
     logger.error('document_upload_user_not_found', { userId, waMessageId });
+    return;
+  }
+
+  if (isAccessBlocked(user)) {
+    await sendWhatsappTextMessage(user.whatsapp_number, MESSAGES.trialBlocked);
     return;
   }
 
