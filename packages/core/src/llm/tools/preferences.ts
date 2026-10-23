@@ -88,6 +88,10 @@ export const setMorningDigestPreferencesTool = defineTool({
     include_finance: z.boolean().optional(),
   }),
   execute: async (params, ctx) => {
+    if (params.enabled === undefined && params.hour === undefined && params.include_agenda === undefined && params.include_finance === undefined) {
+      return { saved: false, reason: 'nothing_to_change' };
+    }
+
     if (params.hour !== undefined) {
       const user = await findUserById(ctx.userId);
       // Mensagem proativa dentro do horário de silêncio nunca sai — avisar em vez de gravar um horário que não funciona.

@@ -158,7 +158,6 @@ export interface AccountOwnerForSweep {
   quietHoursEnd: number;
   /** Nome pra saudação do resumo matinal: preferred_name, senão o primeiro nome. */
   displayName: string | null;
-  city: string | null;
   cityUf: string | null;
   cityLatitude: number | null;
   cityLongitude: number | null;
@@ -178,7 +177,7 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
   const { data, error } = await getSupabaseClient()
     .from('account_members')
     .select(
-      'account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end, name, preferred_name, city, city_uf, city_latitude, city_longitude, morning_digest_enabled, morning_digest_hour, morning_digest_agenda, morning_digest_finance)',
+      'account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end, name, preferred_name, city_uf, city_latitude, city_longitude, morning_digest_enabled, morning_digest_hour, morning_digest_agenda, morning_digest_finance)',
     )
     .eq('role', 'owner');
 
@@ -192,7 +191,6 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
       quiet_hours_end: number;
       name: string | null;
       preferred_name: string | null;
-      city: string | null;
       city_uf: string | null;
       city_latitude: number | null;
       city_longitude: number | null;
@@ -209,7 +207,6 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
       quietHoursStart: user.quiet_hours_start,
       quietHoursEnd: user.quiet_hours_end,
       displayName: user.preferred_name ?? user.name?.trim().split(/\s+/)[0] ?? null,
-      city: user.city,
       cityUf: user.city_uf,
       cityLatitude: user.city_latitude,
       cityLongitude: user.city_longitude,

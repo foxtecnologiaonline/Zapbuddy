@@ -135,7 +135,9 @@ function greetingForHour(hour: number): string {
  */
 export function formatMorningNarrative(input: MorningNarrativeInput): string {
   const headerEmoji = input.weather ? weatherEmoji(input.weather.conditionId) : SEASON_EMOJI[input.season];
-  const greeting = `${greetingForHour(input.digestHour)}${input.name ? `, ${input.name}` : ''}!`;
+  // Nome vem da pessoa: tira os caracteres de formatação do WhatsApp pra "*Ana*" não quebrar o negrito do cumprimento.
+  const safeName = input.name?.replace(/[*_~`]/g, '').trim() ?? '';
+  const greeting = `${greetingForHour(input.digestHour)}${safeName ? `, ${safeName}` : ''}!`;
   const paragraphs: string[] = [`${headerEmoji} *${greeting}*`];
 
   const openerOptions = WEEKDAY_OPENERS[input.weekdayIndex];
@@ -233,6 +235,11 @@ export interface MorningDigestData {
   /** Seções que a pessoa deixou ligadas — desligada = não buscou nada e não conta pra "dia livre". */
   includeAgenda: boolean;
   includeFinance: boolean;
+  /**
+   * false quando alguma fonte de agenda/tarefas/contas falhou ao buscar: vazio
+   * ali não significa "nada hoje", então a narrativa não afirma "dia livre".
+   */
+  dataComplete: boolean;
 }
 
 /**
@@ -271,7 +278,7 @@ export function composeMorningDigest(data: MorningDigestData): string[] {
     season: data.season,
     weather: data.weather,
     holiday: data.holiday,
-    nothingScheduled: data.includeAgenda && data.includeFinance && followUps.length === 0,
+    nothingScheduled: data.dataComplete && data.includeAgenda && data.includeFinance && followUps.length === 0,
     followUpComing: followUps.length > 0,
   });
 

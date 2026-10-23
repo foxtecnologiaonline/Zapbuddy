@@ -33,7 +33,7 @@ Itens de negócio (fluxo de caixa de MEI/PJ, DAS, nota fiscal) não são nicho d
 
 Entram no código, por pedido explícito, mesmo fora da ordem de fases:
 
-- **Resumo matinal** (fila `morning-digest-generate`, 8h local): agora em **3 mensagens separadas** (2026-10,
+- **Resumo matinal** (fila `morning-digest-generate`, hora local configurável por pessoa, default 8h): agora em **3 mensagens separadas** (2026-10,
   amendamento, motivo documentado — pedido do dono do produto):
   1. Narrativa (dia da semana, data, estação do ano, previsão do tempo e feriado nacional/estadual de hoje, se
      houver) — escrita como frase corrida, não lista de bullet, e **sempre enviada** (diferente das duas seguintes,
@@ -64,7 +64,8 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
     nos insights (ADR 0003). Dicas práticas do clima (`digest/weather-tips.ts`: guarda-chuva, casaco, protetor) e
     emoji pela condição; formatação do WhatsApp (`*negrito*`), próximo compromisso destacado, hora nas tarefas
     quando for uma hora de verdade, CTA no fim de cada mensagem, linha de "dia livre" só quando agenda e financeiro
-    estão ligados e vazios (nunca afirma "agenda livre" sem saber).
+    estão ligados e vazios **e todas as buscas deram certo** (se agenda/tarefas/contas falharam, "vazio" não é "livre" e a
+    frase não aparece — nunca afirma "agenda livre" sem saber).
   - Clima: cache em **memória do worker** (não Redis — a cota do Upstash já estourou por comando), chave = coordenada
     arredondada + dia local, com dedupe de pedidos simultâneos e cache negativo de 5 min; uma chamada por lugar em vez
     de uma por usuário. Corrigido junto: a detecção de chuva usava faixas da escala WMO (Open-Meteo) em vez dos IDs do

@@ -38,6 +38,11 @@ describe('set_morning_digest_preferences', () => {
     expect(result).toEqual({ saved: true, enabled: true, hour: 7, include_agenda: true, include_finance: false });
   });
 
+  it('sem nenhum campo, não grava (update vazio)', async () => {
+    expect(await setMorningDigestPreferencesTool.execute({}, ctx)).toEqual({ saved: false, reason: 'nothing_to_change' });
+    expect(saveMorningDigestPreferences).not.toHaveBeenCalled();
+  });
+
   it('recusa horário dentro do silêncio (a mensagem nunca sairia)', async () => {
     const result = await setMorningDigestPreferencesTool.execute({ hour: 23 }, ctx);
 

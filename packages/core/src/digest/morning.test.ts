@@ -107,6 +107,11 @@ describe('formatMorningNarrative', () => {
     expect(formatMorningNarrative({ ...baseNarrative, name: 'Ana', digestHour: 20 })).toContain('*Boa noite, Ana!*');
   });
 
+  it('tira caracteres de formatação do nome (não quebra o negrito)', () => {
+    expect(formatMorningNarrative({ ...baseNarrative, name: '*Ana_*' })).toContain('*Bom dia, Ana!*');
+    expect(formatMorningNarrative({ ...baseNarrative, name: '***' })).toContain('*Bom dia!*');
+  });
+
   it('abertura varia pelo dia da semana e é determinística', () => {
     const friday = { ...baseNarrative, weekdayIndex: 5, weekdayLabel: 'sexta-feira' };
     const first = formatMorningNarrative(friday);
@@ -159,6 +164,7 @@ const baseData: MorningDigestData = {
   bills: [],
   includeAgenda: true,
   includeFinance: true,
+  dataComplete: true,
 };
 
 const aluguel = { name: 'Aluguel', amountCents: 120000, dueDay: 22 };
@@ -218,6 +224,11 @@ describe('composeMorningDigest', () => {
     expect(messages[1]).toContain('Compromissos de hoje');
     expect(messages[1]).toContain('Compromissos financeiros de hoje');
     expect(messages[1]).toContain('registre um pagamento');
+  });
+
+  it('fonte que falhou: vazio não vira "dia livre"', () => {
+    const [narrative] = composeMorningDigest({ ...baseData, dataComplete: false });
+    expect(narrative).not.toMatch(/nada registrado|dia está livre/);
   });
 
   it('seção desligada não aparece nem conta pro "dia livre"', () => {

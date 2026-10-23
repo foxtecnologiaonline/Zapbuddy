@@ -46,10 +46,12 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
   const location = job.data.city ?? fallbackLocation;
   const today = getTodayRange(ownerTimezone);
 
+  const failedSources = new Set<string>();
   const safely = async <T>(source: string, run: () => Promise<T>, fallback: T): Promise<T> => {
     try {
       return await run();
     } catch (error) {
+      failedSources.add(source);
       logger.error('morning_digest_source_failed', { accountId, source, error: describeError(error) });
       return fallback;
     }
@@ -85,6 +87,8 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     bills,
     includeAgenda,
     includeFinance,
+    // Clima fora do ar não muda o que está agendado; falha de agenda/tarefas/contas sim ("vazio" ali pode ser mentira).
+    dataComplete: !['agenda', 'tasks', 'bills'].some((source) => failedSources.has(source)),
   });
 
   await sendWhatsappTextMessage(ownerWhatsappNumber, messages[0]!);
