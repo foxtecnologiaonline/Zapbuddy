@@ -18,6 +18,16 @@ export interface CalendarEventSummary {
   id: string;
   summary: string;
   startIso: string;
+  /** Vazio quando o provider não devolveu fim (não deveria acontecer em evento normal). */
+  endIso: string;
+}
+
+/** Só os campos presentes mudam (PATCH). Horário só vale em par: início e fim juntos. */
+export interface CalendarEventPatch {
+  summary?: string;
+  description?: string;
+  startIso?: string;
+  endIso?: string;
 }
 
 export interface CalendarTokens {

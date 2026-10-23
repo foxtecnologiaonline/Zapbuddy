@@ -1,14 +1,21 @@
 import { getCalendarConnection } from '@zapbuddy/db';
 import { decryptSecret } from '../security/crypto.js';
 import { getTodayRange } from '../time/zoned-ranges.js';
-import { refreshGoogleAccessToken, createGoogleCalendarEvent, listGoogleCalendarEvents, deleteGoogleCalendarEvent } from './providers/google.js';
+import {
+  refreshGoogleAccessToken,
+  createGoogleCalendarEvent,
+  listGoogleCalendarEvents,
+  deleteGoogleCalendarEvent,
+  updateGoogleCalendarEvent,
+} from './providers/google.js';
 import {
   refreshMicrosoftAccessToken,
   createMicrosoftCalendarEvent,
   listMicrosoftCalendarEvents,
   deleteMicrosoftCalendarEvent,
+  updateMicrosoftCalendarEvent,
 } from './providers/microsoft.js';
-import type { CalendarEventInput, CreatedCalendarEvent, CalendarEventSummary, CalendarProviderName } from './types.js';
+import type { CalendarEventInput, CalendarEventPatch, CreatedCalendarEvent, CalendarEventSummary, CalendarProviderName } from './types.js';
 
 export interface CalendarAccess {
   accessToken: string;
@@ -50,6 +57,12 @@ export async function deleteCalendarEvent(access: CalendarAccess, eventId: strin
   return access.provider === 'microsoft'
     ? deleteMicrosoftCalendarEvent(access.accessToken, access.calendarId, eventId)
     : deleteGoogleCalendarEvent(access.accessToken, access.calendarId, eventId);
+}
+
+export async function updateCalendarEvent(access: CalendarAccess, eventId: string, patch: CalendarEventPatch): Promise<CreatedCalendarEvent> {
+  return access.provider === 'microsoft'
+    ? updateMicrosoftCalendarEvent(access.accessToken, access.calendarId, eventId, patch)
+    : updateGoogleCalendarEvent(access.accessToken, access.calendarId, eventId, patch);
 }
 
 function formatHourInZone(iso: string, timeZone: string): string {

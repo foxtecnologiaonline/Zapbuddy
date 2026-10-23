@@ -1,5 +1,5 @@
 import { fetchWithRetry } from '../../whatsapp/http-retry.js';
-import type { CalendarEventInput, CreatedCalendarEvent, CalendarEventSummary, CalendarTokens } from '../types.js';
+import type { CalendarEventInput, CalendarEventPatch, CreatedCalendarEvent, CalendarEventSummary, CalendarTokens } from '../types.js';
 
 // Compartilhado com WhatsApp apesar do caminho (packages/core/src/whatsapp/http-retry.ts)
 // — é só um fetch-com-retry genérico, não haveria ganho em duplicar.
@@ -113,11 +113,12 @@ export async function listGoogleCalendarEvents(
   if (!response.ok) {
     throw new Error(`Google Calendar list failed (${response.status}): ${await response.text()}`);
   }
-  const json = (await response.json()) as { items?: Array<{ id: string; summary?: string; start: { dateTime?: string; date?: string } }> };
+  const json = (await response.json()) as { items?: Array<{ id: string; summary?: string; start: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }> };
   return (json.items ?? []).map((item) => ({
     id: item.id,
     summary: item.summary ?? '(sem título)',
     startIso: item.start.dateTime ?? item.start.date ?? '',
+    endIso: item.end?.dateTime ?? item.end?.date ?? '',
   }));
 }
 
@@ -132,4 +133,36 @@ export async function deleteGoogleCalendarEvent(accessToken: string, calendarId:
   if (!response.ok && response.status !== 404 && response.status !== 410) {
     throw new Error(`Google Calendar event deletion failed (${response.status}): ${await response.text()}`);
   }
+}
+
+/** Edita um evento existente (PATCH — só os campos informados mudam). Lança em 404: o evento não existe mais nessa agenda. */
+export async function updateGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  patch: CalendarEventPatch,
+): Promise<CreatedCalendarEvent> {
+  const body: Record<string, unknown> = {};
+  if (patch.summary !== undefined) body.summary = patch.summary;
+  if (patch.description !== undefined) body.description = patch.description;
+  if (patch.startIso !== undefined && patch.endIso !== undefined) {
+    body.start = { dateTime: patch.startIso };
+    body.end = { dateTime: patch.endIso };
+  }
+
+  const response = await fetchWithRetry(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    10_000,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Google Calendar event update failed (${response.status}): ${await response.text()}`);
+  }
+  const json = (await response.json()) as { id: string; htmlLink: string };
+  return { id: json.id, htmlLink: json.htmlLink };
 }

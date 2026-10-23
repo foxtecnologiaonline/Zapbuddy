@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createNote, deleteNote, listNotes } from '@zapbuddy/db';
+import { createNote, deleteNote, listNotes, updateNote } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 
 export const createNoteTool = defineTool({
@@ -43,5 +43,21 @@ export const deleteNoteTool = defineTool({
   execute: async (params, ctx) => {
     const note = await deleteNote(ctx.accountId, params.note_id);
     return note ? { deleted: true, note_id: note.id } : { deleted: false };
+  },
+});
+
+export const updateNoteTool = defineTool({
+  name: 'update_note',
+  description:
+    'Reescreve o texto de uma nota que já existe, dado o note_id de list_notes — use quando a pessoa quiser ' +
+    'corrigir ou completar uma nota ("muda aquela nota pra...", "acrescenta na nota do aluguel"). Mande o texto ' +
+    'COMPLETO novo (inclusive a parte que ficou igual). Se o note_id não existir mais, retorna updated: false.',
+  schema: z.object({
+    note_id: z.string().uuid(),
+    content: z.string().min(1).max(2000),
+  }),
+  execute: async (params, ctx) => {
+    const note = await updateNote(ctx.accountId, params.note_id, params.content);
+    return note ? { updated: true, note_id: note.id } : { updated: false };
   },
 });

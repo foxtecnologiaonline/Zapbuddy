@@ -58,3 +58,17 @@ export async function deleteNote(accountId: string, noteId: string): Promise<Not
   if (error) throw error;
   return (data as Note | null) ?? null;
 }
+
+/** Reescreve o texto de uma nota da conta. Null se o id não existe nessa conta. */
+export async function updateNote(accountId: string, noteId: string, content: string): Promise<Note | null> {
+  const { data, error } = await getSupabaseClient()
+    .from('notes')
+    .update({ content })
+    .eq('id', noteId)
+    .eq('account_id', accountId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Note | null) ?? null;
+}

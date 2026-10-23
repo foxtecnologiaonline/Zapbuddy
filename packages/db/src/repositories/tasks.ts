@@ -65,3 +65,27 @@ export async function deleteTask(accountId: string, taskId: string): Promise<Tas
   if (error) throw error;
   return (data as Task | null) ?? null;
 }
+
+export interface UpdateTaskInput {
+  title?: string;
+  /** `null` remove o prazo; `undefined` deixa como está. */
+  dueAt?: string | null;
+}
+
+/** Edita título e/ou prazo de uma tarefa da conta. Null se o id não existe nessa conta. */
+export async function updateTask(accountId: string, taskId: string, input: UpdateTaskInput): Promise<Task | null> {
+  const patch: Record<string, unknown> = {};
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.dueAt !== undefined) patch.due_at = input.dueAt;
+
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .update(patch)
+    .eq('id', taskId)
+    .eq('account_id', accountId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Task | null) ?? null;
+}

@@ -1,5 +1,5 @@
 import { fetchWithRetry } from '../../whatsapp/http-retry.js';
-import type { CalendarEventInput, CreatedCalendarEvent, CalendarEventSummary, CalendarTokens } from '../types.js';
+import type { CalendarEventInput, CalendarEventPatch, CreatedCalendarEvent, CalendarEventSummary, CalendarTokens } from '../types.js';
 import { toGraphDateTime, fromGraphDateTime } from './microsoft-datetime.js';
 
 // Tenant `common` (não um tenant fixo): aceita conta pessoal Microsoft E
@@ -122,11 +122,12 @@ export async function listMicrosoftCalendarEvents(
   if (!response.ok) {
     throw new Error(`Microsoft Calendar list failed (${response.status}): ${await response.text()}`);
   }
-  const json = (await response.json()) as { value?: Array<{ id: string; subject?: string; start: { dateTime: string } }> };
+  const json = (await response.json()) as { value?: Array<{ id: string; subject?: string; start: { dateTime: string }; end?: { dateTime: string } }> };
   return (json.value ?? []).map((item) => ({
     id: item.id,
     summary: item.subject ?? '(sem título)',
     startIso: fromGraphDateTime(item.start.dateTime),
+    endIso: item.end ? fromGraphDateTime(item.end.dateTime) : '',
   }));
 }
 
@@ -141,4 +142,36 @@ export async function deleteMicrosoftCalendarEvent(accessToken: string, calendar
   if (!response.ok && response.status !== 404) {
     throw new Error(`Microsoft Calendar event deletion failed (${response.status}): ${await response.text()}`);
   }
+}
+
+/** Edita um evento existente (PATCH — só os campos informados mudam). Lança em 404: o evento não existe mais nessa agenda. */
+export async function updateMicrosoftCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  patch: CalendarEventPatch,
+): Promise<CreatedCalendarEvent> {
+  const body: Record<string, unknown> = {};
+  if (patch.summary !== undefined) body.subject = patch.summary;
+  if (patch.description !== undefined) body.body = { contentType: 'text', content: patch.description };
+  if (patch.startIso !== undefined && patch.endIso !== undefined) {
+    body.start = toGraphDateTime(patch.startIso);
+    body.end = toGraphDateTime(patch.endIso);
+  }
+
+  const response = await fetchWithRetry(
+    `${eventsPath(calendarId)}/${encodeURIComponent(eventId)}`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    10_000,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Microsoft Calendar event update failed (${response.status}): ${await response.text()}`);
+  }
+  const json = (await response.json()) as { id: string; webLink: string };
+  return { id: json.id, htmlLink: json.webLink };
 }

@@ -48,6 +48,51 @@ export async function cancelReminder(accountId: string, reminderId: string): Pro
   return (data as Reminder | null) ?? null;
 }
 
+export interface UpdateReminderInput {
+  message?: string;
+  remindAtIso?: string;
+  /** `null` torna o lembrete único; `undefined` mantém a recorrência atual. */
+  recurrence?: ReminderRecurrence | null;
+}
+
+/**
+ * Edita um lembrete ainda pendente (mensagem, horário ou recorrência). Só
+ * `pending`: um lembrete já disparado/cancelado não é "remarcado", a pessoa
+ * cria outro. Null cobre id de outra conta e não-pendente sem distinguir.
+ */
+export async function updateReminder(accountId: string, reminderId: string, input: UpdateReminderInput): Promise<Reminder | null> {
+  const patch: Record<string, unknown> = {};
+  if (input.message !== undefined) patch.message = input.message;
+  if (input.remindAtIso !== undefined) patch.remind_at = input.remindAtIso;
+  if (input.recurrence !== undefined) patch.recurrence = input.recurrence;
+
+  const { data, error } = await getSupabaseClient()
+    .from('reminders')
+    .update(patch)
+    .eq('id', reminderId)
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Reminder | null) ?? null;
+}
+
+/** Lembretes pendentes da conta, mais próximos primeiro — pra "quais lembretes eu tenho" e pra achar o reminder_id de uma edição. */
+export async function listPendingReminders(accountId: string, limit = 30): Promise<Reminder[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('reminders')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .order('remind_at', { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as Reminder[];
+}
+
 /** Reminders due now, used by the worker's scheduled sweep. */
 export async function listDueReminders(nowIso: string): Promise<Reminder[]> {
   const { data, error } = await getSupabaseClient()

@@ -93,6 +93,42 @@ export function getTodayRange(timeZone: string, referenceDate: Date = new Date()
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
+/** Amanhã inteiro (00:00:00 a 23:59:59) NO FUSO DO USUÁRIO. */
+export function getTomorrowRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, day + 1, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(year, month, day + 1, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/** Próximos 7 dias corridos (hoje + 6 dias seguintes) NO FUSO DO USUÁRIO — o espelho de `getLast7DaysRange`, pra "o que tenho essa semana". */
+export function getNext7DaysRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, day, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(year, month, day + 6, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/**
+ * Janela entre duas datas locais (YYYY-MM-DD, inclusive nas duas pontas) NO
+ * FUSO DO USUÁRIO — pra "o que tenho dia 30" ou "mês que vem" sem deixar o
+ * modelo montar timestamps UTC à mão. Lança em formato inválido ou fim
+ * anterior ao início.
+ */
+export function getDateKeyRange(timeZone: string, fromDate: string, toDate: string): DateRange {
+  const parse = (value: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) throw new Error(`Data inválida "${value}" — use o formato YYYY-MM-DD.`);
+    return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+  };
+  const from = parse(fromDate);
+  const to = parse(toDate);
+  const start = zonedWallTimeToUtc(from.year, from.month, from.day, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(to.year, to.month, to.day, 23, 59, 59, timeZone);
+  if (end.getTime() < start.getTime()) throw new Error('A data final não pode ser anterior à inicial.');
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
 /**
  * Últimos 7 dias corridos (hoje + 6 dias anteriores) NO FUSO DO USUÁRIO —
  * janela rolante, não "semana de calendário" (evita a ambiguidade de
