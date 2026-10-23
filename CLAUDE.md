@@ -229,6 +229,33 @@ provedor pra não virar uma simulação enganosa (cobrança que não move dinhei
 fiscal é documento regulado, não algo pra simular). Continuam não implementados até haver
 provedor + decisão explícita — não revisitar esse recorte sem pedido explícito.
 
+**Amendamento 2026-10 (motivo documentado, pedido explícito do dono do produto):** "Google Agenda"
+generalizada pra suportar **Outlook/Microsoft 365** também — a integração deixou de ser
+Google-específica. `packages/core/src/google/` virou `packages/core/src/calendar/` (`types.ts`
+genéricos; `providers/google.ts` e `providers/microsoft.ts`, cada um fazendo OAuth + chamada de
+API via fetch direto, sem SDK, mesmo padrão de antes; `calendar-access.ts` despacha pro provider
+certo da conta — tools/`undo_last_action`/resumo matinal só chamam essas funções genéricas, nunca
+um provider específico). Migration `0022_calendar_multi_provider.sql` adiciona
+`calendar_connections.provider` e renomeia as colunas (`google_refresh_token_encrypted` →
+`refresh_token_encrypted`, `google_calendar_id` → `calendar_id`).
+
+Decisões explícitas (perguntadas ao dono do produto antes de implementar):
+- **Uma agenda conectada por conta, nunca as duas juntas** — conectar o Outlook com o Google já
+  conectado substitui a conexão (mesmo upsert por `account_id` que já existia, só precisava
+  aceitar `provider`). Evita a complexidade de decidir em qual calendário criar um evento, ou de
+  checar conflito em dois calendários ao mesmo tempo.
+- **Rotas do Google (`/api/calendar/connect`, `/api/calendar/callback`) não foram movidas** —
+  mexer nelas quebraria o redirect URI já registrado no Google Cloud Console em produção. O
+  Outlook ganhou rotas próprias (`/api/calendar/microsoft/connect`, `.../callback`).
+- **Credencial do Azure AD ainda não existe** — implementado mesmo assim, mesmo padrão já usado
+  pro Asaas/Tavily: sem `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`/`MICROSOFT_REDIRECT_URI`
+  preenchidos, o botão "Conectar Outlook" falha de forma controlada (`?calendar=error`), nunca
+  afeta o Google. Passo a passo de criação do app no Azure Portal documentado no `.env.example`.
+- **Nenhuma outra integração entrou nesta rodada** — Apple/iCloud Calendar foi avaliado e
+  descartado: sem OAuth de consumidor de verdade (só CalDAV + senha de app específica do iCloud),
+  fricção e risco de segurança altos pra pouco ganho. Open Finance/banco continua explicitamente
+  fora de escopo (decisão anterior, não revisitada).
+
 ## Pesquisa autônoma e aprendizado contínuo (2026-10, motivo documentado)
 
 **Exceção explícita ao gating de fases abaixo** ("nenhuma feature de Fase

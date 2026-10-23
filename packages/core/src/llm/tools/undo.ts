@@ -11,8 +11,7 @@ import {
   findLastSuccessfulToolCall,
 } from '@zapbuddy/db';
 import { defineTool, type ToolContext } from '../tool-types.js';
-import { deleteGoogleCalendarEvent } from '../../google/calendar.js';
-import { getFreshCalendarAccess } from '../../google/calendar-access.js';
+import { deleteCalendarEvent, getFreshCalendarAccess } from '../../calendar/calendar-access.js';
 
 const UNDO_WINDOW_MINUTES = 10;
 
@@ -46,7 +45,7 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
     case 'create_calendar_event': {
       const access = await getFreshCalendarAccess(ctx.accountId);
       if (!access) return false;
-      await deleteGoogleCalendarEvent(access.accessToken, access.calendarId, resultId);
+      await deleteCalendarEvent(access, resultId);
       return true;
     }
     case 'remember_important_date':

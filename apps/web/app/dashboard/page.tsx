@@ -163,10 +163,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </form>
       </header>
 
-      {calendarStatus === 'connected' && <p className="notice">Google Agenda conectado com sucesso.</p>}
-      {calendarStatus === 'error' && (
-        <p className="notice notice-error">Não deu pra conectar o Google Agenda. Tenta de novo?</p>
-      )}
+      {calendarStatus === 'connected' && <p className="notice">Agenda conectada com sucesso.</p>}
+      {calendarStatus === 'error' && <p className="notice notice-error">Não deu pra conectar a agenda. Tenta de novo?</p>}
 
       <section className="kpis" aria-label="Resumo do mês">
         <div className="kpi">
@@ -426,13 +424,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         <section className="card">
-          <h2>Google Agenda</h2>
+          <h2>Agenda</h2>
           {calendarConnection ? (
-            <p className="muted">Conectado.</p>
+            <>
+              <p className="muted">Conectado: {calendarConnection.provider === 'microsoft' ? 'Outlook' : 'Google Agenda'}.</p>
+              <p style={{ opacity: 0.6, fontSize: 13 }}>
+                Conectar {calendarConnection.provider === 'microsoft' ? 'o Google Agenda' : 'o Outlook'} substitui esta conexão — só dá
+                pra ter uma agenda conectada por vez.
+              </p>
+            </>
           ) : (
-            <a href="/api/calendar/connect" className="btn">
-              Conectar Google Agenda
-            </a>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <a href="/api/calendar/connect" className="btn">
+                Conectar Google Agenda
+              </a>
+              <a href="/api/calendar/microsoft/connect" className="btn">
+                Conectar Outlook
+              </a>
+            </div>
           )}
         </section>
 

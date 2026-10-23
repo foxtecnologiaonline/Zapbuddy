@@ -46,6 +46,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     await saveCalendarConnection({
       accountId: account.accountId,
+      provider: 'google',
       refreshTokenEncrypted: encryptSecret(tokens.refreshToken),
       connectedByUserId: userId,
     });
