@@ -1,0 +1,16 @@
+-- Trial vira 3 dias com bloqueio real de uso (2026-10, pedido explícito do
+-- dono do produto — ver CLAUDE.md). Antes: 7 dias, sem bloqueio nenhum, só
+-- um convite por conversa (ADR 0004). Agora: passado `trial_ends_at` sem
+-- `plan_status = 'active'`, o Tom bloqueia antes de chamar a IA (ver
+-- packages/core/src/payments/trial-gate.ts).
+--
+-- O default `now() + interval '3 days'` é volátil (não constante) de
+-- propósito: numa ALTER TABLE ADD COLUMN, o Postgres reavalia a expressão
+-- pra cada linha já existente no momento em que esta migration roda — então
+-- toda conta que já estava em trial ganha uma contagem NOVA de 3 dias a
+-- partir de agora (decisão explícita do dono do produto: "quem já estava
+-- tem mais 3 dias a partir desse momento"), e pra cada INSERT novo depois
+-- disso o mesmo default reavalia `now()` na hora do cadastro, dando 3 dias
+-- a partir do próprio created_at — sem precisar de coluna calculada nem
+-- lógica extra em createUser().
+alter table users add column if not exists trial_ends_at timestamptz not null default (now() + interval '3 days');
