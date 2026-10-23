@@ -1,6 +1,8 @@
 import { z } from 'zod';
-import { createNote, deleteNote, listNotes, updateNote } from '@zapbuddy/db';
+import { createNote, deleteNote, listNotes, searchNotesBySimilarity, updateNote } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
+import { embedText } from '../embeddings/client.js';
+import { mergeHybridResults, SEMANTIC_MIN_SIMILARITY, SEMANTIC_RELATED_LIMIT } from '../../search/hybrid.js';
 
 export const createNoteTool = defineTool({
   name: 'create_note',
@@ -12,7 +14,8 @@ export const createNoteTool = defineTool({
     content: z.string().min(1).max(2000),
   }),
   execute: async (params, ctx) => {
-    const note = await createNote(ctx.accountId, ctx.userId, params.content);
+    // Vetor é bônus (busca por significado): sem chave/com falha da OpenAI a nota é salva do mesmo jeito.
+    const note = await createNote(ctx.accountId, ctx.userId, params.content, await embedText(params.content));
     return { note_id: note.id, created: true };
   },
 });
@@ -20,15 +23,27 @@ export const createNoteTool = defineTool({
 export const listNotesTool = defineTool({
   name: 'list_notes',
   description:
-    'Lista as notas pessoais da pessoa, mais recentes primeiro. Passe query pra buscar só notas que ' +
-    'contenham um termo (ex.: "o que eu anotei sobre o aluguel" → query: "aluguel") — sem query, lista ' +
-    'tudo.',
+    'Lista as notas pessoais da pessoa, mais recentes primeiro. Passe query pra buscar (ex.: "o que eu anotei ' +
+    'sobre o aluguel" → query: "aluguel"): acha notas que contêm o termo (match: "exact") e também notas ' +
+    'PARECIDAS em assunto mesmo sem a palavra (match: "related") — trate "related" como possível, não como ' +
+    'certeza, e diga isso se for o único resultado. Sem query, lista tudo.',
   schema: z.object({
     query: z.string().min(1).max(200).optional(),
   }),
   execute: async (params, ctx) => {
-    const notes = await listNotes(ctx.accountId, undefined, params.query);
-    return { notes };
+    if (!params.query) {
+      return { notes: await listNotes(ctx.accountId) };
+    }
+
+    const queryEmbedding = await embedText(params.query);
+    const [exact, related] = await Promise.all([
+      listNotes(ctx.accountId, undefined, params.query),
+      queryEmbedding ? searchNotesBySimilarity(ctx.accountId, queryEmbedding, SEMANTIC_RELATED_LIMIT, SEMANTIC_MIN_SIMILARITY) : [],
+    ]);
+    const merged = mergeHybridResults(exact, related, 20);
+    return {
+      notes: merged.map(({ item, match }) => ({ id: item.id, content: item.content, created_at: item.created_at, match })),
+    };
   },
 });
 
@@ -57,7 +72,7 @@ export const updateNoteTool = defineTool({
     content: z.string().min(1).max(2000),
   }),
   execute: async (params, ctx) => {
-    const note = await updateNote(ctx.accountId, params.note_id, params.content);
+    const note = await updateNote(ctx.accountId, params.note_id, params.content, await embedText(params.content));
     return note ? { updated: true, note_id: note.id } : { updated: false };
   },
 });

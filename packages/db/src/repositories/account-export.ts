@@ -22,7 +22,9 @@ export async function exportAccountData(accountId: string): Promise<Record<strin
 
   const results = await Promise.all(
     tables.map(async (table) => {
-      const { data, error } = await client.from(table).select('*').eq('account_id', accountId).order('created_at', { ascending: true });
+      // notes tem coluna de vetor (embedding) — nunca vai pro arquivo de portabilidade.
+      const columns = table === 'notes' ? 'id, account_id, content, created_by_user_id, created_at' : '*';
+      const { data, error } = await client.from(table).select(columns).eq('account_id', accountId).order('created_at', { ascending: true });
       if (error) throw error;
       return [table, data ?? []] as const;
     }),

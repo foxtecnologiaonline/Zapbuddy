@@ -23,6 +23,7 @@ import { handleProactiveResearch } from './proactive-research.js';
 import { handleInterpretationFeedback } from './interpretation-feedback.js';
 import { handleLogsRetention } from './logs-retention.js';
 import { handleOnboardingNudge } from './onboarding-nudge.js';
+import { handleEmbeddingsBackfill } from './embeddings-backfill.js';
 
 // 19h local — fim de tarde/começo de noite, momento plausível de "ver como
 // foi o dia" sem acordar ninguém (ADR 0003, decisão 2). Granularidade de
@@ -121,6 +122,9 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
   } catch (error) {
     logger.error('onboarding_nudge_sweep_failed', { error: error instanceof Error ? error.message : String(error) });
   }
+
+  // Vetores de notas/documentos que ficaram pendentes (busca semântica) — manutenção leve, nunca lança.
+  await handleEmbeddingsBackfill();
 
   const accounts = await listAccountsForInsightsSweep();
 

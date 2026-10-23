@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { getSupabaseClient } from '../client.js';
+import { logger } from '../logger.js';
 import type { Document } from '../types.js';
 
 const DOCUMENTS_BUCKET = 'documents';
+
+/** Sem `embedding` e sem `search_tsv` de propósito — vetor e tsvector não têm utilidade pra quem lê e inflariam toda resposta (ver NOTE_COLUMNS em notes.ts). */
+const DOCUMENT_COLUMNS =
+  'id, account_id, uploaded_by_user_id, storage_path, file_name, mime_type, caption, extracted_text, extracted_data, created_at';
 
 export interface UploadDocumentInput {
   accountId: string;
@@ -38,7 +43,7 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<Docume
       mime_type: input.mimeType,
       caption: input.caption ?? null,
     })
-    .select('*')
+    .select(DOCUMENT_COLUMNS)
     .single();
 
   if (error) throw error;
@@ -52,7 +57,7 @@ export interface DocumentWithUrl extends Document {
   download_url: string;
 }
 
-async function withSignedUrls(docs: Document[]): Promise<DocumentWithUrl[]> {
+export async function withSignedUrls(docs: Document[]): Promise<DocumentWithUrl[]> {
   const client = getSupabaseClient();
   return Promise.all(
     docs.map(async (doc) => {
@@ -68,7 +73,7 @@ async function withSignedUrls(docs: Document[]): Promise<DocumentWithUrl[]> {
 export async function listRecentDocuments(accountId: string, limit = DEFAULT_DOCUMENTS_LIMIT): Promise<DocumentWithUrl[]> {
   const { data, error } = await getSupabaseClient()
     .from('documents')
-    .select('*')
+    .select(DOCUMENT_COLUMNS)
     .eq('account_id', accountId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -78,13 +83,14 @@ export async function listRecentDocuments(accountId: string, limit = DEFAULT_DOC
 }
 
 /**
- * Busca por nome do arquivo + legenda via tsvector do Postgres (ver
- * migration 0006 e decisão 2 do ADR 0002) — não por conteúdo do arquivo.
+ * Busca textual por nome do arquivo + legenda + o que o modelo leu no
+ * conteúdo (extracted_text, migration 0024) via tsvector do Postgres. A
+ * busca por significado é `searchDocumentsBySimilarity`; a tool junta as duas.
  */
 export async function searchDocuments(accountId: string, query: string, limit = DEFAULT_DOCUMENTS_LIMIT): Promise<DocumentWithUrl[]> {
   const { data, error } = await getSupabaseClient()
     .from('documents')
-    .select('*')
+    .select(DOCUMENT_COLUMNS)
     .eq('account_id', accountId)
     .textSearch('search_tsv', query, { type: 'websearch', config: 'portuguese' })
     .order('created_at', { ascending: false })
@@ -92,4 +98,62 @@ export async function searchDocuments(accountId: string, query: string, limit = 
 
   if (error) throw error;
   return withSignedUrls((data ?? []) as Document[]);
+}
+
+export interface RelatedDocument extends Document {
+  similarity: number;
+}
+
+/** Documentos parecidos em significado com a busca (RPC match_documents). Vazio — nunca erro — se o RPC falhar: é bônus sobre a busca textual. */
+export async function searchDocumentsBySimilarity(
+  accountId: string,
+  embedding: number[],
+  limit: number,
+  minSimilarity: number,
+): Promise<RelatedDocument[]> {
+  const { data, error } = await getSupabaseClient().rpc('match_documents', {
+    p_account_id: accountId,
+    query_embedding: embedding,
+    match_count: limit,
+    min_similarity: minSimilarity,
+  });
+
+  if (error) {
+    logger.error('documents_similarity_search_failed', { error });
+    return [];
+  }
+  return (data ?? []) as RelatedDocument[];
+}
+
+export interface DocumentAnalysisInput {
+  extractedText: string;
+  extractedData: Record<string, unknown>;
+  embedding: number[] | null;
+}
+
+/** Grava o que foi lido do arquivo (e o vetor, quando deu pra gerar). */
+export async function saveDocumentAnalysis(documentId: string, input: DocumentAnalysisInput): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('documents')
+    .update({ extracted_text: input.extractedText, extracted_data: input.extractedData, embedding: input.embedding })
+    .eq('id', documentId);
+  if (error) throw error;
+}
+
+/** Documentos ainda sem vetor, de qualquer conta — só pro backfill do worker. */
+export async function listDocumentsMissingEmbedding(
+  limit: number,
+): Promise<Array<{ id: string; file_name: string; caption: string | null; extracted_text: string | null }>> {
+  const { data, error } = await getSupabaseClient()
+    .from('documents')
+    .select('id, file_name, caption, extracted_text')
+    .is('embedding', null)
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Array<{ id: string; file_name: string; caption: string | null; extracted_text: string | null }>;
+}
+
+export async function setDocumentEmbedding(documentId: string, embedding: number[]): Promise<void> {
+  const { error } = await getSupabaseClient().from('documents').update({ embedding }).eq('id', documentId);
+  if (error) throw error;
 }

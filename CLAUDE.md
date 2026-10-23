@@ -510,6 +510,29 @@ indicada agora pode clicar num link com "Indicado <código>" já preenchido em v
 manualmente. Sem `TOM_WHATSAPP_NUMBER` configurada, a tool e o painel caem de volta pro código
 manual — nunca um link quebrado.
 
+## Alcance do Tom — edição, hábitos, pesquisa ampliada, busca semântica e leitura de arquivos (2026-10, motivo documentado)
+
+Decisão do dono do produto: implementar as 6 lacunas levantadas num mapeamento de alcance. Detalhe e
+trade-offs em `docs/adr/0006-alcance-do-tom-edicao-habitos-pesquisa-visao.md` — resumo:
+
+- **Edição**: `update_task`/`update_note`/`update_reminder`/`update_calendar_event`/`delete_calendar_event`/
+  `list_reminders`; agenda ganha `tomorrow`/`next_7_days`/intervalo por data. Remarcar nunca é apagar e recriar.
+- **Hábitos** (`habits`/`habit_checkins`, migration `0023`): check-in diário por data local, sequência calculada em
+  código. **Reverte** o corte "Hábitos/rotina com acompanhamento" da rodada de expansão B2C acima (pedido explícito).
+  Sem cobrança proativa de check-in ainda.
+- **Pesquisa**: `web_search` com `current_info` (notícia/resultado, cache de 20 min), `get_weather` (qualquer cidade
+  do BR) e `get_market_rate` (dólar/euro/libra/Selic/CDI/IPCA do Banco Central, sem chave). Dado que a fonte não
+  trouxe = "não consegui checar", nunca chute.
+- **Busca semântica** em notas e documentos (migration `0024`, pgvector): híbrida, exato primeiro e parecido marcado
+  `related`. Vetor é bônus — sem `OPENAI_API_KEY` a busca por texto continua; backfill horário no sweep.
+- **Leitura de foto/PDF**: o Tom lê comprovante/conta/foto (visão do Claude), guarda o que leu (entra na busca) e
+  responde. **Nunca registra gasto sozinho a partir do arquivo** — pergunta, salvo se a legenda já pedir. Não
+  transcreve CPF/RG/cartão/PIX. Arquivos antigos não são relidos retroativamente.
+
+Migrations `0023_habits.sql` e `0024_semantic_search_and_document_reading.sql` precisam ser aplicadas no Supabase
+antes do deploy. Tools registradas: 43 → 55 (~28,5KB de schema, ~7,1K tokens estimados; perto do patamar de ~10K
+onde `tool_search`/`defer_loading` compensa — remedir na próxima rodada que adicionar tools).
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

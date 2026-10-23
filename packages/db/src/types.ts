@@ -270,6 +270,10 @@ export interface Document {
   file_name: string;
   mime_type: string;
   caption: string | null;
+  /** O que o modelo leu no arquivo (descrição curta em pt-BR) — null enquanto não analisado ou quando o tipo não é analisável. */
+  extracted_text: string | null;
+  /** Campos estruturados lidos (tipo, estabelecimento, valor, datas) — ver ExtractedDocumentData em core. */
+  extracted_data: Record<string, unknown> | null;
   created_at: string;
 }
 
