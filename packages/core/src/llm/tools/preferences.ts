@@ -1,5 +1,14 @@
 import { z } from 'zod';
-import { setQuietHours, setOccupation, saveUserEmail } from '@zapbuddy/db';
+import {
+  findUserById,
+  saveMorningDigestPreferences,
+  saveUserCity,
+  saveUserEmail,
+  setOccupation,
+  setQuietHours,
+} from '@zapbuddy/db';
+import { isWithinQuietHours } from '../../time/quiet-hours.js';
+import { geocodeBrazilianCity } from '../../weather/geocoding.js';
 import { defineTool } from '../tool-types.js';
 
 /**
@@ -44,5 +53,66 @@ export const setQuietHoursTool = defineTool({
   execute: async (params, ctx) => {
     await setQuietHours(ctx.userId, params.start_hour, params.end_hour);
     return { set: true, start_hour: params.start_hour, end_hour: params.end_hour };
+  },
+});
+
+export const setCityTool = defineTool({
+  name: 'set_city',
+  description:
+    'Guarda a cidade onde a pessoa mora, só quando ela mesma disser. Melhora a previsão do tempo do resumo da manhã ' +
+    '(sem isso, o Tom estima pela região do DDD do WhatsApp). Passe uf (sigla) se ela falar o estado ou se a cidade ' +
+    'tiver nome comum em vários estados. Se voltar saved=false, diga que não conseguiu localizar e peça cidade e estado.',
+  schema: z.object({
+    city: z.string().min(2).max(100),
+    uf: z.string().length(2).optional(),
+  }),
+  execute: async (params, ctx) => {
+    const found = await geocodeBrazilianCity(params.city, params.uf);
+    if (!found) return { saved: false };
+    await saveUserCity(ctx.userId, found);
+    return { saved: true, city: found.city, uf: found.uf };
+  },
+});
+
+export const setMorningDigestPreferencesTool = defineTool({
+  name: 'set_morning_digest_preferences',
+  description:
+    'Ajusta o resumo da manhã que o Tom manda sozinho: ligar/desligar (enabled), horário local de chegada (hour, 0-23), ' +
+    'e se inclui a parte de agenda/tarefas (include_agenda) e a parte financeira (include_finance). Só passe o que ' +
+    'a pessoa pediu pra mudar. Ex.: "me manda o resumo às 7h" → hour 7; "tira a parte financeira" → ' +
+    'include_finance false; "não quero mais o resumo" → enabled false.',
+  schema: z.object({
+    enabled: z.boolean().optional(),
+    hour: z.number().int().min(0).max(23).optional(),
+    include_agenda: z.boolean().optional(),
+    include_finance: z.boolean().optional(),
+  }),
+  execute: async (params, ctx) => {
+    if (params.hour !== undefined) {
+      const user = await findUserById(ctx.userId);
+      // Mensagem proativa dentro do horário de silêncio nunca sai — avisar em vez de gravar um horário que não funciona.
+      if (user && isWithinQuietHours(params.hour, user.quiet_hours_start, user.quiet_hours_end)) {
+        return {
+          saved: false,
+          reason: 'inside_quiet_hours',
+          quiet_hours_start: user.quiet_hours_start,
+          quiet_hours_end: user.quiet_hours_end,
+        };
+      }
+    }
+
+    const user = await saveMorningDigestPreferences(ctx.userId, {
+      enabled: params.enabled,
+      hour: params.hour,
+      includeAgenda: params.include_agenda,
+      includeFinance: params.include_finance,
+    });
+    return {
+      saved: true,
+      enabled: user.morning_digest_enabled,
+      hour: user.morning_digest_hour,
+      include_agenda: user.morning_digest_agenda,
+      include_finance: user.morning_digest_finance,
+    };
   },
 });

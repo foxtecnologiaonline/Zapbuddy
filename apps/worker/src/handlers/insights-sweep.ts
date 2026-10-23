@@ -35,10 +35,9 @@ const TARGET_LOCAL_HOUR = 19;
 const DIGEST_LOCAL_WEEKDAY = 5; // sexta
 const DIGEST_LOCAL_HOUR = 18;
 
-// 8h local — primeira coisa do dia. Janela de silêncio padrão (22h–7h) não
-// cobre esse horário, então por padrão sempre chega; quem configurar silêncio
-// nessa faixa simplesmente não recebe o resumo matinal naquele dia.
-const MORNING_DIGEST_LOCAL_HOUR = 8;
+// Resumo matinal: hora local e liga/desliga vêm das preferências da pessoa
+// (users.morning_digest_*, default 8h). Janela de silêncio continua valendo:
+// hora dentro do silêncio = não recebe naquele dia.
 
 // 9h local — manhã, horário distinto dos outros dois (18h/19h) pra não
 // competir por conexão com o Supabase na mesma janela (mesmo raciocínio dos
@@ -129,11 +128,23 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
       const localHour = getLocalHour(account.ownerTimezone);
       const quiet = isWithinQuietHours(localHour, account.quietHoursStart, account.quietHoursEnd);
 
-      if (localHour === MORNING_DIGEST_LOCAL_HOUR && !quiet) {
+      if (account.morningDigestEnabled && localHour === account.morningDigestHour && !quiet) {
         const today = getTodayRange(account.ownerTimezone);
         await getMorningDigestGenerateQueue().add(
           'generate',
-          { accountId: account.accountId, ownerWhatsappNumber: account.ownerWhatsappNumber, ownerTimezone: account.ownerTimezone },
+          {
+            accountId: account.accountId,
+            ownerWhatsappNumber: account.ownerWhatsappNumber,
+            ownerTimezone: account.ownerTimezone,
+            displayName: account.displayName,
+            city:
+              account.cityUf && account.cityLatitude !== null && account.cityLongitude !== null
+                ? { uf: account.cityUf, latitude: account.cityLatitude, longitude: account.cityLongitude }
+                : null,
+            digestHour: localHour,
+            includeAgenda: account.morningDigestAgenda,
+            includeFinance: account.morningDigestFinance,
+          },
           { jobId: `morning:${account.accountId}:${today.startIso.slice(0, 10)}` },
         );
       }

@@ -22,6 +22,16 @@ export interface User {
   /** Preenchido quando a pessoa confirma via set_quiet_hours — diferente de quiet_hours_start/end, que sempre têm um valor (default 22/7) mesmo sem confirmação. */
   quiet_hours_confirmed_at: string | null;
   email: string | null;
+  /** Cidade informada pela pessoa (set_city) — null = ainda usa a aproximação pelo DDD. Ver migration 0023. */
+  city: string | null;
+  city_uf: string | null;
+  city_latitude: number | null;
+  city_longitude: number | null;
+  /** Preferências do resumo matinal (migration 0023). */
+  morning_digest_enabled: boolean;
+  morning_digest_hour: number;
+  morning_digest_agenda: boolean;
+  morning_digest_finance: boolean;
   /** Só a preferência declarada (nunca dado de pagamento real) — ver migration 0021. */
   preferred_payment_method: PreferredPaymentMethod | null;
   /** Exigência da Asaas (POST /customers) pra gerar checkout real — ver migration 0020. */

@@ -33,6 +33,24 @@ export async function listTasks(
   return (data ?? []) as Task[];
 }
 
+/**
+ * Tarefas pendentes com entrega dentro de [fromIso, toIso], filtradas no
+ * banco — listTasks corta em 50 por criação, então numa conta com muitas
+ * pendentes uma tarefa de hoje podia ficar de fora do resumo matinal.
+ */
+export async function listPendingTasksDueBetween(accountId: string, fromIso: string, toIso: string): Promise<Task[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .gte('due_at', fromIso)
+    .lte('due_at', toIso)
+    .order('due_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Task[];
+}
+
 export async function completeTask(accountId: string, taskId: string): Promise<Task> {
   const { data, error } = await getSupabaseClient()
     .from('tasks')

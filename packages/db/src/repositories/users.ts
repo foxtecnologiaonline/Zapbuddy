@@ -315,6 +315,45 @@ export async function saveUserEmail(userId: string, email: string): Promise<User
   return data as User;
 }
 
+export interface UserCityInput {
+  city: string;
+  uf: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** Cidade já geocodificada (ver geocodeBrazilianCity) — guardar coordenada junto evita geocodificar de novo todo dia. */
+export async function saveUserCity(userId: string, input: UserCityInput): Promise<User> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .update({ city: input.city, city_uf: input.uf, city_latitude: input.latitude, city_longitude: input.longitude })
+    .eq('id', userId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as User;
+}
+
+export interface MorningDigestPreferencesInput {
+  enabled?: boolean;
+  hour?: number;
+  includeAgenda?: boolean;
+  includeFinance?: boolean;
+}
+
+/** Só grava o que veio (undefined = não mexe) — a pessoa costuma mudar uma coisa por vez. */
+export async function saveMorningDigestPreferences(userId: string, input: MorningDigestPreferencesInput): Promise<User> {
+  const update: Record<string, unknown> = {};
+  if (input.enabled !== undefined) update.morning_digest_enabled = input.enabled;
+  if (input.hour !== undefined) update.morning_digest_hour = input.hour;
+  if (input.includeAgenda !== undefined) update.morning_digest_agenda = input.includeAgenda;
+  if (input.includeFinance !== undefined) update.morning_digest_finance = input.includeFinance;
+
+  const { data, error } = await getSupabaseClient().from('users').update(update).eq('id', userId).select('*').single();
+  if (error) throw error;
+  return data as User;
+}
+
 /** Só a preferência declarada (PIX/boleto/cartão) — nunca dado de pagamento real, ver migration 0021. */
 export async function savePreferredPaymentMethod(userId: string, method: PreferredPaymentMethod): Promise<User> {
   const { data, error } = await getSupabaseClient()
