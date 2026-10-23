@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { listActiveSubscriptionsForEvent, logWebhookDelivery, logger, type WebhookEventTypePublic } from '@zapbuddy/db';
 import { fetchWithRetry } from '../whatsapp/http-retry.js';
 import { getWebhookDispatchQueue } from '../queues/definitions.js';
+import { assertPublicHttpsUrl } from '../security/ssrf-guard.js';
 
 /**
  * Enfileira o evento pra entrega assíncrona (ADR 0003, decisão 5) — chamado
@@ -49,6 +50,7 @@ export async function dispatchWebhookEvent(
   const results = await Promise.all(
     subscriptions.map(async (subscription) => {
       try {
+        await assertPublicHttpsUrl(subscription.url);
         const response = await fetchWithRetry(
           subscription.url,
           {
@@ -59,6 +61,8 @@ export async function dispatchWebhookEvent(
               'X-ZapBuddy-Event': eventType,
             },
             body: rawBody,
+            // Nunca segue redirect: um 302 pra rede interna contornaria a checagem acima.
+            redirect: 'manual',
           },
           10_000,
         );
