@@ -26,7 +26,9 @@ export interface UploadDocumentInput {
  */
 export async function uploadDocument(input: UploadDocumentInput): Promise<Document> {
   const client = getSupabaseClient();
-  const storagePath = `${input.accountId}/${randomUUID()}-${input.fileName}`;
+  // Nome vem do remetente do WhatsApp: nunca entra cru na chave do Storage (path traversal).
+  const safeName = input.fileName.replace(/[^\w.\-]+/g, '_').replace(/\.{2,}/g, '.').slice(-100) || 'arquivo';
+  const storagePath = `${input.accountId}/${randomUUID()}-${safeName}`;
 
   const { error: uploadError } = await client.storage
     .from(DOCUMENTS_BUCKET)

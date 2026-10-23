@@ -63,7 +63,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
-  const payload = JSON.parse(rawBody) as WhatsappWebhookPayload;
+  let payload: WhatsappWebhookPayload;
+  try {
+    payload = JSON.parse(rawBody) as WhatsappWebhookPayload;
+  } catch {
+    return new NextResponse('Bad Request', { status: 400 });
+  }
 
   const messages = payload.entry?.flatMap((entry) => entry.changes ?? []).flatMap((change) => change.value?.messages ?? []) ?? [];
 

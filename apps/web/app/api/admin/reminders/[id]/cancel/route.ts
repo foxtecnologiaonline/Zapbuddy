@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const referer = request.headers.get('referer');
-  const redirectTarget = referer && referer.startsWith(new URL('/', request.url).origin) ? referer : '/admin/reminders';
+  const redirectTarget = referer && (referer === new URL('/', request.url).origin || referer.startsWith(new URL('/', request.url).origin + '/')) ? referer : '/admin/reminders';
 
   return NextResponse.redirect(new URL(redirectTarget, request.url), { status: 303 });
 }

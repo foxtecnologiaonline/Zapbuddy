@@ -58,7 +58,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
   }
 
-  const payload = (await request.json()) as AsaasWebhookPayload;
+  let payload: AsaasWebhookPayload;
+  try {
+    payload = (await request.json()) as AsaasWebhookPayload;
+  } catch {
+    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  }
   logger.info('asaas_webhook_received', { event: payload.event, subscription: payload.payment?.subscription });
 
   if (payload.event && CONFIRMATION_EVENTS.has(payload.event) && payload.payment?.subscription) {

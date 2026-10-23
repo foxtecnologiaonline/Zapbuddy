@@ -25,6 +25,7 @@ export {
 } from './whatsapp/evolution-channel.js';
 export type { EvolutionInstanceStatus } from './whatsapp/evolution-channel.js';
 export * from './security/crypto.js';
+export * from './security/ssrf-guard.js';
 export * from './calendar/types.js';
 export * from './calendar/providers/google.js';
 export * from './calendar/providers/microsoft.js';

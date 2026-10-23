@@ -84,7 +84,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
-  const body = (await request.json()) as EvolutionWebhookBody;
+  let body: EvolutionWebhookBody;
+  try {
+    body = (await request.json()) as EvolutionWebhookBody;
+  } catch {
+    return new NextResponse('Bad Request', { status: 400 });
+  }
 
   if (!instanceMatches(body.instance)) {
     await logWebhookEvent({ channel: 'evolution', eventType: 'rejected', status: 'rejected', rejectionReason: 'instance mismatch' });
