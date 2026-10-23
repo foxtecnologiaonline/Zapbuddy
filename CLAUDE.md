@@ -54,7 +54,7 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
      atraso). Só enviada se houver algo.
   3. Contas recorrentes que vencem **hoje** (não mais a janela de até 3 dias de antes — decisão explícita desta
      rodada: "compromissos financeiros do dia"). Só enviada se houver alguma.
-  **Refinamento (2026-10, pedido do dono do produto, 10 melhorias — migration `0023_morning_digest_prefs.sql`
+  **Refinamento (2026-10, pedido do dono do produto, 10 melhorias — migration `0024_morning_digest_prefs.sql`
   precisa ser aplicada no Supabase ANTES do deploy: o sweep horário passou a selecionar colunas novas de `users`):**
   - Montagem das mensagens separada do IO: `composeMorningDigest` (`digest/morning.ts`, puro e testado); o handler só
     busca (tudo em `Promise.all`, cada fonte com fallback próprio) e envia, com pausa de 1,5s entre as mensagens
