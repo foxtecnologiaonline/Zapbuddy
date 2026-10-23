@@ -33,7 +33,7 @@ Itens de negócio (fluxo de caixa de MEI/PJ, DAS, nota fiscal) não são nicho d
 
 Entram no código, por pedido explícito, mesmo fora da ordem de fases:
 
-- **Resumo matinal** (fila `morning-digest-generate`, 8h local): agora em **3 mensagens separadas** (2026-10,
+- **Resumo matinal** (fila `morning-digest-generate`, hora local configurável por pessoa, default 8h): agora em **3 mensagens separadas** (2026-10,
   amendamento, motivo documentado — pedido do dono do produto):
   1. Narrativa (dia da semana, data, estação do ano, previsão do tempo e feriado nacional/estadual de hoje, se
      houver) — escrita como frase corrida, não lista de bullet, e **sempre enviada** (diferente das duas seguintes,
@@ -54,6 +54,32 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
      atraso). Só enviada se houver algo.
   3. Contas recorrentes que vencem **hoje** (não mais a janela de até 3 dias de antes — decisão explícita desta
      rodada: "compromissos financeiros do dia"). Só enviada se houver alguma.
+  **Refinamento (2026-10, pedido do dono do produto, 10 melhorias — migration `0024_morning_digest_prefs.sql`
+  precisa ser aplicada no Supabase ANTES do deploy: o sweep horário passou a selecionar colunas novas de `users`):**
+  - Montagem das mensagens separada do IO: `composeMorningDigest` (`digest/morning.ts`, puro e testado); o handler só
+    busca (tudo em `Promise.all`, cada fonte com fallback próprio) e envia, com pausa de 1,5s entre as mensagens
+    (ordem 1-2-3 garantida). Se agenda+tarefas e financeiro somam até 2 itens, viram uma mensagem só.
+  - Saudação com nome (`preferred_name` ou primeiro nome) e bom dia/boa tarde/boa noite pela hora; abertura varia por
+    dia da semana, de forma determinística (mesmo dia → mesma frase, retry não muda o texto). Sem LLM — template, como
+    nos insights (ADR 0003). Dicas práticas do clima (`digest/weather-tips.ts`: guarda-chuva, casaco, protetor) e
+    emoji pela condição; formatação do WhatsApp (`*negrito*`), próximo compromisso destacado, hora nas tarefas
+    quando for uma hora de verdade, CTA no fim de cada mensagem, linha de "dia livre" só quando agenda e financeiro
+    estão ligados e vazios **e todas as buscas deram certo** (se agenda/tarefas/contas falharam, "vazio" não é "livre" e a
+    frase não aparece — nunca afirma "agenda livre" sem saber).
+  - Clima: cache em **memória do worker** (não Redis — a cota do Upstash já estourou por comando), chave = coordenada
+    arredondada + dia local, com dedupe de pedidos simultâneos e cache negativo de 5 min; uma chamada por lugar em vez
+    de uma por usuário. Corrigido junto: a detecção de chuva usava faixas da escala WMO (Open-Meteo) em vez dos IDs do
+    OpenWeatherMap (2xx/3xx/5xx), então só `pop >= 0.4` detectava chuva.
+  - Tarefas de hoje filtradas no banco (`listPendingTasksDueBetween`): `listTasks` corta em 50 por criação, e numa
+    conta com muitas pendentes uma tarefa de hoje podia ficar de fora.
+  - Cidade real: tool `set_city` (geocoding do OpenWeatherMap, mesma chave) guarda cidade/UF/coordenadas e passa a
+    valer no lugar da aproximação pelo DDD (clima + UF do feriado estadual); entra no cadastro progressivo.
+    **Feriado municipal NÃO foi implementado**: a pesquisa não achou fonte confiável (datas divergentes entre fontes,
+    ex.: aniversário vs. padroeiro) — mesmo princípio de não informar data errada. Só municipal confirmado entraria.
+  - Preferências da pessoa via `set_morning_digest_preferences`: ligar/desligar, horário local (0-23) e se inclui
+    agenda/tarefas e financeiro. Horário dentro do silêncio é recusado na hora (a mensagem nunca sairia).
+  - Log `morning_digest_sent` por envio (partes presentes, se havia clima/feriado, se a cidade era conhecida) para
+    medir quanto o clima falha e quais seções as pessoas realmente recebem.
 - **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
   só o que a pessoa informou. Nunca vira pagamento sozinho.
 - **Metas com valor** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor-alvo e valor guardado são
