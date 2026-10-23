@@ -50,10 +50,13 @@ export async function getTodayWeatherSummary(input: {
   if (!apiKey) return null;
 
   try {
-    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${input.latitude}&lon=${input.longitude}&appid=${apiKey}&units=metric&lang=pt_br`;
+    // cnt=16 (2 dias em passos de 3h) é margem de sobra pro resto do dia local, já que o job
+    // roda de manhã (8h local) e a previsão só cobre pra frente a partir de agora — baixa o
+    // payload pra menos da metade do default (40 entradas / 5 dias) sem perder nada de hoje.
+    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${input.latitude}&lon=${input.longitude}&appid=${apiKey}&units=metric&lang=pt_br&cnt=16`;
     const response = await fetchWithRetry(url, { method: 'GET' }, 8_000);
     if (!response.ok) {
-      logger.error('weather_forecast_http_error', { status: response.status });
+      logger.error('weather_forecast_http_error', { status: response.status, latitude: input.latitude, longitude: input.longitude });
       return null;
     }
 
@@ -71,11 +74,18 @@ export async function getTodayWeatherSummary(input: {
     const maxTempC = Math.max(...todayEntries.map((entry) => entry.main.temp_max));
     const rainExpected = todayEntries.some(entryMeansRain);
 
-    // Entrada mais próxima do meio-dia local representa melhor "o dia" do que a primeira do período.
-    const middayEntry = todayEntries.reduce((closest, entry) => {
-      const hourDiff = (candidate: OpenWeatherMapForecastEntry) => Math.abs(getLocalHour(input.timezone, new Date(candidate.dt * 1000)) - 12);
-      return hourDiff(entry) < hourDiff(closest) ? entry : closest;
-    });
+    // Entrada mais próxima do meio-dia local representa melhor "o dia" do que a primeira do
+    // período — cada entrada só passa por getLocalHour uma vez (evita recalcular a do "closest"
+    // atual em toda iteração do reduce).
+    let middayEntry = todayEntries[0]!;
+    let smallestHourDiff = Infinity;
+    for (const entry of todayEntries) {
+      const hourDiff = Math.abs(getLocalHour(input.timezone, new Date(entry.dt * 1000)) - 12);
+      if (hourDiff < smallestHourDiff) {
+        smallestHourDiff = hourDiff;
+        middayEntry = entry;
+      }
+    }
 
     return {
       minTempC: Math.round(minTempC),
@@ -84,7 +94,11 @@ export async function getTodayWeatherSummary(input: {
       rainExpected,
     };
   } catch (error) {
-    logger.error('weather_forecast_failed', { error: error instanceof Error ? error.message : String(error) });
+    logger.error('weather_forecast_failed', {
+      error: error instanceof Error ? error.message : String(error),
+      latitude: input.latitude,
+      longitude: input.longitude,
+    });
     return null;
   }
 }
