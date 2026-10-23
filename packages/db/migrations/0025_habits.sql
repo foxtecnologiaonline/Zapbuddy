@@ -1,4 +1,4 @@
--- Hábitos e rotina com acompanhamento (2026-10, pedido explícito do dono do
+-- (Renumerada: nasceu como 0023, colidiu com 0023_trial_3_dias.) Hábitos e rotina com acompanhamento (2026-10, pedido explícito do dono do
 -- produto — antes "conscientemente fora" da rodada de expansão B2C, ver
 -- CLAUDE.md). Meta pessoal (personal_goals) é "algo a alcançar"; hábito é
 -- "algo que se repete" e o que importa é a constância (sequência de dias).

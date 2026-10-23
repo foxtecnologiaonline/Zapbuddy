@@ -550,7 +550,7 @@ trade-offs em `docs/adr/0006-alcance-do-tom-edicao-habitos-pesquisa-visao.md` �
 
 - **Edição**: `update_task`/`update_note`/`update_reminder`/`update_calendar_event`/`delete_calendar_event`/
   `list_reminders`; agenda ganha `tomorrow`/`next_7_days`/intervalo por data. Remarcar nunca é apagar e recriar.
-- **Hábitos** (`habits`/`habit_checkins`, migration `0023`): check-in diário por data local, sequência calculada em
+- **Hábitos** (`habits`/`habit_checkins`, migration `0025`, antes `0023` — renumerada por colisão com `0023_trial_3_dias`): check-in diário por data local, sequência calculada em
   código. **Reverte** o corte "Hábitos/rotina com acompanhamento" da rodada de expansão B2C acima (pedido explícito).
   Sem cobrança proativa de check-in ainda.
 - **Pesquisa**: `web_search` com `current_info` (notícia/resultado, cache de 20 min), `get_weather` (qualquer cidade
@@ -562,7 +562,7 @@ trade-offs em `docs/adr/0006-alcance-do-tom-edicao-habitos-pesquisa-visao.md` �
   responde. **Nunca registra gasto sozinho a partir do arquivo** — pergunta, salvo se a legenda já pedir. Não
   transcreve CPF/RG/cartão/PIX. Arquivos antigos não são relidos retroativamente.
 
-Migrations `0023_habits.sql` e `0024_semantic_search_and_document_reading.sql` precisam ser aplicadas no Supabase
+Migrations `0025_habits.sql` e `0024_semantic_search_and_document_reading.sql` precisam ser aplicadas no Supabase
 antes do deploy. Tools registradas: 43 → 55 (~28,5KB de schema, ~7,1K tokens estimados; perto do patamar de ~10K
 onde `tool_search`/`defer_loading` compensa — remedir na próxima rodada que adicionar tools).
 

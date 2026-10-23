@@ -45,3 +45,4 @@ export * from './payments/asaas-client.js';
 export * from './habits/streak.js';
 export * from './documents/extract.js';
 export * from './llm/embeddings/client.js';
+export { isAccessBlocked } from './payments/trial-gate.js';

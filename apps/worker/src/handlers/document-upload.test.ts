@@ -19,11 +19,12 @@ const core = vi.hoisted(() => ({
   embedText: vi.fn(),
   extractDocumentContent: vi.fn(),
   getAnalyzableKind: vi.fn(),
+  isAccessBlocked: vi.fn(),
   formatExtractionForConversation: vi.fn(),
   buildExtractedText: vi.fn(),
   buildDocumentEmbeddingText: vi.fn(),
   toStoredExtraction: vi.fn(),
-  MESSAGES: { documentReceived: (name: string) => `Salvei "${name}"` },
+  MESSAGES: { documentReceived: (name: string) => `Salvei "${name}"`, trialBlocked: 'teste acabou' },
   INVITE_CODE_MESSAGE_PATTERN: /^\s*entrar\s+(\d{4,8})\s*$/i,
 }));
 
@@ -56,6 +57,7 @@ describe('handleDocumentUpload', () => {
     db.uploadDocument.mockResolvedValue({ id: 'doc-1' });
     core.getCachedReply.mockResolvedValue(null);
     core.downloadWhatsappMedia.mockResolvedValue({ buffer: Buffer.from('x'), mimeType: 'image/jpeg' });
+    core.isAccessBlocked.mockReturnValue(false);
     core.getAnalyzableKind.mockReturnValue('image');
     core.extractDocumentContent.mockResolvedValue(extraction);
     core.embedText.mockResolvedValue([0.1]);
@@ -76,6 +78,17 @@ describe('handleDocumentUpload', () => {
     expect(core.orchestrateTurn).toHaveBeenCalledWith({ user: onboardedUser, messageText: '[Arquivo recebido e já salvo: ...]', messageSource: 'text' });
     expect(core.sendWhatsappTextMessage).toHaveBeenCalledWith('5511999999999', 'Vi um comprovante de R$ 54,90, quer que eu lance?');
     expect(core.setCachedReply).toHaveBeenCalledWith('wa-1', 'Vi um comprovante de R$ 54,90, quer que eu lance?');
+  });
+
+  it('trial acabado: avisa e não baixa, não guarda nem lê o arquivo', async () => {
+    core.isAccessBlocked.mockReturnValue(true);
+
+    await handleDocumentUpload(job());
+
+    expect(core.sendWhatsappTextMessage).toHaveBeenCalledWith('5511999999999', 'teste acabou');
+    expect(core.downloadWhatsappMedia).not.toHaveBeenCalled();
+    expect(db.uploadDocument).not.toHaveBeenCalled();
+    expect(core.extractDocumentContent).not.toHaveBeenCalled();
   });
 
   it('reentrega com resposta já gerada só reenvia: não baixa, não guarda, não lê de novo', async () => {

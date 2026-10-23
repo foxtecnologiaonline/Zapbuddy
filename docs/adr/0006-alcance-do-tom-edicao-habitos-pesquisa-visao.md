@@ -24,7 +24,7 @@ numa conversa nova (o histórico curto guarda só texto).
 - `list_calendar_events` ganhou `tomorrow`, `next_7_days` e `from_date`/`to_date` (datas locais). `last_7_days` continua
   sendo só passado.
 
-### 2. Hábitos (migration 0023)
+### 2. Hábitos (migration 0025, renumerada da 0023 por colisão com a do trial)
 - `habits` + `habit_checkins`; `checkin_date` é a DATA LOCAL da pessoa, com `unique(habit_id, checkin_date)` (check-in
   idempotente). Sequência calculada em código puro (`habits/streak.ts`), nunca estimada pelo modelo.
 - Hoje sem marcar não quebra a sequência que vinha até ontem. Retroativo até 7 dias, nunca futuro.
@@ -71,5 +71,5 @@ numa conversa nova (o histórico curto guarda só texto).
 - 12 tools novas (43 → 55 no registro): o schema serializado passa de ~18KB para ~28,5KB (~7,1K tokens estimados,
   chars/4) — ainda abaixo do patamar de ~10K onde `tool_search`/`defer_loading` compensa, mas já perto. Próxima rodada
   que adicionar tools deve remedir e avaliar `defer_loading` antes.
-- Migrations `0023` e `0024` precisam ser aplicadas no Supabase antes do deploy.
+- Migrations `0025` (hábitos) e `0024` precisam ser aplicadas no Supabase antes do deploy.
 - Duas chamadas de LLM por arquivo legível (visão + resposta). Acompanhar custo pelos logs `llm_call_completed`.

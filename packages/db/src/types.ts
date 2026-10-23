@@ -172,7 +172,7 @@ export interface HabitCheckin {
   id: string;
   habit_id: string;
   account_id: string;
-  /** Data local da pessoa (YYYY-MM-DD) — ver migration 0023. */
+  /** Data local da pessoa (YYYY-MM-DD) — ver migration 0025. */
   checkin_date: string;
   created_by_user_id: string | null;
   created_at: string;

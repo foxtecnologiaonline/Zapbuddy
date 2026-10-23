@@ -20,6 +20,7 @@ import {
   embedText,
   extractDocumentContent,
   getAnalyzableKind,
+  isAccessBlocked,
   formatExtractionForConversation,
   buildExtractedText,
   buildDocumentEmbeddingText,
@@ -53,6 +54,13 @@ export async function handleDocumentUpload(job: Job<DocumentUploadJob>): Promise
   const user = await findUserById(userId);
   if (!user) {
     logger.error('document_upload_user_not_found', { userId, waMessageId });
+    return;
+  }
+
+  // Trial acabado/cancelado: nem guarda nem lê o arquivo (custo de Storage e de visão sem contrapartida) — mesma
+  // porta fechada que o orquestrador aplica às mensagens de texto.
+  if (isAccessBlocked(user)) {
+    await sendWhatsappTextMessage(user.whatsapp_number, MESSAGES.trialBlocked);
     return;
   }
 
