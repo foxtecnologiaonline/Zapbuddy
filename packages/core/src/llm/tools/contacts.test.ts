@@ -1,65 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const db = vi.hoisted(() => ({
-  claimPendingOutbound: vi.fn(),
-  countOutboundSentSince: vi.fn(),
-  createPendingOutbound: vi.fn(),
+  createMessageDraft: vi.fn(),
   deleteContact: vi.fn(),
-  findContactById: vi.fn(),
-  findLatestPendingOutbound: vi.fn(),
-  findUserById: vi.fn(),
-  isNumberOptedOut: vi.fn(),
   listContacts: vi.fn(),
-  listOutboundMessages: vi.fn(),
-  markOutboundDispatched: vi.fn(),
-  markOutboundFailed: vi.fn(),
+  listMessageDrafts: vi.fn(),
+  updateMessageDraft: vi.fn(),
   upsertContact: vi.fn(),
 }));
-const channel = vi.hoisted(() => ({ sendWhatsappTemplate: vi.fn(), sendWhatsappTextTracked: vi.fn() }));
 vi.mock('@zapbuddy/db', () => db);
-vi.mock('../../whatsapp/channel.js', () => channel);
 
 import {
   deleteContactTool,
-  listSentMessagesTool,
-  prepareMessageToContactTool,
+  draftMessageForContactTool,
+  listMessageLogTool,
   saveContactTool,
-  sendPreparedMessageTool,
+  updateMessageStatusTool,
 } from './contacts.js';
 
-const ctx = { userId: 'user-1', accountId: 'account-1', turnId: 'turn-2' } as never;
-const contact = (name: string, extra: Record<string, unknown> = {}) => ({
-  id: `c-${name}`,
-  name,
-  name_normalized: name.toLowerCase(),
-  whatsapp_number: '5511999999999',
-  last_inbound_at: null,
-  opted_out_at: null,
-  ...extra,
-});
-const pending = (extra: Record<string, unknown> = {}) => ({
-  id: 'out-1',
-  contact_id: 'c-aline',
-  recipient_name: 'Aline',
-  recipient_number: '5511999999999',
+const ctx = { userId: 'user-1', accountId: 'account-1' } as never;
+const contact = (name: string, number = '5511999999999') => ({ id: `c-${name}`, name, name_normalized: name.toLowerCase(), whatsapp_number: number });
+const draft = (recipient: string | null, extra: Record<string, unknown> = {}) => ({
+  id: `d-${recipient}`,
+  recipient_name: recipient,
   body: 'Bom dia!',
-  created_turn_id: 'turn-1',
-  expires_at: new Date(Date.now() + 600_000).toISOString(),
+  status: 'draft',
+  reply_note: null,
+  created_at: '2026-10-23T10:00:00Z',
   ...extra,
 });
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  delete process.env.WHATSAPP_CONTACT_TEMPLATE_NAME;
-  delete process.env.OUTBOUND_DAILY_LIMIT;
-  db.countOutboundSentSince.mockResolvedValue(0);
-  db.isNumberOptedOut.mockResolvedValue(false);
-  db.findUserById.mockResolvedValue({ name: 'Fernando', preferred_name: null });
-  db.findContactById.mockResolvedValue(contact('aline'));
-  db.claimPendingOutbound.mockResolvedValue(pending());
-  channel.sendWhatsappTextTracked.mockResolvedValue({ messageId: 'wamid.1' });
-  channel.sendWhatsappTemplate.mockResolvedValue({ messageId: 'wamid.t' });
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe('save_contact', () => {
   it('normaliza o número e devolve só o final dele', async () => {
@@ -75,129 +46,82 @@ describe('save_contact', () => {
   });
 });
 
-describe('prepare_message_to_contact', () => {
-  it('não envia nada: só deixa o recado pendente, preso ao turno atual', async () => {
+describe('draft_message_for_contact', () => {
+  it('contato salvo: devolve o texto e o link direto na conversa, e registra o rascunho', async () => {
     db.listContacts.mockResolvedValue([contact('Aline')]);
-    db.createPendingOutbound.mockResolvedValue({});
 
-    const result = await prepareMessageToContactTool.execute({ contact_name: 'aline', message: ' Bom dia! ' }, ctx);
+    const result = await draftMessageForContactTool.execute({ contact_name: 'aline', message: ' Bom dia, Aline! ' }, ctx);
 
-    expect(db.createPendingOutbound).toHaveBeenCalledWith(expect.objectContaining({ turnId: 'turn-2', body: 'Bom dia!', recipientName: 'Aline' }));
-    expect(channel.sendWhatsappTextTracked).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ status: 'awaiting_confirmation', to: 'Aline', message: 'Bom dia!' });
+    expect(result).toEqual({
+      status: 'ready',
+      to: 'Aline',
+      contact_saved: true,
+      message: 'Bom dia, Aline!',
+      link: 'https://wa.me/5511999999999?text=Bom%20dia%2C%20Aline!',
+    });
+    expect(db.createMessageDraft).toHaveBeenCalledWith({ accountId: 'account-1', userId: 'user-1', contactId: 'c-Aline', recipientName: 'Aline', body: 'Bom dia, Aline!' });
   });
 
-  it('contato inexistente, ambíguo, descadastrado e limite diário não criam pendência', async () => {
-    db.listContacts.mockResolvedValue([contact('Aline Souza'), contact('Alice Lima')]);
-    expect(await prepareMessageToContactTool.execute({ contact_name: 'Carlos', message: 'oi' }, ctx)).toEqual({ status: 'contact_not_found' });
-    expect(await prepareMessageToContactTool.execute({ contact_name: 'Ali', message: 'oi' }, ctx)).toMatchObject({ status: 'ambiguous' });
+  it('contato desconhecido: ainda entrega o texto, com link que deixa escolher a conversa', async () => {
+    db.listContacts.mockResolvedValue([contact('João')]);
 
-    db.listContacts.mockResolvedValue([contact('Aline', { opted_out_at: '2026-10-01T00:00:00Z' })]);
-    expect(await prepareMessageToContactTool.execute({ contact_name: 'Aline', message: 'oi' }, ctx)).toMatchObject({ status: 'contact_opted_out' });
+    const result = await draftMessageForContactTool.execute({ contact_name: 'Carlos', message: 'Oi' }, ctx);
 
+    expect(result).toEqual({ status: 'ready', to: 'Carlos', contact_saved: false, message: 'Oi', link: 'https://wa.me/?text=Oi' });
+    expect(db.createMessageDraft).toHaveBeenCalledWith(expect.objectContaining({ contactId: null, recipientName: 'Carlos' }));
+  });
+
+  it('sem destinatário informado também funciona', async () => {
+    const result = await draftMessageForContactTool.execute({ message: 'Feliz aniversário!' }, ctx);
+    expect(result).toMatchObject({ status: 'ready', to: null, contact_saved: false });
+    expect(db.listContacts).not.toHaveBeenCalled();
+  });
+
+  it('nome ambíguo: pergunta qual e não registra nada', async () => {
+    db.listContacts.mockResolvedValue([contact('Aline Souza'), contact('Alice Lima', '5511988887777')]);
+    const result = await draftMessageForContactTool.execute({ contact_name: 'Ali', message: 'Oi' }, ctx);
+    expect(result).toMatchObject({ status: 'ambiguous', candidates: ['Aline Souza', 'Alice Lima'] });
+    expect(db.createMessageDraft).not.toHaveBeenCalled();
+  });
+
+  it('o texto com acento, emoji e quebra de linha sobrevive no link', async () => {
     db.listContacts.mockResolvedValue([contact('Aline')]);
-    db.countOutboundSentSince.mockResolvedValue(20);
-    expect(await prepareMessageToContactTool.execute({ contact_name: 'Aline', message: 'oi' }, ctx)).toMatchObject({ status: 'daily_limit_reached', limit: 20 });
-    expect(db.createPendingOutbound).not.toHaveBeenCalled();
+    const result = (await draftMessageForContactTool.execute({ contact_name: 'Aline', message: 'Café & pão 😀\nvamos?' }, ctx)) as { link: string };
+    expect(new URL(result.link).searchParams.get('text')).toBe('Café & pão 😀\nvamos?');
   });
 });
 
-describe('send_prepared_message', () => {
-  it('RECUSA confirmar no mesmo turno em que preparou (a pessoa precisa responder antes)', async () => {
-    db.findLatestPendingOutbound.mockResolvedValue(pending({ created_turn_id: 'turn-2' }));
-    expect(await sendPreparedMessageTool.execute({}, ctx)).toEqual({ sent: false, reason: 'needs_confirmation_from_person' });
-    expect(db.claimPendingOutbound).not.toHaveBeenCalled();
-    expect(channel.sendWhatsappTextTracked).not.toHaveBeenCalled();
+describe('update_message_status', () => {
+  it('atualiza o recado mais recente do contato citado', async () => {
+    db.listMessageDrafts.mockResolvedValue([draft('João'), draft('Aline')]);
+    const result = await updateMessageStatusTool.execute({ contact_name: 'aline', status: 'replied', reply_summary: 'Disse que vai passar aqui' }, ctx);
+    expect(db.updateMessageDraft).toHaveBeenCalledWith('account-1', 'd-Aline', { status: 'replied', replyNote: 'Disse que vai passar aqui' });
+    expect(result).toEqual({ updated: true, to: 'Aline', status: 'replied' });
   });
 
-  it('sem pendência, expirado, descadastrado ou limite: não envia', async () => {
-    db.findLatestPendingOutbound.mockResolvedValueOnce(null);
-    expect(await sendPreparedMessageTool.execute({}, ctx)).toEqual({ sent: false, reason: 'nothing_pending' });
-
-    db.findLatestPendingOutbound.mockResolvedValueOnce(pending({ expires_at: new Date(Date.now() - 1000).toISOString() }));
-    expect(await sendPreparedMessageTool.execute({}, ctx)).toEqual({ sent: false, reason: 'confirmation_expired' });
-
-    db.findLatestPendingOutbound.mockResolvedValueOnce(pending());
-    db.isNumberOptedOut.mockResolvedValueOnce(true);
-    expect(await sendPreparedMessageTool.execute({}, ctx)).toEqual({ sent: false, reason: 'contact_opted_out' });
-
-    db.findLatestPendingOutbound.mockResolvedValueOnce(pending());
-    db.countOutboundSentSince.mockResolvedValueOnce(20);
-    expect(await sendPreparedMessageTool.execute({}, ctx)).toEqual({ sent: false, reason: 'daily_limit_reached' });
-    expect(channel.sendWhatsappTextTracked).not.toHaveBeenCalled();
+  it('sem contato citado atualiza o último recado', async () => {
+    db.listMessageDrafts.mockResolvedValue([draft('João'), draft('Aline')]);
+    await updateMessageStatusTool.execute({ status: 'sent' }, ctx);
+    expect(db.updateMessageDraft).toHaveBeenCalledWith('account-1', 'd-João', { status: 'sent', replyNote: undefined });
   });
 
-  it('envia texto identificando quem pediu e guarda o id da mensagem pra acompanhar entrega', async () => {
-    db.findLatestPendingOutbound.mockResolvedValue(pending());
-
-    const result = await sendPreparedMessageTool.execute({}, ctx);
-
-    const [to, text] = channel.sendWhatsappTextTracked.mock.calls[0]!;
-    expect(to).toBe('5511999999999');
-    expect(text).toContain('Bom dia!');
-    expect(text).toContain('Fernando, via Tom (assistente pessoal)');
-    expect(db.markOutboundDispatched).toHaveBeenCalledWith('out-1', { waMessageId: 'wamid.1', sendMode: 'free_form' });
-    expect(result).toEqual({ sent: true, to: 'Aline', mode: 'free_form' });
-  });
-
-  it('quem perdeu a corrida pelo recado (já reivindicado) não envia de novo', async () => {
-    db.findLatestPendingOutbound.mockResolvedValue(pending());
-    db.claimPendingOutbound.mockResolvedValue(null);
-    expect(await sendPreparedMessageTool.execute({}, ctx)).toEqual({ sent: false, reason: 'already_handled' });
-    expect(channel.sendWhatsappTextTracked).not.toHaveBeenCalled();
-  });
-
-  it('janela fechada + template configurado → template com nome e recado como variáveis', async () => {
-    process.env.WHATSAPP_CONTACT_TEMPLATE_NAME = 'tom_recado';
-    db.findLatestPendingOutbound.mockResolvedValue(pending({ body: 'Oi\nAline' }));
-
-    const result = await sendPreparedMessageTool.execute({}, ctx);
-
-    expect(channel.sendWhatsappTemplate).toHaveBeenCalledWith('5511999999999', { name: 'tom_recado', languageCode: 'pt_BR', bodyParams: ['Fernando', 'Oi Aline'] });
-    expect(channel.sendWhatsappTextTracked).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ sent: true, mode: 'template' });
-  });
-
-  it('erro 131047 no texto livre cai no template, se houver', async () => {
-    process.env.WHATSAPP_CONTACT_TEMPLATE_NAME = 'tom_recado';
-    db.findContactById.mockResolvedValue(contact('aline', { last_inbound_at: new Date().toISOString() }));
-    db.findLatestPendingOutbound.mockResolvedValue(pending());
-    channel.sendWhatsappTextTracked.mockRejectedValue(new Error('WhatsApp send failed (400): code 131047'));
-
-    const result = await sendPreparedMessageTool.execute({}, ctx);
-
-    expect(channel.sendWhatsappTemplate).toHaveBeenCalled();
-    expect(db.markOutboundDispatched).toHaveBeenCalledWith('out-1', { waMessageId: 'wamid.t', sendMode: 'template' });
-    expect(result).toMatchObject({ sent: true, mode: 'template' });
-  });
-
-  it('falha sem template: marca failed no log e explica o motivo', async () => {
-    db.findLatestPendingOutbound.mockResolvedValue(pending());
-    channel.sendWhatsappTextTracked.mockRejectedValue(new Error('WhatsApp send failed (400): code 131047'));
-
-    const result = await sendPreparedMessageTool.execute({}, ctx);
-
-    expect(db.markOutboundFailed).toHaveBeenCalledWith('out-1', expect.stringContaining('131047'));
-    expect(result).toEqual({ sent: false, reason: 'outside_24h_window' });
+  it('nenhum recado do contato → não inventa', async () => {
+    db.listMessageDrafts.mockResolvedValue([draft('João')]);
+    expect(await updateMessageStatusTool.execute({ contact_name: 'Aline', status: 'sent' }, ctx)).toEqual({ updated: false, reason: 'no_message_found' });
+    expect(db.updateMessageDraft).not.toHaveBeenCalled();
   });
 });
 
-describe('delete_contact e list_sent_messages', () => {
+describe('list_message_log e delete_contact', () => {
+  it('lista os recados do contato com o que a pessoa informou', async () => {
+    db.listMessageDrafts.mockResolvedValue([draft('Aline', { status: 'replied', reply_note: 'Ok!' }), draft('João')]);
+    const result = (await listMessageLogTool.execute({ contact_name: 'aline' }, ctx)) as { messages: unknown[] };
+    expect(result.messages).toEqual([{ to: 'Aline', message: 'Bom dia!', status: 'replied', reply_summary: 'Ok!', created_at: '2026-10-23T10:00:00Z' }]);
+  });
+
   it('delete_contact pergunta quando há mais de um', async () => {
-    db.listContacts.mockResolvedValue([contact('Aline Souza'), contact('Alice Lima')]);
+    db.listContacts.mockResolvedValue([contact('Aline Souza'), contact('Alice Lima', '5511988887777')]);
     expect(await deleteContactTool.execute({ name: 'Ali' }, ctx)).toMatchObject({ deleted: false, reason: 'ambiguous' });
     expect(db.deleteContact).not.toHaveBeenCalled();
-  });
-
-  it('list_sent_messages resume status e respostas, filtrando por contato', async () => {
-    db.listOutboundMessages.mockResolvedValue([
-      { recipient_name: 'Aline', body: 'Bom dia!', status: 'read', sent_at: 's', read_at: 'r', failed_reason: null, replies: [{ message_type: 'text', body: 'Bom dia!!', created_at: 't' }] },
-      { recipient_name: 'João', body: 'Oi', status: 'delivered', sent_at: 's', read_at: null, failed_reason: null, replies: [] },
-    ]);
-
-    const result = (await listSentMessagesTool.execute({ contact_name: 'aline' }, ctx)) as { messages: Array<Record<string, unknown>> };
-
-    expect(result.messages).toHaveLength(1);
-    expect(result.messages[0]).toMatchObject({ to: 'Aline', status: 'read', replied: true, replies: [{ type: 'text', text: 'Bom dia!!', at: 't' }] });
   });
 });

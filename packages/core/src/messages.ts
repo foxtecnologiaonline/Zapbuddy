@@ -27,8 +27,6 @@ export const MESSAGES = {
   inviteCodeInvalid:
     'Esse código não é válido ou expirou. Confirma com quem te convidou e manda de novo (ex.: "entrar 482913"), ' +
     'ou me conta seu nome que eu sigo com seu cadastro normal.',
-  recipientOptOutAck:
-    'Tudo bem, não vou mais enviar recados pra este número. Se mudar de ideia, é só me chamar por aqui. 🙂',
   documentReceived: (fileName: string) => `📎 Salvei "${fileName}". Pode pedir pra eu procurar depois.`,
   // Bloqueio real de trial encerrado (2026-10, pedido do dono do produto —
   // ver CLAUDE.md). Mensagem FIXA, nunca gerada pela IA: a pessoa bloqueada

@@ -37,7 +37,6 @@ const baseInput: Omit<LlmProviderRunInput, 'toolContext'> & { toolContext: LlmPr
     timezone: 'America/Sao_Paulo',
     accountId: 'account-1',
     role: 'owner',
-  turnId: 'turn-test',
   },
 };
 

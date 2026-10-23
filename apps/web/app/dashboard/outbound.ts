@@ -1,35 +1,18 @@
-/** Rótulos do log de recados a terceiros — puro, testável sem banco. */
+/** Rótulos do log de recados — puro, testável sem banco. O status é o que a PESSOA contou ao Tom (ele não vê o que acontece no WhatsApp dela). */
 
-export interface OutboundRow {
+export interface DraftRow {
   status: string;
-  failed_reason: string | null;
-  replies: Array<{ body: string | null; message_type: string }>;
+  reply_note: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  sent: 'Enviada',
-  delivered: 'Entregue',
-  read: 'Lida',
-  failed: 'Falhou',
+  draft: 'Redigido (ainda não marcado como enviado)',
+  sent: 'Enviado (você confirmou)',
+  replied: 'Respondeu (você informou)',
 };
 
-const FAILURE_HINT: Array<[RegExp, string]> = [
-  [/131047/, 'fora da janela de 24h da Meta'],
-  [/131026/, 'número sem WhatsApp'],
-  [/13(1049|0472)/, 'bloqueada por política da Meta'],
-];
-
-export function describeOutboundStatus(row: OutboundRow): string {
+export function describeDraftStatus(row: DraftRow): string {
   const label = STATUS_LABEL[row.status] ?? row.status;
-  if (row.status !== 'failed' || !row.failed_reason) return label;
-  const hint = FAILURE_HINT.find(([pattern]) => pattern.test(row.failed_reason!))?.[1];
-  return hint ? `${label} — ${hint}` : label;
-}
-
-/** "Respondeu" com o trecho da última resposta (ou o tipo, se for mídia) — ou "Sem resposta". */
-export function describeOutboundReply(row: OutboundRow): string {
-  const last = row.replies.at(-1);
-  if (!last) return 'Sem resposta';
-  const preview = last.body ? last.body.replace(/\s+/g, ' ').trim().slice(0, 120) : `[${last.message_type}]`;
-  return `Respondeu: ${preview}`;
+  if (row.status !== 'replied' || !row.reply_note) return label;
+  return `${label}: ${row.reply_note.replace(/\s+/g, ' ').trim().slice(0, 120)}`;
 }

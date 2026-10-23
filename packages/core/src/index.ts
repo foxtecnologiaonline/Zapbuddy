@@ -48,6 +48,6 @@ export * from './habits/streak.js';
 export * from './documents/extract.js';
 export * from './llm/embeddings/client.js';
 export { isAccessBlocked } from './payments/trial-gate.js';
-export * from './contacts/replies.js';
 export * from './contacts/phone.js';
-export * from './contacts/outbound.js';
+export * from './contacts/shared.js';
+export * from './contacts/compose.js';

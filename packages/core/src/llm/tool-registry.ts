@@ -29,9 +29,9 @@ import {
   saveContactTool,
   listContactsTool,
   deleteContactTool,
-  prepareMessageToContactTool,
-  sendPreparedMessageTool,
-  listSentMessagesTool,
+  draftMessageForContactTool,
+  updateMessageStatusTool,
+  listMessageLogTool,
 } from './tools/contacts.js';
 import { undoLastActionTool } from './tools/undo.js';
 import { rememberImportantDateTool, listImportantDatesTool, forgetImportantDateTool } from './tools/important-dates.js';
@@ -98,9 +98,9 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   saveContactTool,
   listContactsTool,
   deleteContactTool,
-  prepareMessageToContactTool,
-  sendPreparedMessageTool,
-  listSentMessagesTool,
+  draftMessageForContactTool,
+  updateMessageStatusTool,
+  listMessageLogTool,
 ];
 
 export function getToolByName(name: string) {

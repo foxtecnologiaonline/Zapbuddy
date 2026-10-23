@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError, computeHabitStats, localDateKey } from '@zapbuddy/core';
+import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError, computeHabitStats, localDateKey, buildWhatsappComposeLink } from '@zapbuddy/core';
 import {
   findUserById,
   listTransactions,
@@ -16,7 +16,7 @@ import {
   listImportantDates,
   listPersonalGoals,
   listActiveHabits,
-  listOutboundMessages,
+  listMessageDrafts,
   listContacts,
   listHabitCheckinDates,
   listActiveRecurringBills,
@@ -27,7 +27,7 @@ import { getCurrentMonthRange } from '@/lib/timezone';
 import { CategoryBars, Sparkline } from './charts';
 import { bucketSumsByDay, TREND_WINDOW_DAYS } from './trend';
 import { buildTimeline, type TimelineEntry } from './timeline';
-import { describeOutboundReply, describeOutboundStatus } from './outbound';
+import { describeDraftStatus } from './outbound';
 
 const MONTH_NAMES_PT = [
   'janeiro',
@@ -91,7 +91,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     savingsGoals,
     habits,
     habitCheckinDates,
-    outboundMessages,
+    messageDrafts,
     contacts,
   ] = await Promise.all([
     summarizeTransactions(account.accountId, startIso, endIso),
@@ -117,7 +117,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listGoals(account.accountId, 'active'),
     listActiveHabits(account.accountId),
     listHabitCheckinDates(account.accountId, localDateKey(user.timezone)),
-    listOutboundMessages(account.accountId, 30),
+    listMessageDrafts(account.accountId, 30),
     listContacts(account.accountId),
   ]);
 
@@ -368,26 +368,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         <section className="card">
-          <h2>Recados enviados pelo Tom</h2>
+          <h2>Recados redigidos pelo Tom</h2>
           <p className="muted-sm">
-            O que você pediu pro Tom mandar a outras pessoas, se foi entregue e se a pessoa respondeu. As mensagens saem
-            do número do Tom, identificadas como suas.
+            Recados que você pediu pro Tom escrever pra outras pessoas. O Tom não envia nada: quem manda é você, pelo seu
+            WhatsApp. O status é o que você contou a ele (&quot;mandei&quot;, &quot;ela respondeu...&quot;).
           </p>
-          {outboundMessages.length === 0 ? (
-            <p className="muted">Nada enviado ainda — peça no WhatsApp: &quot;Tom, manda um bom dia pra Aline&quot;.</p>
+          {messageDrafts.length === 0 ? (
+            <p className="muted">Nada ainda — peça no WhatsApp: &quot;Tom, escreve um bom dia pra Aline&quot;.</p>
           ) : (
             <ul className="item-list">
-              {outboundMessages.map((message) => (
-                <li key={message.id}>
-                  <span>
-                    <strong>{message.recipient_name}</strong>: {message.body.length > 140 ? `${message.body.slice(0, 140)}…` : message.body}
-                  </span>
-                  <span className="muted">
-                    {describeOutboundStatus(message)} · {describeOutboundReply(message)}
-                    {message.sent_at && ` · ${new Date(message.sent_at).toLocaleString('pt-BR', { timeZone: user.timezone, dateStyle: 'short', timeStyle: 'short' })}`}
-                  </span>
-                </li>
-              ))}
+              {messageDrafts.map((draft) => {
+                const contact = contacts.find((candidate) => candidate.id === draft.contact_id);
+                return (
+                  <li key={draft.id}>
+                    <span>
+                      <strong>{draft.recipient_name ?? 'Sem destinatário'}</strong>: {draft.body.length > 140 ? `${draft.body.slice(0, 140)}…` : draft.body}
+                    </span>
+                    <span className="muted">
+                      {describeDraftStatus(draft)} · {new Date(draft.created_at).toLocaleString('pt-BR', { timeZone: user.timezone, dateStyle: 'short', timeStyle: 'short' })}
+                    </span>
+                    <span className="item-actions">
+                      <a className="btn btn-sm" href={buildWhatsappComposeLink(contact?.whatsapp_number ?? null, draft.body)} target="_blank" rel="noreferrer">
+                        abrir no WhatsApp
+                      </a>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <h3>Contatos</h3>
@@ -397,10 +404,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <ul className="item-list">
               {contacts.map((contact) => (
                 <li key={contact.id}>
-                  <span>
-                    {contact.name}
-                    {contact.opted_out_at && ' (pediu pra não receber)'}
-                  </span>
+                  <span>{contact.name}</span>
                   <span className="item-actions">
                     <form action={`/api/dashboard/contacts/${contact.id}/delete`} method="POST">
                       <button type="submit" className="btn btn-sm btn-danger">

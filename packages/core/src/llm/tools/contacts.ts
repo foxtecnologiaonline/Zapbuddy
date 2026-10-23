@@ -1,56 +1,16 @@
 import { z } from 'zod';
-import {
-  claimPendingOutbound,
-  countOutboundSentSince,
-  createPendingOutbound,
-  deleteContact,
-  findContactById,
-  findLatestPendingOutbound,
-  findUserById,
-  isNumberOptedOut,
-  listContacts,
-  listOutboundMessages,
-  markOutboundDispatched,
-  markOutboundFailed,
-  upsertContact,
-} from '@zapbuddy/db';
+import { createMessageDraft, deleteContact, listContacts, listMessageDrafts, updateMessageDraft, upsertContact } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
+import { buildWhatsappComposeLink } from '../../contacts/compose.js';
 import { matchContactByName, normalizeContactName } from '../../contacts/matching.js';
-import { maskWhatsappNumber, normalizeBrazilianWhatsappNumber, whatsappNumberVariants } from '../../contacts/phone.js';
-import {
-  CONFIRMATION_TTL_MS,
-  DEFAULT_OUTBOUND_DAILY_LIMIT,
-  chooseSendMode,
-  composeOutboundText,
-  describeSendFailure,
-  isOutsideWindowError,
-  sanitizeTemplateParam,
-  type SendMode,
-} from '../../contacts/outbound.js';
-import { sendWhatsappTemplate, sendWhatsappTextTracked } from '../../whatsapp/channel.js';
-
-function dailyLimit(): number {
-  const configured = Number(process.env.OUTBOUND_DAILY_LIMIT);
-  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_OUTBOUND_DAILY_LIMIT;
-}
-
-/** Template aprovado pela Meta pra abrir conversa fora da janela de 24h (ver .env.example). Null = não configurado. */
-function templateConfig(): { name: string; languageCode: string } | null {
-  const name = process.env.WHATSAPP_CONTACT_TEMPLATE_NAME;
-  return name ? { name, languageCode: process.env.WHATSAPP_CONTACT_TEMPLATE_LANG ?? 'pt_BR' } : null;
-}
-
-async function isOverDailyLimit(userId: string): Promise<boolean> {
-  const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-  return (await countOutboundSentSince(userId, since)) >= dailyLimit();
-}
+import { maskWhatsappNumber, normalizeBrazilianWhatsappNumber } from '../../contacts/phone.js';
 
 export const saveContactTool = defineTool({
   name: 'save_contact',
   description:
-    'Salva (ou corrige o nome de) um contato com o número de WhatsApp, pra poder mandar recados. Use quando a ' +
-    'pessoa disser o número de alguém ("o da Aline é 11 99999-9999") ou encaminhar um cartão de contato ' +
-    '("[Contato compartilhado]"). Só números do Brasil.',
+    'Salva (ou corrige o nome de) um contato com o número de WhatsApp, pra o link dos recados que você redige abrir ' +
+    'direto na conversa certa. Use quando a pessoa disser o número de alguém ("o da Aline é 11 99999-9999") ou ' +
+    'encaminhar um cartão de contato ("[Contato compartilhado ...]"). Só números do Brasil.',
   schema: z.object({
     name: z.string().min(1).max(80),
     whatsapp_number: z.string().min(8).max(25),
@@ -76,13 +36,7 @@ export const listContactsTool = defineTool({
     const contacts = await listContacts(ctx.accountId);
     const wanted = params.query ? normalizeContactName(params.query) : null;
     const filtered = wanted ? contacts.filter((contact) => contact.name_normalized.includes(wanted)) : contacts;
-    return {
-      contacts: filtered.map((contact) => ({
-        name: contact.name,
-        number_hint: maskWhatsappNumber(contact.whatsapp_number),
-        opted_out: contact.opted_out_at !== null,
-      })),
-    };
+    return { contacts: filtered.map((contact) => ({ name: contact.name, number_hint: maskWhatsappNumber(contact.whatsapp_number) })) };
   },
 });
 
@@ -99,135 +53,87 @@ export const deleteContactTool = defineTool({
   },
 });
 
-export const prepareMessageToContactTool = defineTool({
-  name: 'prepare_message_to_contact',
+export const draftMessageForContactTool = defineTool({
+  name: 'draft_message_for_contact',
   description:
-    'PASSO 1 de mandar um recado a OUTRA pessoa ("manda um bom dia pra Aline"): acha o contato pelo nome e deixa o ' +
-    'recado preparado — NADA é enviado ainda. Escreva message na voz da própria pessoa, só com o que ela pediu ' +
-    '(sem inventar conteúdo, valor, promessa ou compromisso). Depois mostre a ela o texto e o destinatário e ' +
-    'pergunte se pode enviar. Um destinatário por pedido. Sem contato (contact_not_found), peça o número e use ' +
-    'save_contact.',
+    'Redige um recado pra OUTRA pessoa ("manda um bom dia pra Aline") e devolve um link do WhatsApp com o texto já ' +
+    'preenchido: a PESSOA toca, abre a conversa e ela mesma envia. Você NUNCA envia nada a terceiros. Escreva ' +
+    'message na voz dela, só com o que ela pediu (sem inventar conteúdo, valor, promessa ou compromisso). Na ' +
+    'resposta mostre o texto (pra ela poder copiar) e o link. contact_saved:false = não há número salvo, o link ' +
+    'deixa ela escolher a conversa — ofereça salvar o número (save_contact). ambiguous = pergunte qual contato.',
   schema: z.object({
-    contact_name: z.string().min(1).max(80),
+    contact_name: z.string().min(1).max(80).optional(),
     message: z.string().min(1).max(1000),
   }),
   execute: async (params, ctx) => {
-    const match = matchContactByName(params.contact_name, await listContacts(ctx.accountId));
-    if (match.kind === 'none') return { status: 'contact_not_found' };
-    if (match.kind === 'ambiguous') return { status: 'ambiguous', candidates: match.contacts.map((contact) => contact.name) };
+    const message = params.message.trim();
+    let contact = null;
+    let recipientName: string | null = params.contact_name?.trim() ?? null;
 
-    const { contact } = match;
-    if (contact.opted_out_at) return { status: 'contact_opted_out', contact_name: contact.name };
-    if (await isOverDailyLimit(ctx.userId)) return { status: 'daily_limit_reached', limit: dailyLimit() };
+    if (params.contact_name) {
+      const match = matchContactByName(params.contact_name, await listContacts(ctx.accountId));
+      if (match.kind === 'ambiguous') return { status: 'ambiguous', candidates: match.contacts.map((candidate) => candidate.name) };
+      if (match.kind === 'one') {
+        contact = match.contact;
+        recipientName = match.contact.name;
+      }
+    }
 
-    await createPendingOutbound({
-      accountId: ctx.accountId,
-      userId: ctx.userId,
-      contactId: contact.id,
-      recipientName: contact.name,
-      recipientNumber: contact.whatsapp_number,
-      body: params.message.trim(),
-      turnId: ctx.turnId,
-      expiresAtIso: new Date(Date.now() + CONFIRMATION_TTL_MS).toISOString(),
-    });
+    await createMessageDraft({ accountId: ctx.accountId, userId: ctx.userId, contactId: contact?.id ?? null, recipientName, body: message });
     return {
-      status: 'awaiting_confirmation',
-      to: contact.name,
-      number_hint: maskWhatsappNumber(contact.whatsapp_number),
-      message: params.message.trim(),
-      valid_for_minutes: CONFIRMATION_TTL_MS / 60_000,
+      status: 'ready',
+      to: recipientName,
+      contact_saved: contact !== null,
+      message,
+      link: buildWhatsappComposeLink(contact?.whatsapp_number ?? null, message),
     };
   },
 });
 
-async function dispatch(mode: SendMode, to: string, senderName: string, body: string): Promise<{ messageId: string | null }> {
-  const template = templateConfig();
-  if (mode === 'template' && template) {
-    return sendWhatsappTemplate(to, {
-      name: template.name,
-      languageCode: template.languageCode,
-      bodyParams: [sanitizeTemplateParam(senderName, 60), sanitizeTemplateParam(body)],
-    });
-  }
-  return sendWhatsappTextTracked(to, composeOutboundText(senderName, body));
-}
-
-export const sendPreparedMessageTool = defineTool({
-  name: 'send_prepared_message',
+export const updateMessageStatusTool = defineTool({
+  name: 'update_message_status',
   description:
-    'PASSO 2: envia o recado que prepare_message_to_contact deixou pendente — SÓ depois que a pessoa disser "sim" ' +
-    'numa mensagem POSTERIOR à que mostrou o texto (no mesmo turno é recusado: needs_confirmation_from_person). ' +
-    'Não recebe parâmetros (envia o único recado pendente). O Tom sempre se identifica como assistente de quem ' +
-    'pediu. Se vier sent:false, explique o reason sem inventar. Se ela desistir ou mudar o texto, NÃO chame ' +
-    'esta tool: prepare de novo.',
-  schema: z.object({}),
-  execute: async (_params, ctx) => {
-    const pending = await findLatestPendingOutbound(ctx.userId);
-    if (!pending) return { sent: false, reason: 'nothing_pending' };
-    if (pending.created_turn_id === ctx.turnId) return { sent: false, reason: 'needs_confirmation_from_person' };
-    if (new Date(pending.expires_at).getTime() < Date.now()) return { sent: false, reason: 'confirmation_expired' };
-    if (await isNumberOptedOut(whatsappNumberVariants(pending.recipient_number))) return { sent: false, reason: 'contact_opted_out' };
-    if (await isOverDailyLimit(ctx.userId)) return { sent: false, reason: 'daily_limit_reached' };
+    'Registra no log o que a pessoa CONTOU sobre um recado que você redigiu: sent ("mandei"), replied ("ela ' +
+    'respondeu ..." — guarde o resumo em reply_summary) ou discarded ("não mandei / deixa pra lá"). Atualiza o ' +
+    'recado mais recente (do contato citado, se houver). Você não vê o que acontece fora da conversa: só registre ' +
+    'o que ela disse.',
+  schema: z.object({
+    contact_name: z.string().min(1).max(80).optional(),
+    status: z.enum(['sent', 'replied', 'discarded']),
+    reply_summary: z.string().max(500).optional(),
+  }),
+  execute: async (params, ctx) => {
+    const wanted = params.contact_name ? normalizeContactName(params.contact_name) : null;
+    const draft = (await listMessageDrafts(ctx.accountId, 20)).find(
+      (candidate) => !wanted || normalizeContactName(candidate.recipient_name ?? '').includes(wanted),
+    );
+    if (!draft) return { updated: false, reason: 'no_message_found' };
 
-    // Atômico: dois envios simultâneos ou um retry nunca duplicam a mensagem a um terceiro.
-    const claimed = await claimPendingOutbound(pending.id);
-    if (!claimed) return { sent: false, reason: 'already_handled' };
-
-    const [sender, contact] = await Promise.all([
-      findUserById(ctx.userId),
-      pending.contact_id ? findContactById(ctx.accountId, pending.contact_id) : Promise.resolve(null),
-    ]);
-    const senderName = sender?.preferred_name ?? sender?.name ?? 'Um contato seu';
-    const template = templateConfig();
-
-    let mode = chooseSendMode({ lastInboundAtIso: contact?.last_inbound_at ?? null, templateConfigured: template !== null });
-    try {
-      let result: { messageId: string | null };
-      try {
-        result = await dispatch(mode, pending.recipient_number, senderName, pending.body);
-      } catch (error) {
-        // Janela de 24h fechada que não sabíamos: tenta uma vez pelo template, se houver.
-        const message = error instanceof Error ? error.message : String(error);
-        if (mode === 'free_form' && template && isOutsideWindowError(message)) {
-          mode = 'template';
-          result = await dispatch(mode, pending.recipient_number, senderName, pending.body);
-        } else {
-          throw error;
-        }
-      }
-      await markOutboundDispatched(pending.id, { waMessageId: result.messageId, sendMode: mode });
-      return { sent: true, to: pending.recipient_name, mode };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await markOutboundFailed(pending.id, message);
-      return { sent: false, reason: describeSendFailure(message) };
-    }
+    await updateMessageDraft(ctx.accountId, draft.id, { status: params.status, replyNote: params.reply_summary });
+    return { updated: true, to: draft.recipient_name, status: params.status };
   },
 });
 
-export const listSentMessagesTool = defineTool({
-  name: 'list_sent_messages',
+export const listMessageLogTool = defineTool({
+  name: 'list_message_log',
   description:
-    'Os recados que o Tom já enviou a outras pessoas e o que aconteceu: enviado, entregue, lido, falhou, e se a ' +
-    'pessoa respondeu (e o quê). Use pra "a Aline respondeu?", "o que eu mandei pro João?". Com contact_name, só ' +
-    'os desse contato. Os dados vêm daqui — não presuma que leram ou responderam.',
+    'O log dos recados que você redigiu pra outras pessoas e o que a pessoa contou de cada um (redigido, mandado, ' +
+    'respondido). Use pra "o que eu mandei pra Aline?", "ela respondeu?". Os status vêm do que ELA informou — ' +
+    'você não sabe se foi enviado ou respondido por conta própria; diga isso se perguntarem.',
   schema: z.object({ contact_name: z.string().min(1).max(80).optional() }),
   execute: async (params, ctx) => {
     const wanted = params.contact_name ? normalizeContactName(params.contact_name) : null;
-    const messages = (await listOutboundMessages(ctx.accountId, 20))
-      .filter((message) => !wanted || normalizeContactName(message.recipient_name).includes(wanted))
+    const drafts = (await listMessageDrafts(ctx.accountId, 20))
+      .filter((draft) => !wanted || normalizeContactName(draft.recipient_name ?? '').includes(wanted))
       .slice(0, 8);
 
     return {
-      messages: messages.map((message) => ({
-        to: message.recipient_name,
-        message: message.body.slice(0, 200),
-        status: message.status,
-        sent_at: message.sent_at,
-        read_at: message.read_at,
-        failed_reason: message.failed_reason,
-        replied: message.replies.length > 0,
-        replies: message.replies.slice(0, 3).map((reply) => ({ type: reply.message_type, text: reply.body?.slice(0, 300) ?? null, at: reply.created_at })),
+      messages: drafts.map((draft) => ({
+        to: draft.recipient_name,
+        message: draft.body.slice(0, 200),
+        status: draft.status,
+        reply_summary: draft.reply_note,
+        created_at: draft.created_at,
       })),
     };
   },

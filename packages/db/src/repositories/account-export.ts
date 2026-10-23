@@ -19,8 +19,7 @@ export async function exportAccountData(accountId: string): Promise<Record<strin
     'habits',
     'habit_checkins',
     'contacts',
-    'outbound_messages',
-    'outbound_replies',
+    'message_drafts',
   ] as const;
 
   const results = await Promise.all(

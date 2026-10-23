@@ -1,5 +1,5 @@
 import { fetchWithRetry } from './http-retry.js';
-import type { ConnectionCheck, MediaRef, SentMessageInfo, TemplateMessage, WhatsappChannel } from './types.js';
+import type { ConnectionCheck, MediaRef, WhatsappChannel } from './types.js';
 
 const GRAPH_API_VERSION = 'v20.0';
 
@@ -14,27 +14,6 @@ export class CloudApiChannel implements WhatsappChannel {
   readonly provider = 'cloud-api' as const;
 
   async sendText(to: string, body: string): Promise<void> {
-    await this.sendTextTracked(to, body);
-  }
-
-  async sendTextTracked(to: string, body: string): Promise<SentMessageInfo> {
-    return this.post({ messaging_product: 'whatsapp', to, type: 'text', text: { body } });
-  }
-
-  async sendTemplate(to: string, template: TemplateMessage): Promise<SentMessageInfo> {
-    return this.post({
-      messaging_product: 'whatsapp',
-      to,
-      type: 'template',
-      template: {
-        name: template.name,
-        language: { code: template.languageCode },
-        components: [{ type: 'body', parameters: template.bodyParams.map((text) => ({ type: 'text', text })) }],
-      },
-    });
-  }
-
-  private async post(payload: Record<string, unknown>): Promise<SentMessageInfo> {
     const phoneNumberId = requireEnv('WHATSAPP_PHONE_NUMBER_ID');
     const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
 
@@ -46,7 +25,12 @@ export class CloudApiChannel implements WhatsappChannel {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to,
+          type: 'text',
+          text: { body },
+        }),
       },
       15_000,
     );
@@ -55,8 +39,6 @@ export class CloudApiChannel implements WhatsappChannel {
       const errorBody = await response.text();
       throw new Error(`WhatsApp send failed (${response.status}): ${errorBody}`);
     }
-    const body = (await response.json().catch(() => ({}))) as { messages?: Array<{ id?: string }> };
-    return { messageId: body.messages?.[0]?.id ?? null };
   }
 
   async downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {

@@ -1,5 +1,5 @@
 import { fetchWithRetry } from './http-retry.js';
-import type { ConnectionCheck, MediaRef, SentMessageInfo, WhatsappChannel } from './types.js';
+import type { ConnectionCheck, MediaRef, WhatsappChannel } from './types.js';
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -28,10 +28,6 @@ export class EvolutionChannel implements WhatsappChannel {
   readonly provider = 'evolution' as const;
 
   async sendText(to: string, body: string): Promise<void> {
-    await this.sendTextTracked(to, body);
-  }
-
-  async sendTextTracked(to: string, body: string): Promise<SentMessageInfo> {
     const phone = to.replace(/\D/g, '');
     const response = await fetchWithRetry(
       `${baseUrl()}/message/sendText/${instanceName()}`,
@@ -47,12 +43,6 @@ export class EvolutionChannel implements WhatsappChannel {
       const errorBody = await response.text().catch(() => response.statusText);
       throw new Error(`Evolution sendText falhou (${response.status}): ${errorBody}`);
     }
-    const data = (await response.json().catch(() => ({}))) as { key?: { id?: string } };
-    return { messageId: data.key?.id ?? null };
-  }
-
-  async sendTemplate(): Promise<SentMessageInfo> {
-    throw new Error('Evolution não suporta mensagem de template (conceito da Cloud API oficial da Meta)');
   }
 
   async downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {

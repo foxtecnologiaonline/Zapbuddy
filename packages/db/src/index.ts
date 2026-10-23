@@ -33,4 +33,4 @@ export * from './repositories/important-dates.js';
 export * from './repositories/personal-goals.js';
 export * from './repositories/habits.js';
 export * from './repositories/contacts.js';
-export * from './repositories/outbound-messages.js';
+export * from './repositories/message-drafts.js';

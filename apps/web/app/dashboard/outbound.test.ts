@@ -1,21 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { describeOutboundReply, describeOutboundStatus } from './outbound.js';
+import { describeDraftStatus } from './outbound.js';
 
-describe('describeOutboundStatus', () => {
-  it('traduz o status e explica falhas conhecidas', () => {
-    expect(describeOutboundStatus({ status: 'read', failed_reason: null, replies: [] })).toBe('Lida');
-    expect(describeOutboundStatus({ status: 'failed', failed_reason: '400 code 131047', replies: [] })).toBe('Falhou — fora da janela de 24h da Meta');
-    expect(describeOutboundStatus({ status: 'failed', failed_reason: 'timeout', replies: [] })).toBe('Falhou');
+describe('describeDraftStatus', () => {
+  it('deixa claro que o status é o que a pessoa informou', () => {
+    expect(describeDraftStatus({ status: 'draft', reply_note: null })).toContain('ainda não marcado');
+    expect(describeDraftStatus({ status: 'sent', reply_note: null })).toBe('Enviado (você confirmou)');
   });
-});
 
-describe('describeOutboundReply', () => {
-  it('sem resposta', () => {
-    expect(describeOutboundReply({ status: 'read', failed_reason: null, replies: [] })).toBe('Sem resposta');
-  });
-  it('mostra o trecho da última resposta, ou o tipo da mídia', () => {
-    const base = { status: 'read', failed_reason: null };
-    expect(describeOutboundReply({ ...base, replies: [{ body: 'oi', message_type: 'text' }, { body: 'tudo bem?\n\nbeijos', message_type: 'text' }] })).toBe('Respondeu: tudo bem? beijos');
-    expect(describeOutboundReply({ ...base, replies: [{ body: null, message_type: 'audio' }] })).toBe('Respondeu: [audio]');
+  it('mostra o resumo da resposta, saneado e limitado', () => {
+    expect(describeDraftStatus({ status: 'replied', reply_note: 'Disse\n\nque vai' })).toBe('Respondeu (você informou): Disse que vai');
+    expect(describeDraftStatus({ status: 'replied', reply_note: 'x'.repeat(500) }).length).toBeLessThan(160);
+    expect(describeDraftStatus({ status: 'replied', reply_note: null })).toBe('Respondeu (você informou)');
   });
 });

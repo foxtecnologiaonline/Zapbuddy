@@ -592,24 +592,19 @@ Migrations `0025_habits.sql` e `0026_semantic_search_and_document_reading.sql` p
 antes do deploy. Tools registradas: 43 → 55 (~28,5KB de schema, ~7,1K tokens estimados; perto do patamar de ~10K
 onde `tool_search`/`defer_loading` compensa — remedir na próxima rodada que adicionar tools).
 
-## Recados a terceiros (2026-10, motivo documentado)
+## Recados para outras pessoas — o Tom redige, a pessoa envia (2026-10, motivo documentado)
 
-Decisão do dono do produto: o Tom passa a **escrever para outra pessoa** a pedido ("tom, manda um bom dia pra Aline",
-por texto ou áudio), com log do que foi enviado e se houve resposta, e uma seção no painel. Detalhe em
-`docs/adr/0007-recados-a-terceiros.md` — resumo:
+Decisão do dono do produto: ao pedir "tom, manda um bom dia pra Aline", o Tom **gera a mensagem** e entrega um link
+`wa.me` com o texto preenchido; **quem envia é a própria pessoa**, pelo WhatsApp dela. **O Tom não envia nada a
+terceiros** — não revisitar sem pedido explícito. Detalhe e caminhos descartados (envio pelo número do Tom e pelo
+WhatsApp pessoal via Evolution/ZapScript) em `docs/adr/0007-recados-a-terceiros.md`. Resumo:
 
-- Sai **pelo número do Tom, sempre identificado** ("— {nome}, via Tom") — nunca se passa pela pessoa. Enviar pelo
-  WhatsApp pessoal dela (Evolution) ficou de fora (regra de produção acima). Decisão: **sempre confirmar** antes de
-  enviar, imposto em código (`turnId`), não só no prompt.
-- Contatos (`contacts`) vêm da conversa ou de cartão de contato encaminhado — a Cloud API não lê a agenda do WhatsApp.
-- Log (`outbound_messages`/`outbound_replies`): enviada/entregue/lida/falhou + respostas. Resposta de quem não é usuário
-  é roteada no webhook (não vira conta nova) e repassada a quem pediu. Opt-out por PARAR. Teto diário de recados.
-- **Depende de passo externo**: aprovar na Meta o template de primeiro contato (texto no `.env.example`); sem ele o Tom
-  só escreve a quem falou com ele nas últimas 24h.
-- Migration `0027_contacts_and_outbound_messages.sql` precisa ser aplicada no Supabase antes do deploy. Tools: 63
-  (~8,3K tokens de schema; avaliar `defer_loading` antes de passar de ~10K).
-- Isso **revisita** o recorte "cobranças a terceiros" só no sentido de falar com terceiros: continua sem cobrar nem
-  emitir nota. Não é um canal de marketing — um destinatário por pedido, mensagem pessoal da própria pessoa.
+- `draft_message_for_contact` redige na voz da pessoa, só com o que ela pediu (nunca inventa conteúdo) e devolve texto +
+  link. Contatos (`contacts`) são só nome+número, salvos por conversa ou cartão de contato encaminhado; ambiguidade →
+  pergunta qual.
+- Log (`message_drafts`, painel "Recados redigidos pelo Tom"): **só reflete o que a pessoa conta** ("mandei", "ela
+  respondeu ..."). O Tom nunca afirma que foi enviado, entregue, lido ou respondido por conta própria.
+- Migration `0027_contacts_and_message_drafts.sql` precisa ser aplicada no Supabase antes do deploy (idempotente).
 
 ## Métricas por fase
 
