@@ -32,6 +32,25 @@ const UNDOABLE_ACTIONS: Record<string, string> = {
   log_habit_checkin: 'checkin_id',
 };
 
+/**
+ * Ações que mudam ou apagam algo que já existia e que o desfazer NÃO sabe
+ * reverter. Se uma delas é mais recente que a última criação, "desfaz" pode
+ * estar se referindo a ela — apagar a criação anterior seria destrutivo e
+ * surpreendente (ex.: editar uma tarefa e pedir "desfaz" apagaria a tarefa).
+ */
+const NON_UNDOABLE_ACTIONS = [
+  'update_task',
+  'update_note',
+  'update_reminder',
+  'update_calendar_event',
+  'delete_calendar_event',
+  'complete_task',
+  'delete_task',
+  'delete_note',
+  'cancel_reminder',
+  'correct_last_transaction',
+];
+
 async function revertAction(toolName: string, resultId: string, ctx: ToolContext): Promise<boolean> {
   switch (toolName) {
     case 'record_transaction':
@@ -78,15 +97,22 @@ export const undoLastActionTool = defineTool({
     'Desfaz a última coisa que a pessoa acabou de criar (lançamento, tarefa, lembrete, nota, conta recorrente, meta ' +
     'com valor, meta pessoal, data importante, hábito, check-in de hábito ou evento), se for dos últimos 10 minutos. Use quando ela disser ' +
     '"desfaz", "cancela isso", "foi engano". Nunca desfaz algo mais antigo e não desfaz duas vezes seguidas — se ' +
-    'não houver nada, diga isso.',
+    'não houver nada, diga isso. Se a última coisa foi uma edição, conclusão ou exclusão (reason: ' +
+    'last_action_not_undoable), diga que isso não dá pra desfazer por aqui e ofereça corrigir na conversa.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const sinceIso = new Date(Date.now() - UNDO_WINDOW_MINUTES * 60 * 1000).toISOString();
     const candidate = await findLastSuccessfulToolCall(ctx.userId, Object.keys(UNDOABLE_ACTIONS), sinceIso);
     if (!candidate) return { undone: false, reason: 'nothing_to_undo' };
 
-    const lastUndo = await findLastSuccessfulToolCall(ctx.userId, ['undo_last_action'], sinceIso);
+    const [lastUndo, lastNonUndoable] = await Promise.all([
+      findLastSuccessfulToolCall(ctx.userId, ['undo_last_action'], sinceIso),
+      findLastSuccessfulToolCall(ctx.userId, NON_UNDOABLE_ACTIONS, sinceIso),
+    ]);
     if (lastUndo && lastUndo.created_at > candidate.created_at) return { undone: false, reason: 'nothing_to_undo' };
+    if (lastNonUndoable && lastNonUndoable.created_at > candidate.created_at) {
+      return { undone: false, reason: 'last_action_not_undoable', last_action: lastNonUndoable.tool_name };
+    }
 
     const resultKey = UNDOABLE_ACTIONS[candidate.tool_name];
     const result = (candidate.result ?? {}) as Record<string, unknown>;

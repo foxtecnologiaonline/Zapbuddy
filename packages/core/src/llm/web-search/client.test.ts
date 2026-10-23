@@ -168,3 +168,22 @@ describe('searchWeb com freshness current', () => {
     expect(vi.mocked(findFreshKnowledgeEntryByQuery).mock.calls[0]![1]).toBe(7 * 24 * 60 * 60 * 1000);
   });
 });
+
+describe('searchWeb sem resultado', () => {
+  it('current sem notícia tenta a busca geral, e resultado vazio não entra no cache', async () => {
+    vi.mocked(findFreshKnowledgeEntryByQuery).mockResolvedValue(null);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await searchWeb('preço do bitcoin', { origin: 'user_query', freshness: 'current' });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1].body as string).topic).toBe('news');
+    expect(JSON.parse(fetchSpy.mock.calls[1]![1].body as string)).not.toHaveProperty('topic');
+    expect(result.summary).toBe('Nenhum resultado encontrado.');
+    expect(insertKnowledgeEntry).not.toHaveBeenCalled();
+  });
+});

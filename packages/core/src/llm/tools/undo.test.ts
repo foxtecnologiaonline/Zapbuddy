@@ -36,6 +36,28 @@ describe('undo_last_action', () => {
     expect(db.deleteTransaction).not.toHaveBeenCalled();
   });
 
+  it('não apaga a criação anterior quando a última ação foi uma edição (update_task)', async () => {
+    db.findLastSuccessfulToolCall
+      .mockResolvedValueOnce(toolCall('create_task', { task_id: 'task-1', created: true }, minutesAgo(5)))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(toolCall('update_task', { updated: true }, minutesAgo(1)));
+
+    const result = await undoLastActionTool.execute({}, ctx);
+
+    expect(result).toEqual({ undone: false, reason: 'last_action_not_undoable', last_action: 'update_task' });
+    expect(db.deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('edição ANTERIOR à criação não atrapalha o desfazer', async () => {
+    db.findLastSuccessfulToolCall
+      .mockResolvedValueOnce(toolCall('create_task', { task_id: 'task-1', created: true }, minutesAgo(1)))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(toolCall('update_task', { updated: true }, minutesAgo(5)));
+    db.deleteTask.mockResolvedValueOnce({ id: 'task-1' });
+
+    expect(await undoLastActionTool.execute({}, ctx)).toEqual({ undone: true, undone_action: 'create_task' });
+  });
+
   it('desfaz o último lançamento pelo transaction_id do resultado', async () => {
     db.findLastSuccessfulToolCall
       .mockResolvedValueOnce(toolCall('record_transaction', { transaction_id: 'tx-1', recorded: true }, minutesAgo(1)))

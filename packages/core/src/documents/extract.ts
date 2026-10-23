@@ -132,8 +132,11 @@ function userInstruction(caption?: string): string {
   return caption ? `Legenda que a pessoa escreveu ao enviar: "${cleanText(caption, 300)}". Leia o arquivo.` : 'Leia o arquivo.';
 }
 
+let anthropicClient: Anthropic | null = null;
+let openAiClient: OpenAI | null = null;
+
 async function extractWithAnthropic(input: ExtractInput): Promise<unknown> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = (anthropicClient ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
   const data = input.buffer.toString('base64');
   const media: Anthropic.ContentBlockParam =
     input.kind === 'pdf'
@@ -162,7 +165,7 @@ async function extractWithAnthropic(input: ExtractInput): Promise<unknown> {
 
 /** Fallback só pra imagem: a Chat Completions aceita PDF de outro jeito (arquivo enviado) e não vale a complexidade aqui. */
 async function extractWithOpenAi(input: ExtractInput): Promise<unknown> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = (openAiClient ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
   const response = await client.chat.completions.create({
     model: process.env.OPENAI_FALLBACK_MODEL ?? 'gpt-4o-mini',
     max_tokens: 900,

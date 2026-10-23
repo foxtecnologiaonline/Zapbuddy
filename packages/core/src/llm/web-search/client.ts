@@ -129,8 +129,18 @@ export async function searchWeb(query: string, options: SearchWebOptions): Promi
     }
   }
 
-  const results = await fetchFromTavily(query, options.maxResults ?? DEFAULT_MAX_RESULTS, options.freshness);
+  const maxResults = options.maxResults ?? DEFAULT_MAX_RESULTS;
+  let results = await fetchFromTavily(query, maxResults, options.freshness);
+  // O índice de notícias não cobre tudo que muda no dia (preço, horário, cotação de cripto):
+  // sem nenhuma notícia, tenta a busca geral antes de desistir.
+  if (results.length === 0 && options.freshness === 'current') {
+    results = await fetchFromTavily(query, maxResults);
+  }
   const summary = summarize(results) || 'Nenhum resultado encontrado.';
+
+  // Busca vazia não vai pro cache: "nenhum resultado" ficaria servido por dias
+  // (7 dias na busca geral) mesmo que a fonte passe a ter resposta logo depois.
+  if (results.length === 0) return { fromCache: false, summary, sourceUrls: [] };
   const sourceUrls = results.map((result) => result.url).filter(Boolean);
 
   await insertKnowledgeEntry({

@@ -16,6 +16,12 @@ export const createHabitTool = defineTool({
     name: z.string().min(1).max(120),
   }),
   execute: async (params, ctx) => {
+    // Mesmo nome (sem diferenciar maiúscula/espaço) já ativo = o mesmo hábito: devolve o existente em vez de duplicar
+    // (o modelo repete a chamada com facilidade quando a conversa dá uma volta).
+    const normalized = params.name.trim().toLowerCase();
+    const existing = (await listActiveHabits(ctx.accountId)).find((habit) => habit.name.trim().toLowerCase() === normalized);
+    if (existing) return { habit_id: existing.id, created: false, already_exists: true };
+
     const habit = await createHabit(ctx.accountId, ctx.userId, params.name);
     return { habit_id: habit.id, created: true };
   },

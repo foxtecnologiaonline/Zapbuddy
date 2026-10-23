@@ -10,7 +10,7 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock('@zapbuddy/db', () => db);
 
-import { logHabitCheckinTool, listHabitsTool } from './habits.js';
+import { logHabitCheckinTool, listHabitsTool, createHabitTool } from './habits.js';
 import { localDateKey, shiftDateKey } from '../../habits/streak.js';
 
 const TZ = 'America/Sao_Paulo';
@@ -70,5 +70,19 @@ describe('list_habits', () => {
 
     expect(result.habits[0]).toMatchObject({ name: 'Academia', done_today: false, current_streak: 1, last_7_days: 1 });
     expect(result.habits[1]).toMatchObject({ name: 'Leitura', current_streak: 0 });
+  });
+});
+
+describe('create_habit', () => {
+  it('não duplica um hábito ativo com o mesmo nome', async () => {
+    db.listActiveHabits.mockResolvedValue([{ id: HABIT_ID, name: 'Academia' }]);
+    expect(await createHabitTool.execute({ name: '  academia ' }, ctx)).toEqual({ habit_id: HABIT_ID, created: false, already_exists: true });
+    expect(db.createHabit).not.toHaveBeenCalled();
+  });
+
+  it('cria quando é novo', async () => {
+    db.listActiveHabits.mockResolvedValue([]);
+    db.createHabit.mockResolvedValue({ id: 'novo' });
+    expect(await createHabitTool.execute({ name: 'Leitura' }, ctx)).toEqual({ habit_id: 'novo', created: true });
   });
 });

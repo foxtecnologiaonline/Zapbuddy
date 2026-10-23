@@ -17,19 +17,20 @@ export async function handleEmbeddingsBackfill(): Promise<void> {
   if (!process.env.OPENAI_API_KEY) return;
 
   try {
-    const notes = await listNotesMissingEmbedding(BATCH_SIZE);
-    for (const note of notes) {
-      const embedding = await embedText(note.content);
-      if (embedding) await setNoteEmbedding(note.id, embedding);
-    }
-
-    const documents = await listDocumentsMissingEmbedding(BATCH_SIZE);
-    for (const document of documents) {
-      const embedding = await embedText(
-        buildDocumentEmbeddingText({ fileName: document.file_name, caption: document.caption, extractedText: document.extracted_text }),
-      );
-      if (embedding) await setDocumentEmbedding(document.id, embedding);
-    }
+    // Em paralelo: são ~50 chamadas curtas e independentes; em série seguravam o sweep por vários segundos.
+    const [notes, documents] = await Promise.all([listNotesMissingEmbedding(BATCH_SIZE), listDocumentsMissingEmbedding(BATCH_SIZE)]);
+    await Promise.all([
+      ...notes.map(async (note) => {
+        const embedding = await embedText(note.content);
+        if (embedding) await setNoteEmbedding(note.id, embedding);
+      }),
+      ...documents.map(async (document) => {
+        const embedding = await embedText(
+          buildDocumentEmbeddingText({ fileName: document.file_name, caption: document.caption, extractedText: document.extracted_text }),
+        );
+        if (embedding) await setDocumentEmbedding(document.id, embedding);
+      }),
+    ]);
   } catch (error) {
     logger.error('embeddings_backfill_failed', { error: error instanceof Error ? error.message : String(error) });
   }
