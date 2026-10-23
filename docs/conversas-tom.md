@@ -139,7 +139,7 @@ de fallback (OpenAI), não é específico de áudio.
 abortar o processamento em curso.
 
 **Resposta (mensagem intermediária):**
-> Só um instante, ainda to vendo isso pra você...
+> Só um instante, ainda tô vendo isso pra você...
 
 ### 2.4 Valor não informado — pergunta antes de chamar a tool
 

@@ -4,8 +4,10 @@ import {
   billsDueWithin,
   buildDateLabels,
   composeMorningDigest,
+  daysOverdue,
   daysUntilDueDay,
   formatMorningNarrative,
+  formatTaskFollowUpMessage,
   taskHourLabel,
   type MorningDigestData,
   type MorningNarrativeInput,
@@ -236,5 +238,35 @@ describe('composeMorningDigest', () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]).not.toMatch(/nada registrado|dia está livre/);
     expect(messages[0]).not.toContain('Aluguel');
+  });
+});
+
+describe('daysOverdue / formatTaskFollowUpMessage (pergunta de conclusão — migration 0022)', () => {
+  it('conta dias de atraso entre datas locais', () => {
+    expect(daysOverdue(2026, 10, 20, 2026, 10, 21)).toBe(1);
+    expect(daysOverdue(2026, 10, 20, 2026, 10, 22)).toBe(2);
+    expect(daysOverdue(2026, 9, 30, 2026, 10, 2)).toBe(2);
+  });
+
+  it('sem tarefa atrasada, não manda mensagem', () => {
+    expect(formatTaskFollowUpMessage([])).toBeNull();
+  });
+
+  it('pergunta pela tarefa e oferece remarcar, não só concluir', () => {
+    const text = formatTaskFollowUpMessage([{ title: 'Reunião do Colegiado', daysOverdue: 2 }]);
+    expect(text).toContain('Preciso confirmar com você');
+    expect(text).toContain('• Reunião do Colegiado (era pra 2 dias atrás)');
+    expect(text).toMatch(/Já rolou\?/);
+    expect(text).toContain('remarcar');
+  });
+
+  it('ontem vira "era pra ontem" e várias tarefas viram uma mensagem só', () => {
+    const text = formatTaskFollowUpMessage([
+      { title: 'Ligar pro banco', daysOverdue: 1 },
+      { title: 'Pagar IPTU', daysOverdue: 3 },
+    ])!;
+    expect(text).toContain('• Ligar pro banco (era pra ontem)');
+    expect(text).toContain('• Pagar IPTU (era pra 3 dias atrás)');
+    expect(text).toContain('Alguma dessas já rolou?');
   });
 });

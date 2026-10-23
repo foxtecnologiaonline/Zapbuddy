@@ -284,3 +284,36 @@ export function composeMorningDigest(data: MorningDigestData): string[] {
 
   return [narrative, ...followUps];
 }
+
+/**
+ * Dias de atraso de uma tarefa (1 = venceu ontem) entre duas datas locais
+ * quaisquer — mesma mecânica de `daysUntilDueDay`, mas sem "próximo mês"
+ * (due_at já passou).
+ */
+export function daysOverdue(dueYear: number, dueMonth: number, dueDay: number, todayYear: number, todayMonth: number, todayDay: number): number {
+  const due = Date.UTC(dueYear, dueMonth - 1, dueDay);
+  const today = Date.UTC(todayYear, todayMonth - 1, todayDay);
+  return Math.round((today - due) / 86_400_000);
+}
+
+export interface OverdueTaskFollowUp {
+  title: string;
+  daysOverdue: number;
+}
+
+function describeOverdue(days: number): string {
+  return days <= 1 ? 'era pra ontem' : `era pra ${days} dias atrás`;
+}
+
+/**
+ * Pergunta de conclusão (migration 0022, pedido do usuário em produção): tarefa
+ * pendente com prazo vencido nunca era confirmada — a pessoa nunca era
+ * perguntada se de fato aconteceu. Uma mensagem só, só com o que ainda não foi
+ * perguntado; null quando não há nada (sem mensagem vazia).
+ */
+export function formatTaskFollowUpMessage(tasks: OverdueTaskFollowUp[]): string | null {
+  if (tasks.length === 0) return null;
+  const lines = tasks.map((task) => `• ${task.title} (${describeOverdue(task.daysOverdue)})`);
+  const ask = tasks.length === 1 ? 'Já rolou? Me conta que eu atualizo, ou me diz pra quando você quer remarcar.' : 'Alguma dessas já rolou? Me conta que eu atualizo, ou me diz pra quando você quer remarcar.';
+  return `❓ *Preciso confirmar com você*\n${lines.join('\n')}\n\n${ask}`;
+}

@@ -1,11 +1,20 @@
 import type { Job } from 'bullmq';
-import { inferLocationFromWhatsappNumber, listActiveRecurringBills, listPendingTasksDueBetween, logger } from '@zapbuddy/db';
+import {
+  inferLocationFromWhatsappNumber,
+  listActiveRecurringBills,
+  listOverdueTasksAwaitingFollowUp,
+  listPendingTasksDueBetween,
+  logger,
+  markTaskFollowUpAsked,
+} from '@zapbuddy/db';
 import {
   billsDueWithin,
   composeMorningDigest,
   datePartsInZone,
+  daysOverdue,
   describeHolidayToday,
   estacaoDoAno,
+  formatTaskFollowUpMessage,
   getTodayAgendaEvents,
   getTodayRange,
   getTodayWeatherSummary,
@@ -57,10 +66,11 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     }
   };
 
-  const [weather, agendaEvents, tasksDueToday, recurringBills] = await Promise.all([
+  const [weather, agendaEvents, tasksDueToday, overdueTasks, recurringBills] = await Promise.all([
     safely('weather', () => getTodayWeatherSummary({ latitude: location.latitude, longitude: location.longitude, timezone: ownerTimezone }), null),
     includeAgenda ? safely('agenda', () => getTodayAgendaEvents(accountId, ownerTimezone), []) : Promise.resolve([]),
     includeAgenda ? safely('tasks', () => listPendingTasksDueBetween(accountId, today.startIso, today.endIso), []) : Promise.resolve([]),
+    includeAgenda ? safely('overdue_tasks', () => listOverdueTasksAwaitingFollowUp(accountId, today.startIso), []) : Promise.resolve([]),
     includeFinance ? safely('bills', () => listActiveRecurringBills(accountId), []) : Promise.resolve([]),
   ]);
 
@@ -104,6 +114,24 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     }
   }
 
+  // Pergunta de conclusão: mensagem à parte, e só marca como perguntada DEPOIS
+  // de entregue — se o envio falhar, a pergunta tenta de novo no próximo dia.
+  const followUps = overdueTasks.map((task) => {
+    const due = datePartsInZone(ownerTimezone, new Date(task.due_at!));
+    return { task, view: { title: task.title, daysOverdue: daysOverdue(due.year, due.month, due.day, year, month, day) } };
+  });
+  const followUpMessage = formatTaskFollowUpMessage(followUps.map((item) => item.view));
+  if (followUpMessage !== null) {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_MESSAGES_MS));
+      await sendWhatsappTextMessage(ownerWhatsappNumber, followUpMessage);
+      delivered += 1;
+      await Promise.all(followUps.map((item) => markTaskFollowUpAsked(accountId, item.task.id)));
+    } catch (error) {
+      logger.error('morning_digest_followup_failed', { accountId, error: describeError(error) });
+    }
+  }
+
   logger.info('morning_digest_sent', {
     accountId,
     messages: delivered,
@@ -111,6 +139,7 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     holiday: holiday?.name ?? null,
     agendaEvents: agendaEvents.length,
     tasks: tasksDueToday.length,
+    followUps: followUps.length,
     bills: bills.length,
     cityKnown: job.data.city != null,
   });

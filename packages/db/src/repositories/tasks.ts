@@ -38,6 +38,26 @@ export async function listTasks(
  * banco — listTasks corta em 50 por criação, então numa conta com muitas
  * pendentes uma tarefa de hoje podia ficar de fora do resumo matinal.
  */
+/**
+ * Tarefas pendentes com prazo vencido (antes de `beforeIso`) que o resumo
+ * matinal ainda não perguntou se foram concluídas (migration 0022). As mais
+ * recentes primeiro e com teto: um acúmulo antigo não vira uma parede de
+ * perguntas num dia só — o resto fica pros dias seguintes.
+ */
+export async function listOverdueTasksAwaitingFollowUp(accountId: string, beforeIso: string, limit = 5): Promise<Task[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .lt('due_at', beforeIso)
+    .is('follow_up_asked_at', null)
+    .order('due_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Task[];
+}
+
 export async function listPendingTasksDueBetween(accountId: string, fromIso: string, toIso: string): Promise<Task[]> {
   const { data, error } = await getSupabaseClient()
     .from('tasks')
@@ -62,6 +82,22 @@ export async function completeTask(accountId: string, taskId: string): Promise<T
 
   if (error) throw error;
   return data as Task;
+}
+
+/**
+ * Marca que o resumo matinal já perguntou, uma vez, se essa tarefa atrasada
+ * foi concluída — pra não repetir a mesma pergunta todo dia (ver migration
+ * 0022). Não muda `status`/`completed_at`: a resposta da pessoa é quem
+ * decide isso, via `complete_task` numa mensagem normal.
+ */
+export async function markTaskFollowUpAsked(accountId: string, taskId: string): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from('tasks')
+    .update({ follow_up_asked_at: new Date().toISOString() })
+    .eq('id', taskId)
+    .eq('account_id', accountId);
+
+  if (error) throw error;
 }
 
 /**
@@ -94,7 +130,11 @@ export interface UpdateTaskInput {
 export async function updateTask(accountId: string, taskId: string, input: UpdateTaskInput): Promise<Task | null> {
   const patch: Record<string, unknown> = {};
   if (input.title !== undefined) patch.title = input.title;
-  if (input.dueAt !== undefined) patch.due_at = input.dueAt;
+  if (input.dueAt !== undefined) {
+    patch.due_at = input.dueAt;
+    // Prazo novo: vale perguntar de novo se foi concluída quando essa data passar (migration 0022).
+    patch.follow_up_asked_at = null;
+  }
 
   const { data, error } = await getSupabaseClient()
     .from('tasks')

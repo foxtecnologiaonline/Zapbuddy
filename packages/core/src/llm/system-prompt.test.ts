@@ -430,3 +430,96 @@ describe('buildSystemPrompt — cadastro progressivo (primeiros 7 dias)', () => 
     expect(section).not.toMatch(/forma de pagamento|preferred_payment_method|CPF/);
   });
 });
+
+describe('buildSystemPrompt — personalidade, situações e repertório (2026-10)', () => {
+  it('só entra pra quem já fez o onboarding (abertura continua o script fixo de 2 frases)', () => {
+    const onboarding = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
+    const registered = buildSystemPrompt(baseUser());
+
+    expect(onboarding).not.toContain('Personalidade e piadas');
+    expect(registered).toContain('Personalidade e piadas');
+    expect(registered).toContain('Repertório de apoio');
+  });
+
+  it('piada só quando a pessoa pede, sempre pelo banco (tell_joke), nunca improvisada', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/piada por conta própria, nunca/);
+    expect(prompt).toMatch(/Piada só existe quando ELA pede/);
+    expect(prompt).toContain('tell_joke');
+    expect(prompt).toMatch(/Piada improvisada\s+por você costuma ser ruim/);
+    expect(prompt).toMatch(/already_told_ids/);
+  });
+
+  it('recusa piada que mexa com grupos de pessoas ou política', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/raça, gênero, religião, orientação, região, aparência,\s+deficiência\) ou política/);
+  });
+
+  it('é honesto sobre ser uma IA e não finge ser humano', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/você é uma IA/i);
+    expect(prompt).toMatch(/Nunca se passe por\s+humano/);
+  });
+
+  it('encaminha sofrimento sério pro CVV (188) em vez de seguir com tarefas', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/CVV, telefone 188/);
+  });
+
+  it('nunca promete lembrar sem criar o registro pela tool', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/Nunca prometa "vou te lembrar"/);
+  });
+
+  it('proatividade é no máximo uma sugestão por resposta e nunca cria nada sem o sim da pessoa', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/no máximo UMA\s+sugestão por resposta/);
+    expect(prompt).toMatch(/nunca crie nada sem o\s+"sim" dela/);
+  });
+
+  it('manda buscar na web qualquer número que muda com o tempo e proíbe recomendar produto financeiro', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/NÃO sabe de\s+cabeça: use web_search/);
+    expect(prompt).toMatch(/Nunca recomende produto, banco, corretora ou ativo/);
+  });
+
+  it('fica na camada estável (cache), nunca na volátil', () => {
+    const blocks = buildSystemPromptBlocks(baseUser());
+
+    expect(blocks.stable).toContain('Personalidade e piadas');
+    expect(blocks.semiStable).not.toContain('Personalidade e piadas');
+    expect(blocks.volatile).not.toContain('Personalidade e piadas');
+  });
+});
+
+describe('buildSystemPrompt — agenda futura, resumo mensal, remarcar (2026-10)', () => {
+  it('ensina a juntar agenda do Google e tarefas com prazo ao responder "o que tenho amanhã"', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('tomorrow');
+    expect(prompt).toContain('next_7_days');
+    expect(prompt).toMatch(/list_tasks\s+pending com due_at dentro da janela/);
+  });
+
+  it('ensina resumo de esse mês / mês passado', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('this_month');
+    expect(prompt).toContain('last_month');
+  });
+
+  it('ensina a remarcar tarefa e adiar lembrete', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('update_task');
+    expect(prompt).toContain('update_reminder');
+    expect(prompt).toContain('list_reminders');
+  });
+});

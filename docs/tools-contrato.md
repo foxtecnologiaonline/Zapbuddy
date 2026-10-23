@@ -59,7 +59,8 @@ responsabilidade de cada tool individual logar.
 
 ## `get_financial_summary` (`tools/finance.ts`)
 
-- **Schema:** `{ period: 'today' | 'last_7_days' }`
+- **Schema:** `{ period: 'today' | 'last_7_days' | 'this_month' | 'last_month' }` (`this_month` = dia 1 até agora;
+  `last_month` = mês anterior inteiro, ambos no fuso do usuário). Retorno inclui `period`.
 - **Execução:** calcula o intervalo no fuso do usuário (`zoned-ranges.ts`) e chama
   `summarizeTransactions()`.
 - **Retorno:** `{ totalIncomeCents, totalExpenseCents, byCategory, count }`
@@ -67,6 +68,15 @@ responsabilidade de cada tool individual logar.
   resumo diário ou semanal proativamente** (confirmado em `packages/core/src/queues/definitions.ts`:
   só há filas de transcrição de áudio, mensagem entrante e disparo de lembrete). O cenário "resumo
   diário proativo" do roteiro de conversa é proposta de produto, não comportamento atual.
+
+## `tell_joke` (`tools/jokes.ts`, banco em `jokes.ts`)
+
+- **Schema:** `{ theme?: 'dinheiro'|'trabalho'|'tempo'|'dia_a_dia'|'tecnologia'|'tom'|'classicas', already_told_ids?: string[] }`
+- **Retorno:** `{ id, theme, joke, repeated }`. Sorteio aleatório do banco curado, fora dos ids já
+  contados; `repeated: true` quando o tema esgotou.
+- **Só quando a pessoa pede** (decisão do dono do produto: nada de piada espontânea). Piada
+  improvisada pelo modelo é evitada de propósito — o banco existe pra garantir qualidade.
+- Leitura pura: não escreve nada no banco.
 
 ## `create_task` / `list_tasks` / `complete_task` / `delete_task` (`tools/tasks.ts`)
 

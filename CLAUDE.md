@@ -80,6 +80,15 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
     agenda/tarefas e financeiro. Horário dentro do silêncio é recusado na hora (a mensagem nunca sairia).
   - Log `morning_digest_sent` por envio (partes presentes, se havia clima/feriado, se a cidade era conhecida) para
     medir quanto o clima falha e quais seções as pessoas realmente recebem.
+  - **Pergunta de conclusão de tarefa atrasada** (2026-10, reportado pelo usuário em produção; `tasks.follow_up_asked_at`,
+    migration `0022_task_follow_up.sql`): como o resumo só lista tarefas de HOJE, uma tarefa que passou do prazo e
+    ficou pendente sumia sem o Tom nunca perguntar se aconteceu. Agora o resumo manda, depois das outras mensagens,
+    uma extra "❓ Preciso confirmar com você" com as tarefas pendentes de dia anterior ainda não perguntadas (as 5
+    mais recentes por dia; o resto fica pros dias seguintes), oferecendo concluir OU remarcar. Marca como
+    perguntada só DEPOIS de entregue (se falhar, tenta no dia seguinte) e nunca repete a pergunta pela mesma tarefa.
+    Remarcar (`update_task` com `due_at` novo) zera a marca: a data nova volta a valer. A resposta segue o fluxo
+    normal (`list_tasks` + `complete_task`/`update_task`/`delete_task`). Existem dois arquivos com prefixo `0022`
+    (`0022_calendar_multi_provider.sql` e `0022_task_follow_up.sql`) — são independentes e idempotentes.
 - **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
   só o que a pessoa informou. Nunca vira pagamento sozinho.
 - **Metas com valor** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor-alvo e valor guardado são
@@ -568,6 +577,42 @@ fluxo de indicação já existente (`get_referral_info`/`buildReferralWhatsappDe
 indicada agora pode clicar num link com "Indicado <código>" já preenchido em vez de digitar isso
 manualmente. Sem `TOM_WHATSAPP_NUMBER` configurada, a tool e o painel caem de volta pro código
 manual — nunca um link quebrado.
+
+## Comunicação do Tom — personalidade, humor e repertório (2026-10, motivo documentado)
+
+Pedido do dono do produto: rever e expandir conhecimento, argumentos, respostas, interações, humor e
+contexto do Tom. Novo módulo `packages/core/src/llm/tom-persona.ts`, no bloco `stable` do system prompt
+(cacheado; ~2.400 tokens a mais), só para quem já fez o onboarding — a abertura de 2 frases continua
+script fixo. Resumo:
+
+- **Piada só quando a pessoa pede** (decisão do dono do produto, corrige a primeira versão que tinha humor
+  espontâneo): leveza no tom sim, tirada própria não. Quando pede, o Tom chama `tell_joke` — banco curado
+  em `llm/jokes.ts` (37 piadas, 7 temas, sorteio sem repetir na conversa via `already_told_ids`). Piada
+  improvisada pelo modelo é evitada de propósito (costuma ser fraca); nada sobre grupos de pessoas nem
+  política. Critério pra entrar no banco: curta, graça na observação ou na virada, funciona sem explicar.
+- **Honestidade sobre ser IA**: nunca se passa por humano, nem sob insistência.
+- **Sofrimento sério**: tarefa e registro ficam de lado, acolhe e cita o CVV (188, gratuito, 24h).
+  Sem diagnóstico, sem terapia.
+- **Proatividade**: no máximo UMA sugestão por resposta, em forma de pergunta, nunca cria nada sem o "sim".
+  Nunca promete "vou lembrar" sem registro pela tool.
+- **Repertório de apoio**: educação financeira e gestão de tempo em 1-2 frases (reserva de emergência,
+  50/30/20, cartão/parcelas, dívidas, priorização, passo mínimo). Número que muda com o tempo (juros,
+  Selic, alíquota) o Tom NÃO cita de cabeça — `web_search`. Nunca recomenda produto, banco ou ativo, nunca
+  promete rendimento, não é consultor financeiro.
+- **Português do dia a dia**: abreviações, gíria de valor e períodos do dia ("de manhã" = 9h etc., dito na
+  confirmação pra ela corrigir).
+- **Mensagens automáticas** (fora do LLM): mais variações no lembrete, na abertura do resumo matinal e no
+  reengajamento do onboarding. Template fixo continua sendo escolha deliberada (sem chamada ao LLM).
+
+- **Lacunas de capacidade** (achadas ao listar 20 pedidos possíveis): resumo financeiro de `this_month`/`last_month`
+  (`get_financial_summary`) é meu; agenda futura (`tomorrow`/`next_7_days`), `update_task` e `list_reminders`/
+  `update_reminder` foram feitos em paralelo por outra sessão (seção "Alcance do Tom" abaixo) e prevalecem. "O que
+  tenho amanhã" junta agenda e tarefas com `due_at` — compromisso salvo como tarefa (agenda desconectada) não pode
+  ficar invisível. Lacuna que continua: adiar um lembrete que JÁ disparou (`update_reminder` só edita pendente; o
+  Tom pergunta o que adiar e cria um novo).
+
+Não validado contra eval real (não existe um neste projeto): monitorar nas conversas reais se a resposta
+ficou longa e quais piadas o pessoal mais pede — o banco cresce/troca conforme o retorno.
 
 ## Alcance do Tom — edição, hábitos, pesquisa ampliada, busca semântica e leitura de arquivos (2026-10, motivo documentado)
 

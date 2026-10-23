@@ -98,6 +98,7 @@ export interface Task {
   status: TaskStatus;
   due_at: string | null;
   completed_at: string | null;
+  follow_up_asked_at: string | null;
   created_at: string;
 }
 
