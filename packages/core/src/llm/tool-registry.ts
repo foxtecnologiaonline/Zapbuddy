@@ -18,6 +18,7 @@ import { createGoalTool, addGoalProgressTool, listGoalsTool } from './tools/savi
 import { setQuietHoursTool, updateOccupationTool, setEmailTool } from './tools/preferences.js';
 import { undoLastActionTool } from './tools/undo.js';
 import { rememberImportantDateTool, listImportantDatesTool, forgetImportantDateTool } from './tools/important-dates.js';
+import { tellJokeTool } from './tools/jokes.js';
 import { createPersonalGoalTool, listPersonalGoalsTool, completePersonalGoalTool, deletePersonalGoalTool } from './tools/goals.js';
 
 export const ALL_TOOLS: ToolDefinition<any>[] = [
@@ -64,6 +65,7 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   listPersonalGoalsTool,
   completePersonalGoalTool,
   deletePersonalGoalTool,
+  tellJokeTool,
 ];
 
 export function getToolByName(name: string) {

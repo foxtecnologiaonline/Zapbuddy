@@ -420,16 +420,25 @@ describe('buildSystemPrompt — personalidade, situações e repertório (2026-1
     const onboarding = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
     const registered = buildSystemPrompt(baseUser());
 
-    expect(onboarding).not.toContain('Personalidade e humor');
-    expect(registered).toContain('Personalidade e humor');
+    expect(onboarding).not.toContain('Personalidade e piadas');
+    expect(registered).toContain('Personalidade e piadas');
     expect(registered).toContain('Repertório de apoio');
   });
 
-  it('limita o humor: nunca em momento sério e nunca às custas da pessoa', () => {
+  it('piada só quando a pessoa pede, sempre pelo banco (tell_joke), nunca improvisada', () => {
     const prompt = buildSystemPrompt(baseUser());
 
-    expect(prompt).toMatch(/Nunca quando ela estiver estressada/);
-    expect(prompt).toMatch(/nunca dela/);
+    expect(prompt).toMatch(/piada por conta própria, nunca/);
+    expect(prompt).toMatch(/Piada só existe quando ELA pede/);
+    expect(prompt).toContain('tell_joke');
+    expect(prompt).toMatch(/Piada improvisada\s+por você costuma ser ruim/);
+    expect(prompt).toMatch(/already_told_ids/);
+  });
+
+  it('recusa piada que mexa com grupos de pessoas ou política', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toMatch(/raça, gênero, religião, orientação, região, aparência,\s+deficiência\) ou política/);
   });
 
   it('é honesto sobre ser uma IA e não finge ser humano', () => {
@@ -468,8 +477,8 @@ describe('buildSystemPrompt — personalidade, situações e repertório (2026-1
   it('fica na camada estável (cache), nunca na volátil', () => {
     const blocks = buildSystemPromptBlocks(baseUser());
 
-    expect(blocks.stable).toContain('Personalidade e humor');
-    expect(blocks.semiStable).not.toContain('Personalidade e humor');
-    expect(blocks.volatile).not.toContain('Personalidade e humor');
+    expect(blocks.stable).toContain('Personalidade e piadas');
+    expect(blocks.semiStable).not.toContain('Personalidade e piadas');
+    expect(blocks.volatile).not.toContain('Personalidade e piadas');
   });
 });

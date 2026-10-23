@@ -83,6 +83,15 @@ responsabilidade de cada tool individual logar.
   existe uma tool de "achar tarefa pela descrição" — a resolução de qual tarefa é responsabilidade
   do modelo dentro da conversa, não de uma tool dedicada.
 
+## `tell_joke` (`tools/jokes.ts`, banco em `jokes.ts`)
+
+- **Schema:** `{ theme?: 'dinheiro'|'trabalho'|'tempo'|'dia_a_dia'|'tecnologia'|'tom'|'classicas', already_told_ids?: string[] }`
+- **Retorno:** `{ id, theme, joke, repeated }`. Sorteio aleatório do banco curado, fora dos ids já
+  contados; `repeated: true` quando o tema esgotou.
+- **Só quando a pessoa pede** (decisão do dono do produto: nada de piada espontânea). Piada
+  improvisada pelo modelo é evitada de propósito — o banco existe pra garantir qualidade.
+- Leitura pura: não escreve nada no banco.
+
 ## `create_reminder` / `cancel_reminder` (`tools/reminders.ts`)
 
 - **Schema de `create_reminder`:** `{ message: string (min 1), remind_at: datetime, task_id?: uuid, recurrence?: 'daily'|'weekly'|'monthly' }`

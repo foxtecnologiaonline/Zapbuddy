@@ -464,8 +464,11 @@ contexto do Tom. Novo módulo `packages/core/src/llm/tom-persona.ts`, no bloco `
 (cacheado; ~2.400 tokens a mais), só para quem já fez o onboarding — a abertura de 2 frases continua
 script fixo. Resumo:
 
-- **Humor com trava**: leve, de situação, uma frase, raro. Nunca em momento de estresse, dívida, saúde,
-  luto ou quando o erro foi do Tom; nunca às custas da pessoa; sem política/religião/futebol.
+- **Piada só quando a pessoa pede** (decisão do dono do produto, corrige a primeira versão que tinha humor
+  espontâneo): leveza no tom sim, tirada própria não. Quando pede, o Tom chama `tell_joke` — banco curado
+  em `llm/jokes.ts` (37 piadas, 7 temas, sorteio sem repetir na conversa via `already_told_ids`). Piada
+  improvisada pelo modelo é evitada de propósito (costuma ser fraca); nada sobre grupos de pessoas nem
+  política. Critério pra entrar no banco: curta, graça na observação ou na virada, funciona sem explicar.
 - **Honestidade sobre ser IA**: nunca se passa por humano, nem sob insistência.
 - **Sofrimento sério**: tarefa e registro ficam de lado, acolhe e cita o CVV (188, gratuito, 24h).
   Sem diagnóstico, sem terapia.
@@ -480,8 +483,8 @@ script fixo. Resumo:
 - **Mensagens automáticas** (fora do LLM): mais variações no lembrete, na abertura do resumo matinal e no
   reengajamento do onboarding. Template fixo continua sendo escolha deliberada (sem chamada ao LLM).
 
-Não validado contra eval real (não existe um neste projeto): monitorar nas conversas reais se o humor
-aparece demais ou fora de hora, e se a resposta ficou longa — e enxugar o módulo se piorar.
+Não validado contra eval real (não existe um neste projeto): monitorar nas conversas reais se a resposta
+ficou longa e quais piadas o pessoal mais pede — o banco cresce/troca conforme o retorno.
 
 ## Métricas por fase
 
