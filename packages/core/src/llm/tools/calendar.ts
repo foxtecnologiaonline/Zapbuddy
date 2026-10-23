@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineTool } from '../tool-types.js';
 import { createGoogleCalendarEvent, listGoogleCalendarEvents } from '../../google/calendar.js';
 import { getFreshCalendarAccess } from '../../google/calendar-access.js';
-import { getTodayRange, getLast7DaysRange } from '../../time/zoned-ranges.js';
+import { getTodayRange, getTomorrowRange, getNext7DaysRange, getLast7DaysRange } from '../../time/zoned-ranges.js';
 
 export const createCalendarEventTool = defineTool({
   name: 'create_calendar_event',
@@ -42,15 +42,24 @@ export const createCalendarEventTool = defineTool({
 
 export const listCalendarEventsTool = defineTool({
   name: 'list_calendar_events',
-  description: "Lista eventos do Google Agenda conectado da conta: 'today' (hoje) ou 'last_7_days' (próximos/últimos 7 dias).",
+  description:
+    "Lista eventos do Google Agenda conectado da conta: 'today' (hoje), 'tomorrow' (amanhã), " +
+    "'next_7_days' (hoje + 6 dias à frente) ou 'last_7_days' (hoje + 6 dias PARA TRÁS, só passado). " +
+    'Compromisso futuro sem Google Agenda conectado vive em tarefas com due_at (list_tasks).',
   schema: z.object({
-    period: z.enum(['today', 'last_7_days']),
+    period: z.enum(['today', 'tomorrow', 'next_7_days', 'last_7_days']),
   }),
   execute: async (params, ctx) => {
     const auth = await getFreshCalendarAccess(ctx.accountId);
     if (!auth) return { connected: false };
 
-    const range = params.period === 'today' ? getTodayRange(ctx.timezone) : getLast7DaysRange(ctx.timezone);
+    const ranges = {
+      today: getTodayRange,
+      tomorrow: getTomorrowRange,
+      next_7_days: getNext7DaysRange,
+      last_7_days: getLast7DaysRange,
+    };
+    const range = ranges[params.period](ctx.timezone);
     const events = await listGoogleCalendarEvents(auth.accessToken, auth.calendarId, range.startIso, range.endIso);
     return { connected: true, events };
   },

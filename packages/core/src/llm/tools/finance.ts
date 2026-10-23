@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { recordTransaction, summarizeTransactions, updateLastTransaction, getBudget, upsertBudget } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, isRecognizedCategory, normalizeCategory } from '../categories.js';
-import { getLast7DaysRange, getTodayRange, getMonthToDateRange } from '../../time/zoned-ranges.js';
+import { getLast7DaysRange, getTodayRange, getMonthToDateRange, getPreviousMonthRange } from '../../time/zoned-ranges.js';
 import { enqueueWebhookEvent } from '../../webhooks/dispatch.js';
 import { assertReasonableOccurredAt } from '../date-sanity.js';
 
@@ -145,13 +145,21 @@ export const getSummaryTool = defineTool({
   name: 'get_financial_summary',
   description:
     "Retorna o resumo financeiro (receitas, gastos, por categoria) do período pedido: 'today' " +
-    "(hoje) ou 'last_7_days' (últimos 7 dias). Os limites de data são calculados no fuso do " +
-    'usuário — nunca gere from/to manualmente.',
+    "(hoje), 'last_7_days' (últimos 7 dias), 'this_month' (do dia 1 até agora) ou 'last_month' " +
+    '(mês anterior inteiro). Os limites de data são calculados no fuso do usuário — nunca gere ' +
+    'from/to manualmente. Para "quanto gastei com X", use o byCategory do resultado.',
   schema: z.object({
-    period: z.enum(['today', 'last_7_days']),
+    period: z.enum(['today', 'last_7_days', 'this_month', 'last_month']),
   }),
   execute: async (params, ctx) => {
-    const range = params.period === 'today' ? getTodayRange(ctx.timezone) : getLast7DaysRange(ctx.timezone);
-    return summarizeTransactions(ctx.accountId, range.startIso, range.endIso);
+    const ranges = {
+      today: getTodayRange,
+      last_7_days: getLast7DaysRange,
+      this_month: getMonthToDateRange,
+      last_month: getPreviousMonthRange,
+    };
+    const range = ranges[params.period](ctx.timezone);
+    const summary = await summarizeTransactions(ctx.accountId, range.startIso, range.endIso);
+    return { period: params.period, ...summary };
   },
 });

@@ -47,6 +47,36 @@ export async function completeTask(accountId: string, taskId: string): Promise<T
 }
 
 /**
+ * Edita título e/ou prazo de uma tarefa (`dueAt: null` remove o prazo).
+ * Mudar o prazo zera `follow_up_asked_at`: com data nova, vale perguntar de
+ * novo se ela foi concluída quando essa data passar (migration 0022).
+ * `maybeSingle()` — id de outra conta ou já excluído devolve null.
+ */
+export async function updateTask(
+  accountId: string,
+  taskId: string,
+  changes: { title?: string; dueAt?: string | null },
+): Promise<Task | null> {
+  const patch: Record<string, unknown> = {};
+  if (changes.title !== undefined) patch.title = changes.title;
+  if (changes.dueAt !== undefined) {
+    patch.due_at = changes.dueAt;
+    patch.follow_up_asked_at = null;
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .update(patch)
+    .eq('id', taskId)
+    .eq('account_id', accountId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Task | null) ?? null;
+}
+
+/**
  * Marca que o resumo matinal já perguntou, uma vez, se essa tarefa atrasada
  * foi concluída — pra não repetir a mesma pergunta todo dia (ver migration
  * 0022). Não muda `status`/`completed_at`: a resposta da pessoa é quem

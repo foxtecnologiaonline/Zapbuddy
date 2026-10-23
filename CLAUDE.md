@@ -483,6 +483,12 @@ script fixo. Resumo:
 - **Mensagens automáticas** (fora do LLM): mais variações no lembrete, na abertura do resumo matinal e no
   reengajamento do onboarding. Template fixo continua sendo escolha deliberada (sem chamada ao LLM).
 
+- **Lacunas de capacidade fechadas** (achadas ao listar 20 pedidos possíveis): resumo financeiro de
+  `this_month`/`last_month`; agenda com `tomorrow`/`next_7_days` (antes `list_calendar_events` só olhava
+  pra TRÁS apesar de a descrição dizer "próximos"); `update_task` (remarcar/renomear tarefa);
+  `list_reminders` + `reschedule_reminder` (adiar). "O que tenho amanhã" junta Google Agenda e tarefas
+  com `due_at` — compromisso salvo como tarefa (agenda desconectada) não pode ficar invisível.
+
 Não validado contra eval real (não existe um neste projeto): monitorar nas conversas reais se a resposta
 ficou longa e quais piadas o pessoal mais pede — o banco cresce/troca conforme o retorno.
 

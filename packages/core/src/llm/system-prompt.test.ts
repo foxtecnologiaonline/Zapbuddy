@@ -482,3 +482,28 @@ describe('buildSystemPrompt — personalidade, situações e repertório (2026-1
     expect(blocks.volatile).not.toContain('Personalidade e piadas');
   });
 });
+
+describe('buildSystemPrompt — agenda futura, resumo mensal, remarcar (2026-10)', () => {
+  it('ensina a juntar agenda do Google e tarefas com prazo ao responder "o que tenho amanhã"', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('tomorrow');
+    expect(prompt).toContain('next_7_days');
+    expect(prompt).toMatch(/list_tasks\s+pending com due_at dentro da janela/);
+  });
+
+  it('ensina resumo de esse mês / mês passado', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('this_month');
+    expect(prompt).toContain('last_month');
+  });
+
+  it('ensina a remarcar tarefa e adiar lembrete', () => {
+    const prompt = buildSystemPrompt(baseUser());
+
+    expect(prompt).toContain('update_task');
+    expect(prompt).toContain('reschedule_reminder');
+    expect(prompt).toContain('list_reminders');
+  });
+});

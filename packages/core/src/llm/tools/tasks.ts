@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { completeTask, createTask, deleteTask, listTasks } from '@zapbuddy/db';
+import { completeTask, createTask, deleteTask, listTasks, updateTask } from '@zapbuddy/db';
 import { defineTool } from '../tool-types.js';
 import { enqueueWebhookEvent } from '../../webhooks/dispatch.js';
 import { assertPlausibleTimestamp } from '../date-sanity.js';
@@ -40,6 +40,28 @@ export const completeTaskTool = defineTool({
     const task = await completeTask(ctx.accountId, params.task_id);
     enqueueWebhookEvent(ctx.accountId, 'task.completed', { task_id: task.id, title: task.title });
     return { task_id: task.id, completed: true };
+  },
+});
+
+export const updateTaskTool = defineTool({
+  name: 'update_task',
+  description:
+    'Edita o título e/ou o prazo (due_at) de uma tarefa existente, dado o task_id — use quando a pessoa ' +
+    'quiser remarcar ("passa pra sexta"), corrigir o nome, ou tirar o prazo (due_at: null). Não use pra ' +
+    'concluir (complete_task) nem pra apagar (delete_task). Se o task_id não existir mais, retorna updated: false.',
+  schema: z.object({
+    task_id: z.string().uuid(),
+    title: z.string().min(1).optional(),
+    due_at: z.string().datetime().nullable().optional(),
+  }),
+  execute: async (params, ctx) => {
+    if (params.title === undefined && params.due_at === undefined) {
+      throw new Error('Informe title e/ou due_at — não há o que alterar.');
+    }
+    if (params.due_at) assertPlausibleTimestamp(params.due_at, 'due_at');
+
+    const task = await updateTask(ctx.accountId, params.task_id, { title: params.title, dueAt: params.due_at });
+    return task ? { updated: true, task_id: task.id, title: task.title, due_at: task.due_at } : { updated: false };
   },
 });
 

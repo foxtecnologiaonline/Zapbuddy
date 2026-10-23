@@ -108,3 +108,23 @@ describe('getLocalWeekday (resumo semanal proativo)', () => {
     expect(getLocalWeekday('America/Sao_Paulo', new Date('2026-05-10T01:00:00.000Z'))).toBe(6);
   });
 });
+
+describe('getTomorrowRange / getNext7DaysRange', () => {
+  it('amanhã no fuso do usuário, não em UTC (já é dia 10 em UTC, mas ainda dia 9 em São Paulo)', async () => {
+    const { getTomorrowRange } = await import('./zoned-ranges.js');
+    const reference = new Date('2026-05-10T01:00:00.000Z'); // 2026-05-09 22:00 em São Paulo
+    const { startIso, endIso } = getTomorrowRange('America/Sao_Paulo', reference);
+
+    expect(startIso).toBe('2026-05-10T03:00:00.000Z');
+    expect(endIso).toBe('2026-05-11T02:59:59.000Z');
+  });
+
+  it('próximos 7 dias cobre hoje + 6 à frente e atravessa virada de mês', async () => {
+    const { getNext7DaysRange } = await import('./zoned-ranges.js');
+    const reference = new Date('2026-05-28T15:00:00.000Z'); // 2026-05-28 12:00 em São Paulo
+    const { startIso, endIso } = getNext7DaysRange('America/Sao_Paulo', reference);
+
+    expect(startIso).toBe('2026-05-28T03:00:00.000Z');
+    expect(endIso).toBe('2026-06-04T02:59:59.000Z'); // fim do dia 03/06 em São Paulo
+  });
+});

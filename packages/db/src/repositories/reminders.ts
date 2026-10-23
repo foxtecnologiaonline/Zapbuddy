@@ -48,6 +48,32 @@ export async function cancelReminder(accountId: string, reminderId: string): Pro
   return (data as Reminder | null) ?? null;
 }
 
+/** Lembretes de uma conta num status (pending: próximos primeiro; demais: mais recentes primeiro) — alimenta list_reminders. */
+export async function listAccountReminders(accountId: string, status: ReminderStatus, limit: number): Promise<Reminder[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('reminders')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', status)
+    .order('remind_at', { ascending: status === 'pending' })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as Reminder[];
+}
+
+export async function findAccountReminderById(accountId: string, reminderId: string): Promise<Reminder | null> {
+  const { data, error } = await getSupabaseClient()
+    .from('reminders')
+    .select('*')
+    .eq('id', reminderId)
+    .eq('account_id', accountId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Reminder | null) ?? null;
+}
+
 /** Reminders due now, used by the worker's scheduled sweep. */
 export async function listDueReminders(nowIso: string): Promise<Reminder[]> {
   const { data, error } = await getSupabaseClient()

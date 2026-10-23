@@ -59,7 +59,8 @@ responsabilidade de cada tool individual logar.
 
 ## `get_financial_summary` (`tools/finance.ts`)
 
-- **Schema:** `{ period: 'today' | 'last_7_days' }`
+- **Schema:** `{ period: 'today' | 'last_7_days' | 'this_month' | 'last_month' }` (`this_month` = dia 1 até agora;
+  `last_month` = mês anterior inteiro, ambos no fuso do usuário)
 - **Execução:** calcula o intervalo no fuso do usuário (`zoned-ranges.ts`) e chama
   `summarizeTransactions()`.
 - **Retorno:** `{ totalIncomeCents, totalExpenseCents, byCategory, count }`
@@ -79,6 +80,9 @@ responsabilidade de cada tool individual logar.
 - `delete_task`: `{ task_id: uuid }` → `{ deleted: true, task_id }` ou `{ deleted: false }` (id
   não existe mais nessa conta). Exclusão real (não soft-delete) — pra tarefa criada por engano,
   diferente de `complete_task`.
+- `update_task`: `{ task_id: uuid, title?: string, due_at?: datetime | null }` → `{ updated: true, task_id, title, due_at }`
+  ou `{ updated: false }`. `due_at: null` remove o prazo; mudar o prazo zera `follow_up_asked_at`
+  (a pergunta de conclusão do resumo matinal volta a valer pra data nova). Sem `title` nem `due_at`: erro.
 - **`complete_task`/`delete_task` exigem o `task_id`, não uma descrição em texto livre.** Não
   existe uma tool de "achar tarefa pela descrição" — a resolução de qual tarefa é responsabilidade
   do modelo dentro da conversa, não de uma tool dedicada.
@@ -92,8 +96,23 @@ responsabilidade de cada tool individual logar.
   improvisada pelo modelo é evitada de propósito — o banco existe pra garantir qualidade.
 - Leitura pura: não escreve nada no banco.
 
-## `create_reminder` / `cancel_reminder` (`tools/reminders.ts`)
+## `list_calendar_events` (`tools/calendar.ts`)
 
+- **Schema:** `{ period: 'today' | 'tomorrow' | 'next_7_days' | 'last_7_days' }` — `next_7_days` é hoje + 6 à
+  frente; `last_7_days` é hoje + 6 PARA TRÁS (só passado). Antes só existiam `today` e `last_7_days`, então
+  "o que tenho amanhã" não tinha como ser respondido. Sem Google Agenda conectado, compromisso futuro vive
+  em tarefas com `due_at`: o system prompt manda juntar as duas fontes numa resposta só.
+
+## `create_reminder` / `cancel_reminder` / `list_reminders` / `reschedule_reminder` (`tools/reminders.ts`)
+
+- `list_reminders`: `{}` → `{ reminders: [{ reminder_id, message, remind_at, status, recurrence }] }` — até 20
+  pendentes (próximos primeiro) + os 5 últimos já disparados (é por aqui que o Tom acha o id do lembrete que
+  acabou de chegar).
+- `reschedule_reminder`: `{ reminder_id: uuid, remind_at: datetime }` → `{ rescheduled: true, reminder_id, remind_at }`
+  ou `{ rescheduled: false }` (id inexistente/cancelado). Sempre cria um lembrete NOVO (mesma mensagem e
+  `task_id`) em vez de reabrir a linha antiga — o `hasReminderBeenDispatched` (Redis) é por id e pularia o
+  envio. Pendente: cancela o antigo e remove o job; mantém a recorrência (move a série). Já disparado: o novo é
+  avulso, porque o próprio disparo já encadeou a próxima ocorrência da série.
 - **Schema de `create_reminder`:** `{ message: string (min 1), remind_at: datetime, task_id?: uuid, recurrence?: 'daily'|'weekly'|'monthly' }`
 - **Execução:** `remind_at` passa por `assertFutureDate` (`date-sanity.ts` — tolera 2min no
   passado por clock skew, rejeita >2 anos no futuro). Persiste o lembrete e enfileira o disparo

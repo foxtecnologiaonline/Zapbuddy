@@ -93,6 +93,22 @@ export function getTodayRange(timeZone: string, referenceDate: Date = new Date()
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
+/** Amanhã inteiro (00:00:00 a 23:59:59) NO FUSO DO USUÁRIO. */
+export function getTomorrowRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, day + 1, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(year, month, day + 1, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/** Hoje + 6 dias à frente (7 dias corridos pra frente) NO FUSO DO USUÁRIO — espelho de `getLast7DaysRange`. */
+export function getNext7DaysRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, day, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(year, month, day + 6, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
 /**
  * Últimos 7 dias corridos (hoje + 6 dias anteriores) NO FUSO DO USUÁRIO —
  * janela rolante, não "semana de calendário" (evita a ambiguidade de
