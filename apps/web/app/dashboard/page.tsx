@@ -117,8 +117,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     listGoals(account.accountId, 'active'),
     listActiveHabits(account.accountId),
     listHabitCheckinDates(account.accountId, localDateKey(user.timezone)),
-    listMessageDrafts(account.accountId, 30),
-    listContacts(account.accountId),
+    // Recados/contatos são um bônus da página: se a migration 0027 ainda não foi aplicada (ou a consulta falhar), a seção
+    // aparece vazia em vez de derrubar o painel inteiro.
+    listMessageDrafts(account.accountId, 30).catch(() => []),
+    listContacts(account.accountId).catch(() => []),
   ]);
 
   let referralLink: string | null = null;
