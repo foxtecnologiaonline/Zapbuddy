@@ -5,6 +5,16 @@ vi.mock('@zapbuddy/db', () => ({
   inferLocationFromWhatsappNumber: vi.fn(() => ({ city: 'São Paulo', uf: 'SP', latitude: -23.55, longitude: -46.63 })),
   listActiveRecurringBills: vi.fn(),
   listPendingTasksDueBetween: vi.fn(),
+  listOverdueTasksAwaitingFollowUp: vi.fn(),
+  markTaskFollowUpAsked: vi.fn(),
+  listImportantDates: vi.fn(),
+  hasSentImportantDateReminderThisYear: vi.fn(),
+  logImportantDateReminder: vi.fn(),
+  listActiveHabits: vi.fn(),
+  listHabitCheckinDates: vi.fn(),
+  listGoals: vi.fn(),
+  listBudgets: vi.fn(),
+  summarizeTransactions: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
@@ -15,12 +25,26 @@ vi.mock('@zapbuddy/core', async () => {
     ...actual,
     getTodayWeatherSummary: vi.fn(),
     getTodayAgendaEvents: vi.fn(),
+    getTomorrowAgendaEvents: vi.fn(),
     sendWhatsappTextMessage: vi.fn(),
   };
 });
 
-import { listActiveRecurringBills, listPendingTasksDueBetween, logger } from '@zapbuddy/db';
-import { getTodayAgendaEvents, getTodayWeatherSummary, sendWhatsappTextMessage, type MorningDigestGenerateJob } from '@zapbuddy/core';
+import {
+  hasSentImportantDateReminderThisYear,
+  listActiveHabits,
+  listActiveRecurringBills,
+  listBudgets,
+  listGoals,
+  listHabitCheckinDates,
+  listImportantDates,
+  listOverdueTasksAwaitingFollowUp,
+  listPendingTasksDueBetween,
+  logImportantDateReminder,
+  logger,
+  summarizeTransactions,
+} from '@zapbuddy/db';
+import { getTodayAgendaEvents, getTodayWeatherSummary, getTomorrowAgendaEvents, sendWhatsappTextMessage, type MorningDigestGenerateJob } from '@zapbuddy/core';
 import { handleMorningDigestGenerate } from './morning-digest-generate.js';
 
 function job(data: Partial<MorningDigestGenerateJob> = {}): Job<MorningDigestGenerateJob> {
@@ -52,6 +76,16 @@ beforeEach(() => {
   vi.mocked(getTodayAgendaEvents).mockReset().mockResolvedValue([]);
   vi.mocked(listPendingTasksDueBetween).mockReset().mockResolvedValue([]);
   vi.mocked(listActiveRecurringBills).mockReset().mockResolvedValue([]);
+  vi.mocked(getTomorrowAgendaEvents).mockReset().mockResolvedValue([]);
+  vi.mocked(listOverdueTasksAwaitingFollowUp).mockReset().mockResolvedValue([]);
+  vi.mocked(listImportantDates).mockReset().mockResolvedValue([]);
+  vi.mocked(hasSentImportantDateReminderThisYear).mockReset().mockResolvedValue(false);
+  vi.mocked(logImportantDateReminder).mockReset().mockResolvedValue(undefined);
+  vi.mocked(listActiveHabits).mockReset().mockResolvedValue([]);
+  vi.mocked(listHabitCheckinDates).mockReset().mockResolvedValue({});
+  vi.mocked(listGoals).mockReset().mockResolvedValue([]);
+  vi.mocked(listBudgets).mockReset().mockResolvedValue([]);
+  vi.mocked(summarizeTransactions).mockReset().mockResolvedValue({ totalIncomeCents: 0, totalExpenseCents: 0, byCategory: {}, count: 0 });
   vi.mocked(sendWhatsappTextMessage).mockReset().mockResolvedValue(undefined);
   vi.mocked(logger.error).mockClear();
 });
@@ -74,7 +108,9 @@ describe('handleMorningDigestGenerate', () => {
       { startIso: '2026-10-22T12:00:00.000Z', title: 'Dentista' },
       { startIso: '2026-10-22T17:00:00.000Z', title: 'Reunião' },
     ]);
-    vi.mocked(listPendingTasksDueBetween).mockResolvedValue([{ title: 'Pagar IPTU', due_at: '2026-10-23T02:59:59.000Z' }] as never);
+    vi.mocked(listPendingTasksDueBetween)
+      .mockResolvedValueOnce([{ title: 'Pagar IPTU', due_at: '2026-10-23T02:59:59.000Z' }] as never)
+      .mockResolvedValue([]);
     vi.mocked(listActiveRecurringBills).mockResolvedValue([{ name: 'Aluguel', amount_cents: 120000, due_day: 22 }] as never);
 
     await run();
@@ -89,6 +125,10 @@ describe('handleMorningDigestGenerate', () => {
     await run({ includeAgenda: false, includeFinance: false });
 
     expect(getTodayAgendaEvents).not.toHaveBeenCalled();
+    expect(getTomorrowAgendaEvents).not.toHaveBeenCalled();
+    expect(listImportantDates).not.toHaveBeenCalled();
+    expect(listActiveHabits).not.toHaveBeenCalled();
+    expect(summarizeTransactions).not.toHaveBeenCalled();
     expect(listPendingTasksDueBetween).not.toHaveBeenCalled();
     expect(listActiveRecurringBills).not.toHaveBeenCalled();
   });
@@ -139,5 +179,102 @@ describe('handleMorningDigestGenerate', () => {
     const assertion = expect(promise).rejects.toThrow('whatsapp down');
     await vi.runAllTimersAsync();
     await assertion;
+  });
+
+  describe('mensagem de informações extras', () => {
+    it('datas importantes de hoje e dos próximos dias, e o aviso das 9h não repete a de hoje', async () => {
+      vi.mocked(listImportantDates).mockResolvedValue([
+        { id: 'd1', label: 'aniversário da Ana', month: 10, day: 22 },
+        { id: 'd2', label: 'aniversário de casamento', month: 10, day: 23 },
+      ] as never);
+
+      await run();
+
+      expect(sent()).toHaveLength(2);
+      expect(sent()[0]).toContain('separei umas informações') ;
+      expect(sent()[1]).toContain('🗓️ Hoje: aniversário da Ana · Amanhã: aniversário de casamento');
+      expect(logImportantDateReminder).toHaveBeenCalledWith('d1', 2026);
+      expect(logImportantDateReminder).not.toHaveBeenCalledWith('d2', 2026);
+    });
+
+    it('data de hoje que já foi avisada não aparece de novo (e não é marcada outra vez)', async () => {
+      vi.mocked(listImportantDates).mockResolvedValue([{ id: 'd1', label: 'aniversário da Ana', month: 10, day: 22 }] as never);
+      vi.mocked(hasSentImportantDateReminderThisYear).mockResolvedValue(true);
+
+      await run();
+
+      expect(sent()).toHaveLength(1);
+      expect(logImportantDateReminder).not.toHaveBeenCalled();
+    });
+
+    it('se a mensagem de extras falhar no envio, a data NÃO é marcada como avisada', async () => {
+      vi.mocked(listImportantDates).mockResolvedValue([{ id: 'd1', label: 'aniversário da Ana', month: 10, day: 22 }] as never);
+      vi.mocked(sendWhatsappTextMessage).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('whatsapp 500'));
+
+      await run();
+
+      expect(logImportantDateReminder).not.toHaveBeenCalled();
+    });
+
+    it('retrato financeiro: ontem, mês comparado e limite perto de estourar', async () => {
+      vi.mocked(summarizeTransactions)
+        .mockResolvedValueOnce({ totalIncomeCents: 0, totalExpenseCents: 8500, byCategory: {}, count: 1 }) // ontem
+        .mockResolvedValueOnce({ totalIncomeCents: 0, totalExpenseCents: 234000, byCategory: { mercado: 90000 }, count: 9 }) // mês até ontem
+        .mockResolvedValueOnce({ totalIncomeCents: 0, totalExpenseCents: 200000, byCategory: {}, count: 8 }); // mês passado, mesmo trecho
+      vi.mocked(listBudgets).mockResolvedValue([{ category: 'mercado', limit_cents: 100000 }] as never);
+
+      await run();
+
+      const extras = sent()[1]!.replace(/\u00a0/g, ' ');
+      expect(extras).toContain('💰 *Seu dinheiro*');
+      expect(extras).toContain('• Ontem: R$ 85,00 em gastos');
+      expect(extras).toContain('17% acima do mesmo período do mês passado');
+      expect(extras).toContain('Mercado está em 90% do limite');
+    });
+
+    it('hábitos com sequência e meta com prazo chegando', async () => {
+      vi.mocked(listActiveHabits).mockResolvedValue([{ id: 'h1', name: 'Caminhada' }] as never);
+      vi.mocked(listHabitCheckinDates).mockResolvedValue({ h1: ['2026-10-21', '2026-10-20', '2026-10-19'] });
+      vi.mocked(listGoals).mockResolvedValue([{ title: 'Viagem', saved_cents: 300000, target_cents: 500000, deadline: '2026-11-01' }] as never);
+
+      await run();
+
+      const extras = sent()[1]!.replace(/\u00a0/g, ' ');
+      expect(extras).toContain('• Caminhada: 3 dias seguidos 🔥 — hoje ainda falta marcar');
+      expect(extras).toContain('Meta Viagem: 60% (R$ 3.000,00 de R$ 5.000,00) — prazo em 10 dias');
+    });
+
+    it('prévia de amanhã com compromissos, tarefas e a previsão de amanhã', async () => {
+      vi.mocked(getTomorrowAgendaEvents).mockResolvedValue([{ startIso: '2026-10-23T12:00:00.000Z', title: 'Dentista' }]);
+      vi.mocked(listPendingTasksDueBetween).mockResolvedValueOnce([]).mockResolvedValueOnce([{ title: 'Ligar pro banco' }] as never);
+      vi.mocked(getTodayWeatherSummary).mockResolvedValue({
+        minTempC: 18,
+        maxTempC: 28,
+        description: 'céu limpo',
+        conditionId: 800,
+        rainExpected: false,
+        rainChancePercent: 0,
+        periods: { morning: null, afternoon: null, evening: null },
+        tomorrow: { minTempC: 17, maxTempC: 29, description: 'chuva leve', conditionId: 500, rainChancePercent: 70 },
+      });
+
+      await run();
+
+      const extras = sent().at(-1)!;
+      expect(extras).toContain('🔜 *Amanhã*: 1 compromisso (9h — Dentista) e 1 tarefa');
+      expect(extras).toContain('🌧️ 17°C a 29°C, chuva leve (70% de chuva)');
+    });
+
+    it('fonte de extras que falha some da mensagem sem derrubar as outras e sem afirmar dia livre errado', async () => {
+      vi.mocked(listImportantDates).mockRejectedValue(new Error('db down'));
+      vi.mocked(listActiveHabits).mockResolvedValue([{ id: 'h1', name: 'Leitura' }] as never);
+
+      await run();
+
+      expect(sent()).toHaveLength(2);
+      expect(sent()[1]).toContain('Leitura');
+      expect(sent()[1]).not.toContain('🗓️');
+      expect(logger.error).toHaveBeenCalledWith('morning_digest_source_failed', expect.objectContaining({ source: 'extras_dates' }));
+    });
   });
 });

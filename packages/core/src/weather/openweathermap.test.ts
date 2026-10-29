@@ -74,6 +74,25 @@ describe('summarizeForecast', () => {
     });
   });
 
+  it('previsão de amanhã vem da mesma resposta: min/máx, condição do meio-dia e maior chance de chuva', () => {
+    const summary = summarizeForecast(
+      [
+        entry(15),
+        entry(9, { main: { temp: 16, temp_min: 15, temp_max: 17 } }, 1),
+        entry(12, { id: 500, description: 'chuva leve', main: { temp: 24, temp_min: 22, temp_max: 28 }, pop: 0.7 }, 1),
+        entry(18, { main: { temp: 20, temp_min: 19, temp_max: 21 }, pop: 0.2 }, 1),
+      ],
+      TZ,
+      now,
+    );
+
+    expect(summary?.tomorrow).toEqual({ minTempC: 15, maxTempC: 28, description: 'chuva leve', conditionId: 500, rainChancePercent: 70 });
+  });
+
+  it('sem entradas de amanhã na resposta, não inventa: tomorrow ausente', () => {
+    expect(summarizeForecast([entry(15)], TZ, now)?.tomorrow).toBeUndefined();
+  });
+
   it('chuva detectada pelo ID da condição mesmo com probabilidade baixa (bug antigo: só pop >= 0.4 pegava)', () => {
     const summary = summarizeForecast([entry(15, { id: 500, description: 'chuva leve', pop: 0.2 })], TZ, now);
     expect(summary?.rainExpected).toBe(true);

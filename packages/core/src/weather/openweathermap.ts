@@ -8,6 +8,14 @@ export interface WeatherPeriod {
   rain: boolean;
 }
 
+export interface TomorrowWeatherSummary {
+  minTempC: number;
+  maxTempC: number;
+  description: string;
+  conditionId: number;
+  rainChancePercent: number;
+}
+
 export interface TodayWeatherSummary {
   minTempC: number;
   maxTempC: number;
@@ -18,6 +26,8 @@ export interface TodayWeatherSummary {
   rainExpected: boolean;
   /** Maior chance de chuva (0-100) entre as janelas de 3h que restam do dia, como o provedor informa. */
   rainChancePercent: number;
+  /** Previsão de amanhã a partir da mesma resposta (sem nova chamada); ausente quando a janela não cobre amanhã. */
+  tomorrow?: TomorrowWeatherSummary;
   /** Manhã (5h-11h), tarde (12h-17h) e noite (18h-23h) locais; null quando a previsão restante do dia não cobre o período. */
   periods: { morning: WeatherPeriod | null; afternoon: WeatherPeriod | null; evening: WeatherPeriod | null };
 }
@@ -81,6 +91,30 @@ export function summarizeForecast(
     if (Math.abs(candidate.hour - 12) < Math.abs(midday.hour - 12)) midday = candidate;
   }
 
+  const tomorrowParts = datePartsInZone(timezone, new Date(now.getTime() + 24 * 60 * 60 * 1000));
+  const tomorrowEntries: Array<{ entry: OpenWeatherMapForecastEntry; hour: number }> = [];
+  for (const entry of entries) {
+    const at = new Date(entry.dt * 1000);
+    const parts = datePartsInZone(timezone, at);
+    if (parts.year === tomorrowParts.year && parts.month === tomorrowParts.month && parts.day === tomorrowParts.day) {
+      tomorrowEntries.push({ entry, hour: getLocalHour(timezone, at) });
+    }
+  }
+  let tomorrow: TomorrowWeatherSummary | undefined;
+  if (tomorrowEntries.length > 0) {
+    let tomorrowMidday = tomorrowEntries[0]!;
+    for (const candidate of tomorrowEntries) {
+      if (Math.abs(candidate.hour - 12) < Math.abs(tomorrowMidday.hour - 12)) tomorrowMidday = candidate;
+    }
+    tomorrow = {
+      minTempC: Math.round(Math.min(...tomorrowEntries.map(({ entry }) => entry.main.temp_min))),
+      maxTempC: Math.round(Math.max(...tomorrowEntries.map(({ entry }) => entry.main.temp_max))),
+      description: tomorrowMidday.entry.weather[0]?.description ?? 'tempo variável',
+      conditionId: tomorrowMidday.entry.weather[0]?.id ?? 800,
+      rainChancePercent: Math.round(Math.max(...tomorrowEntries.map(({ entry }) => entry.pop)) * 100),
+    };
+  }
+
   const inRange = (from: number, to: number) =>
     todayEntries.filter(({ hour }) => hour >= from && hour <= to).map(({ entry }) => entry);
 
@@ -91,6 +125,7 @@ export function summarizeForecast(
     conditionId: midday.entry.weather[0]?.id ?? 800,
     rainExpected: todayEntries.some(({ entry }) => entryMeansRain(entry)),
     rainChancePercent: Math.round(Math.max(...todayEntries.map(({ entry }) => entry.pop)) * 100),
+    tomorrow,
     periods: {
       morning: summarizePeriod(inRange(5, 11)),
       afternoon: summarizePeriod(inRange(12, 17)),

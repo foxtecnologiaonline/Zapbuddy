@@ -36,6 +36,7 @@ export * from './webhooks/dispatch.js';
 export * from './onboarding/nudge-message.js';
 export * from './time/quiet-hours.js';
 export * from './digest/morning.js';
+export * from './digest/extras.js';
 export * from './digest/season.js';
 export * from './digest/weather-tips.js';
 export * from './digest/holidays.js';

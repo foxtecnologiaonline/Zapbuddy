@@ -89,6 +89,22 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
     Remarcar (`update_task` com `due_at` novo) zera a marca: a data nova volta a valer. A resposta segue o fluxo
     normal (`list_tasks` + `complete_task`/`update_task`/`delete_task`). Existem dois arquivos com prefixo `0022`
     (`0022_calendar_multi_provider.sql` e `0022_task_follow_up.sql`) — são independentes e idempotentes.
+  - **Mais informação no bom dia** (2026-10, pedido do dono do produto; sem migration): emojis pelo contexto (cabeçalho
+    pela hora do dia — a flor 🌸 só aparece no corpo, junto da frase da primavera, nunca no início) e 5 informações
+    úteis, todas só com dado que a pessoa registrou (`digest/extras.ts`, puro; `handlers/morning-digest-extras.ts`,
+    IO com `safely` por fonte): (1) contagem regressiva do próximo compromisso logo abaixo da lista de agenda;
+    (2) datas importantes de hoje + próximos 3 dias — a de HOJE já avisada no ano não repete, e ao entregar o resumo ela é
+    marcada em `important_date_logs` pro aviso separado das 9h não duplicar (se a mensagem falhar, não marca);
+    (3) retrato financeiro leve — gasto de ontem (omitido se zero: costuma ser "não registrei"), mês até ontem
+    comparado ao mesmo trecho do mês passado (só com os dois trechos > 0) e categorias com limite próprio
+    (`set_budget_alert`) a partir de 80%; sem julgamento; (4) hábitos (sequência, falta marcar hoje) e metas COM valor
+    cujo prazo declarado está a ≤14 dias — meta qualitativa não tem prazo e não entra; (5) prévia de amanhã
+    (compromissos, tarefas e previsão de amanhã, tirada da MESMA resposta do OpenWeatherMap, sem chamada extra).
+    Vão numa mensagem própria, depois de agenda/financeiro e antes da pergunta de tarefa atrasada; a narrativa passa a
+    anunciá-la ("separei umas informações úteis pra você 👇"). Sem nova preferência: datas, hábitos/metas e amanhã
+    seguem o toggle de agenda/tarefas e o retrato financeiro segue o de financeiro
+    (`set_morning_digest_preferences`). Cotações (dólar/Selic) ficaram de fora — alternativa à prévia de amanhã,
+    não implementada. Não validado com usuários reais: observar se a mensagem de extras ficou longa.
 - **Contas recorrentes** (`recurring_bills`, tools `create_recurring_bill`/`list_recurring_bills`/`cancel_recurring_bill`):
   só o que a pessoa informou. Nunca vira pagamento sozinho.
 - **Metas com valor** (`goals`, tools `create_goal`/`add_goal_progress`/`list_goals`): valor-alvo e valor guardado são

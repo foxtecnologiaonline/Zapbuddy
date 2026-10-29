@@ -24,3 +24,11 @@ export async function getBudget(accountId: string, category: string): Promise<Bu
   if (error) throw error;
   return (data as Budget | null) ?? null;
 }
+
+/** Todos os limites mensais da conta — usado pelo resumo matinal pra avisar categoria perto de estourar. */
+export async function listBudgets(accountId: string): Promise<Budget[]> {
+  const { data, error } = await getSupabaseClient().from('budgets').select('*').eq('account_id', accountId);
+
+  if (error) throw error;
+  return (data ?? []) as Budget[];
+}

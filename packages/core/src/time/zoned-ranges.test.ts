@@ -138,3 +138,30 @@ describe('getTomorrowRange / getNext7DaysRange / getDateKeyRange', () => {
     expect(() => getDateKeyRange('America/Sao_Paulo', '2026-05-31', '2026-05-30')).toThrow(/anterior/);
   });
 });
+
+describe('getYesterdayRange / getMonthComparisonRanges', () => {
+  it('ontem no fuso do usuário', async () => {
+    const { getYesterdayRange } = await import('./zoned-ranges.js');
+    const { startIso, endIso } = getYesterdayRange('America/Sao_Paulo', new Date('2026-10-22T11:00:00.000Z')); // 22/10 08:00 em SP
+    expect(startIso).toBe('2026-10-21T03:00:00.000Z');
+    expect(endIso).toBe('2026-10-22T02:59:59.000Z');
+  });
+
+  it('mês até ontem vs. mesmo trecho do mês anterior', async () => {
+    const { getMonthComparisonRanges } = await import('./zoned-ranges.js');
+    const ranges = getMonthComparisonRanges('America/Sao_Paulo', new Date('2026-10-22T11:00:00.000Z'))!;
+    expect(ranges.current).toEqual({ startIso: '2026-10-01T03:00:00.000Z', endIso: '2026-10-22T02:59:59.000Z' }); // dias 1..21
+    expect(ranges.previous).toEqual({ startIso: '2026-09-01T03:00:00.000Z', endIso: '2026-09-22T02:59:59.000Z' });
+  });
+
+  it('dia 1: não há dia fechado no mês, sem comparação', async () => {
+    const { getMonthComparisonRanges } = await import('./zoned-ranges.js');
+    expect(getMonthComparisonRanges('America/Sao_Paulo', new Date('2026-10-01T11:00:00.000Z'))).toBeNull();
+  });
+
+  it('mês anterior mais curto limita o último dia (31/03 → fevereiro tem 28)', async () => {
+    const { getMonthComparisonRanges } = await import('./zoned-ranges.js');
+    const ranges = getMonthComparisonRanges('America/Sao_Paulo', new Date('2026-03-31T11:00:00.000Z'))!; // 30 dias fechados
+    expect(ranges.previous.endIso).toBe('2026-03-01T02:59:59.000Z'); // fim de 28/02
+  });
+});

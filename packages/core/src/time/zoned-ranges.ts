@@ -201,3 +201,40 @@ export function getPreviousWeekRange(timeZone: string, referenceDate: Date = new
   const end = zonedWallTimeToUtc(year, month, day - 7, 23, 59, 59, timeZone);
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
+
+/** Ontem inteiro (00:00:00 a 23:59:59) NO FUSO DO USUÁRIO. */
+export function getYesterdayRange(timeZone: string, referenceDate: Date = new Date()): DateRange {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  const start = zonedWallTimeToUtc(year, month, day - 1, 0, 0, 0, timeZone);
+  const end = zonedWallTimeToUtc(year, month, day - 1, 23, 59, 59, timeZone);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
+}
+
+/**
+ * Do dia 1 do mês até o fim de ONTEM, e o mesmo trecho do mês anterior (dia 1
+ * até o mesmo dia do mês, limitado ao último dia dele) — comparação justa de
+ * "quanto já gastei no mês" sem comparar um mês parcial com um inteiro.
+ * `null` no dia 1: ainda não há nenhum dia fechado no mês.
+ */
+export function getMonthComparisonRanges(
+  timeZone: string,
+  referenceDate: Date = new Date(),
+): { current: DateRange; previous: DateRange } | null {
+  const { year, month, day } = datePartsInZone(timeZone, referenceDate);
+  if (day === 1) return null;
+
+  const closedDays = day - 1;
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevLastDay = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+
+  const current = {
+    startIso: zonedWallTimeToUtc(year, month, 1, 0, 0, 0, timeZone).toISOString(),
+    endIso: zonedWallTimeToUtc(year, month, closedDays, 23, 59, 59, timeZone).toISOString(),
+  };
+  const previous = {
+    startIso: zonedWallTimeToUtc(prevYear, prevMonth, 1, 0, 0, 0, timeZone).toISOString(),
+    endIso: zonedWallTimeToUtc(prevYear, prevMonth, Math.min(closedDays, prevLastDay), 23, 59, 59, timeZone).toISOString(),
+  };
+  return { current, previous };
+}

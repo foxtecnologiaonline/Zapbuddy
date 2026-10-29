@@ -2,15 +2,12 @@ import type { Estacao } from './season.js';
 import type { HolidayToday } from './holidays.js';
 import type { TodayWeatherSummary } from '../weather/openweathermap.js';
 import { buildWeatherTips, weatherEmoji } from './weather-tips.js';
+import { formatBRL, formatMorningExtras, nextEventCountdownLine, type MorningExtrasData } from './extras.js';
 
 export interface UpcomingBill {
   name: string;
   amountCents: number;
   dueDay: number;
-}
-
-function formatBRL(cents: number): string {
-  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 /**
@@ -91,6 +88,8 @@ export interface MorningNarrativeInput {
   nothingScheduled: boolean;
   /** true quando vai haver mensagem(ns) depois desta — fecha a narrativa com o "já te mando…". */
   followUpComing: boolean;
+  /** true quando vai haver a mensagem de informações extras (datas, dinheiro, hábitos, amanhã). */
+  extrasComing?: boolean;
 }
 
 const SEASON_PHRASE: Record<Estacao, string> = {
@@ -126,6 +125,11 @@ const FREE_DAY_LINES = [
   'Por enquanto seu dia está livre 😌 Me chama se quiser encaixar alguma coisa.',
 ];
 const FOLLOW_UP_LINES = ['Já te mando o que tem pra hoje 👇', 'Olha o que tem pra hoje 👇'];
+const FREE_DAY_WITH_EXTRAS_LINES = [
+  'Seu dia está livre 😌 mas separei umas informações úteis pra você 👇',
+  'Nada marcado pra hoje 🙂 Olha o que separei pra você 👇',
+];
+const EXTRAS_ONLY_LINES = ['Separei umas informações úteis pra você 👇', 'Olha o que separei pra você hoje 👇'];
 
 /** Variação determinística (mesmo dia → mesma frase, então retry de job não muda o texto). */
 function pickVariant<T>(options: T[], month: number, day: number): T {
@@ -183,9 +187,11 @@ export function formatMorningNarrative(input: MorningNarrativeInput): string {
   }
 
   if (input.nothingScheduled) {
-    paragraphs.push(pickVariant(FREE_DAY_LINES, input.month, input.day));
+    paragraphs.push(pickVariant(input.extrasComing ? FREE_DAY_WITH_EXTRAS_LINES : FREE_DAY_LINES, input.month, input.day));
   } else if (input.followUpComing) {
     paragraphs.push(pickVariant(FOLLOW_UP_LINES, input.month, input.day));
+  } else if (input.extrasComing) {
+    paragraphs.push(pickVariant(EXTRAS_ONLY_LINES, input.month, input.day));
   }
 
   return paragraphs.join('\n\n');
@@ -215,7 +221,8 @@ function formatAgendaBlock(events: MorningAgendaEvent[], tasks: MorningTask[], t
       const hour = hourLabelInZone(event.startIso, timeZone);
       return index === nextIndex ? `👉 *${hour}* ${event.title}` : `• ${hour} ${event.title}`;
     });
-    sections.push(`📅 *Compromissos de hoje*\n${lines.join('\n')}`);
+    const countdown = nextEventCountdownLine(events, timeZone, nowMs);
+    sections.push(`📅 *Compromissos de hoje*\n${lines.join('\n')}${countdown ? `\n\n${countdown}` : ''}`);
   }
 
   if (tasks.length > 0) {
@@ -263,6 +270,8 @@ export interface MorningDigestData {
    * ali não significa "nada hoje", então a narrativa não afirma "dia livre".
    */
   dataComplete: boolean;
+  /** Informações extras já buscadas pelo handler (cada fonte com fallback próprio); ausente = sem mensagem de extras. */
+  extras?: MorningExtrasData;
 }
 
 /**
@@ -289,6 +298,8 @@ export function composeMorningDigest(data: MorningDigestData): string[] {
     if (financeBlock !== null) followUps.push(`${financeBlock}\n\n${PAYMENT_CTA}`);
   }
 
+  const extrasMessage = data.extras ? formatMorningExtras(data.extras, data.timezone) : null;
+
   const { weekdayLabel, dateLabel, weekdayIndex } = buildDateLabels(data.timezone, new Date(data.nowMs));
   const narrative = formatMorningNarrative({
     name: data.name,
@@ -303,9 +314,10 @@ export function composeMorningDigest(data: MorningDigestData): string[] {
     holiday: data.holiday,
     nothingScheduled: data.dataComplete && data.includeAgenda && data.includeFinance && followUps.length === 0,
     followUpComing: followUps.length > 0,
+    extrasComing: extrasMessage !== null,
   });
 
-  return [narrative, ...followUps];
+  return [narrative, ...followUps, ...(extrasMessage !== null ? [extrasMessage] : [])];
 }
 
 /**

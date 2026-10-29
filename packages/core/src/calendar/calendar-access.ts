@@ -1,6 +1,6 @@
 import { getCalendarConnection } from '@zapbuddy/db';
 import { decryptSecret } from '../security/crypto.js';
-import { getTodayRange } from '../time/zoned-ranges.js';
+import { getTodayRange, getTomorrowRange, type DateRange } from '../time/zoned-ranges.js';
 import {
   refreshGoogleAccessToken,
   createGoogleCalendarEvent,
@@ -72,10 +72,18 @@ export interface TodayAgendaEvent {
 
 /** Eventos de hoje (fuso da pessoa) em ordem de horário; vazio quando não há agenda conectada. */
 export async function getTodayAgendaEvents(accountId: string, timeZone: string): Promise<TodayAgendaEvent[]> {
+  return getAgendaEventsInRange(accountId, getTodayRange(timeZone));
+}
+
+/** Eventos de amanhã (fuso da pessoa) em ordem de horário — prévia do resumo matinal. */
+export async function getTomorrowAgendaEvents(accountId: string, timeZone: string): Promise<TodayAgendaEvent[]> {
+  return getAgendaEventsInRange(accountId, getTomorrowRange(timeZone));
+}
+
+async function getAgendaEventsInRange(accountId: string, range: DateRange): Promise<TodayAgendaEvent[]> {
   const access = await getFreshCalendarAccess(accountId);
   if (!access) return [];
 
-  const range = getTodayRange(timeZone);
   const events = await listCalendarEvents(access, range.startIso, range.endIso);
   return events
     .map((event) => ({ startIso: event.startIso, title: event.summary }))

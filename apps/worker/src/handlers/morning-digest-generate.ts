@@ -4,6 +4,7 @@ import {
   listActiveRecurringBills,
   listOverdueTasksAwaitingFollowUp,
   listPendingTasksDueBetween,
+  logImportantDateReminder,
   logger,
   markTaskFollowUpAsked,
 } from '@zapbuddy/db';
@@ -14,6 +15,7 @@ import {
   daysOverdue,
   describeHolidayToday,
   estacaoDoAno,
+  formatMorningExtras,
   formatTaskFollowUpMessage,
   getTodayAgendaEvents,
   getTodayRange,
@@ -21,11 +23,23 @@ import {
   sendWhatsappTextMessage,
   type MorningDigestGenerateJob,
 } from '@zapbuddy/core';
+import { loadMorningExtras } from './morning-digest-extras.js';
 
 // Mensagens seguidas no WhatsApp podem chegar fora de ordem; uma pausa curta
 // garante 1-2-3 e dá cara de "alguém digitando".
 const GAP_BETWEEN_MESSAGES_MS = 1_500;
 const DEFAULT_DIGEST_HOUR = 8;
+
+/** O aviso das 9h pula datas já avisadas no ano (idempotência de important_date_logs) — marcar aqui evita a mensagem repetida. Best-effort. */
+async function markTodayDatesAsReminded(ids: string[], year: number): Promise<void> {
+  await Promise.all(
+    ids.map((id) =>
+      logImportantDateReminder(id, year).catch((error) =>
+        logger.error('morning_digest_date_log_failed', { importantDateId: id, error: describeError(error) }),
+      ),
+    ),
+  );
+}
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -81,6 +95,20 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     day,
   );
 
+  const { extras, todayDates } = await loadMorningExtras({
+    accountId,
+    timezone: ownerTimezone,
+    now,
+    year,
+    month,
+    day,
+    includeAgenda,
+    includeFinance,
+    weather,
+    safely,
+  });
+  const extrasText = formatMorningExtras(extras, ownerTimezone);
+
   const holiday = describeHolidayToday(location.uf, year, month, day);
   const messages = composeMorningDigest({
     name: job.data.displayName ?? null,
@@ -99,6 +127,7 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     includeFinance,
     // Clima fora do ar não muda o que está agendado; falha de agenda/tarefas/contas sim ("vazio" ali pode ser mentira).
     dataComplete: !['agenda', 'tasks', 'bills'].some((source) => failedSources.has(source)),
+    extras,
   });
 
   await sendWhatsappTextMessage(ownerWhatsappNumber, messages[0]!);
@@ -109,6 +138,7 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
       await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_MESSAGES_MS));
       await sendWhatsappTextMessage(ownerWhatsappNumber, message);
       delivered += 1;
+      if (message === extrasText) await markTodayDatesAsReminded(todayDates.map((item) => item.id), year);
     } catch (error) {
       logger.error('morning_digest_message_failed', { accountId, error: describeError(error) });
     }
@@ -140,6 +170,7 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     agendaEvents: agendaEvents.length,
     tasks: tasksDueToday.length,
     followUps: followUps.length,
+    extras: extrasText !== null,
     bills: bills.length,
     cityKnown: job.data.city != null,
   });

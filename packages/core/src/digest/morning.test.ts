@@ -316,3 +316,52 @@ describe('formatMorningNarrative — emojis e detalhe do tempo', () => {
     expect(dry).not.toContain('🌡️');
   });
 });
+
+describe('composeMorningDigest — informações extras', () => {
+  const extras = {
+    importantDates: [{ id: 'a', label: 'aniversário da Ana', offsetDays: 0, weekdayLabel: 'Quinta' }],
+    finance: null,
+    habits: [],
+    goals: [],
+    tomorrow: null,
+  };
+
+  it('extras vão numa mensagem própria, por último, e a narrativa avisa', () => {
+    const messages = composeMorningDigest({
+      ...baseData,
+      agendaEvents: [
+        { startIso: '2026-10-22T12:00:00.000Z', title: 'Dentista' },
+        { startIso: '2026-10-22T17:00:00.000Z', title: 'Reunião' },
+      ],
+      extras,
+    });
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toContain('👇');
+    expect(messages[2]).toContain('🗓️ Hoje: aniversário da Ana');
+  });
+
+  it('dia livre com extras: troca a frase de "dia livre" por uma que anuncia as informações', () => {
+    const [narrative, extrasMessage] = composeMorningDigest({ ...baseData, extras });
+    expect(narrative).toContain('separei');
+    expect(narrative).not.toMatch(/nada registrado/);
+    expect(extrasMessage).toContain('🗓️');
+  });
+
+  it('extras sem conteúdo não geram mensagem nem mudam a narrativa', () => {
+    const messages = composeMorningDigest({ ...baseData, extras: { importantDates: [], finance: null, habits: [], goals: [], tomorrow: null } });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/nada registrado|dia está livre/);
+  });
+
+  it('só extras (agenda desligada): a narrativa anuncia sem prometer agenda', () => {
+    const [narrative] = composeMorningDigest({ ...baseData, includeAgenda: false, extras });
+    expect(narrative).toMatch(/Separei umas informações|Olha o que separei/);
+    expect(narrative).not.toContain('o que tem pra hoje');
+  });
+
+  it('a contagem regressiva do próximo compromisso fica logo abaixo da lista de compromissos', () => {
+    const messages = composeMorningDigest({ ...baseData, agendaEvents: [{ startIso: '2026-10-22T12:15:00.000Z', title: 'Dentista' }] });
+    expect(messages[1]).toContain('⏰ Seu primeiro compromisso é às 9h15, daqui a 1h15.');
+    expect(messages[1]!.indexOf('Dentista')).toBeLessThan(messages[1]!.indexOf('⏰ Seu primeiro'));
+  });
+});
