@@ -116,6 +116,12 @@ export interface MorningDigestGenerateJob {
   digestHour?: number;
   includeAgenda?: boolean;
   includeFinance?: boolean;
+  /** Dono da conta (pra marcar a oferta de indicadores como feita). */
+  ownerUserId?: string;
+  /** Indicadores econômicos que a pessoa escolheu receber após o bom dia (vazio = nenhum). */
+  indicators?: string[];
+  /** true = a oferta de indicadores já foi feita (ou a pessoa já configurou). */
+  indicatorsOffered?: boolean;
 }
 
 export type OnboardingNudgeStage = '2h' | '24h';

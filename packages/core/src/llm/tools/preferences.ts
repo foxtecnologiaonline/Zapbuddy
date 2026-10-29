@@ -9,6 +9,7 @@ import {
   setQuietHours,
 } from '@zapbuddy/db';
 import { isWithinQuietHours } from '../../time/quiet-hours.js';
+import { INDICATOR_CODES, normalizeIndicatorSelection } from '../../markets/digest.js';
 import { geocodeBrazilianCity } from '../../weather/geocoding.js';
 import { defineTool } from '../tool-types.js';
 
@@ -72,7 +73,9 @@ export const setCityTool = defineTool({
 export const setMorningDigestPreferencesTool = defineTool({
   name: 'set_morning_digest_preferences',
   description:
-    'Ajusta o que o Tom manda sozinho. Resumo da manhã: enabled, hour (0-23), include_agenda, include_finance. ' +
+    'Ajusta o que o Tom manda sozinho. Resumo da manhã: enabled, hour (0-23), include_agenda, include_finance, ' +
+    'indicators (indicadores econômicos após o bom dia, a partir do dia seguinte: usd, eur, gbp, selic, cdi, ipca, ' +
+    'ipca_12m; "todos" = os 7; [] remove). ' +
     'Rotinas: checkins ("como foi?" depois de compromisso/tarefa; ligadas por padrão), weekly_tip (dica semanal; ' +
     'ligada), day_close (fechamento do dia à noite; DESLIGADO — só liga se ela pedir) e week_review (revisão no ' +
     'domingo; desligada). Só passe o que a pessoa pediu pra mudar.',
@@ -81,6 +84,7 @@ export const setMorningDigestPreferencesTool = defineTool({
     hour: z.number().int().min(0).max(23).optional(),
     include_agenda: z.boolean().optional(),
     include_finance: z.boolean().optional(),
+    indicators: z.array(z.enum(INDICATOR_CODES)).max(7).optional(),
     checkins: z.boolean().optional(),
     weekly_tip: z.boolean().optional(),
     day_close: z.boolean().optional(),
@@ -94,7 +98,7 @@ export const setMorningDigestPreferencesTool = defineTool({
       ...(params.week_review !== undefined ? { routine_week_review: params.week_review } : {}),
     };
     const digestUntouched =
-      params.enabled === undefined && params.hour === undefined && params.include_agenda === undefined && params.include_finance === undefined;
+      params.enabled === undefined && params.hour === undefined && params.include_agenda === undefined && params.include_finance === undefined && params.indicators === undefined;
     if (digestUntouched && Object.keys(routinePatch).length === 0) {
       return { saved: false, reason: 'nothing_to_change' };
     }
@@ -121,6 +125,7 @@ export const setMorningDigestPreferencesTool = defineTool({
       hour: params.hour,
       includeAgenda: params.include_agenda,
       includeFinance: params.include_finance,
+      indicators: params.indicators === undefined ? undefined : normalizeIndicatorSelection(params.indicators),
     });
     const routines = Object.keys(routinePatch).length > 0 ? await saveRoutinePrefs(ctx.userId, routinePatch) : undefined;
     return {
@@ -130,6 +135,7 @@ export const setMorningDigestPreferencesTool = defineTool({
       hour: user.morning_digest_hour,
       include_agenda: user.morning_digest_agenda,
       include_finance: user.morning_digest_finance,
+      indicators: user.morning_digest_indicators ?? [],
     };
   },
 });

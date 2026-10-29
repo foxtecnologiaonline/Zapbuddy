@@ -165,6 +165,8 @@ export interface AccountOwnerForSweep {
   morningDigestHour: number;
   morningDigestAgenda: boolean;
   morningDigestFinance: boolean;
+  morningDigestIndicators: string[];
+  indicatorsOffered: boolean;
   /** Quando a pessoa começou (a dica de habilidade só entra depois dos primeiros dias). */
   userCreatedAt: string;
   routineCheckins: boolean;
@@ -183,7 +185,7 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
   const { data, error } = await getSupabaseClient()
     .from('account_members')
     .select(
-      'account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end, name, preferred_name, city_uf, city_latitude, city_longitude, morning_digest_enabled, morning_digest_hour, morning_digest_agenda, morning_digest_finance, created_at, routine_checkins, routine_weekly_tip, routine_day_close, routine_week_review)',
+      'account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end, name, preferred_name, city_uf, city_latitude, city_longitude, morning_digest_enabled, morning_digest_hour, morning_digest_agenda, morning_digest_finance, morning_digest_indicators, indicators_offered_at, created_at, routine_checkins, routine_weekly_tip, routine_day_close, routine_week_review)',
     )
     .eq('role', 'owner');
 
@@ -204,6 +206,8 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
       morning_digest_hour: number;
       morning_digest_agenda: boolean;
       morning_digest_finance: boolean;
+      morning_digest_indicators: string[] | null;
+      indicators_offered_at: string | null;
       created_at: string;
       routine_checkins: boolean;
       routine_weekly_tip: boolean;
@@ -225,6 +229,8 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
       morningDigestHour: user.morning_digest_hour,
       morningDigestAgenda: user.morning_digest_agenda,
       morningDigestFinance: user.morning_digest_finance,
+      morningDigestIndicators: user.morning_digest_indicators ?? [],
+      indicatorsOffered: user.indicators_offered_at !== null,
       userCreatedAt: user.created_at,
       routineCheckins: user.routine_checkins,
       routineWeeklyTip: user.routine_weekly_tip,

@@ -34,6 +34,8 @@ function baseUser(overrides: Partial<User> = {}): User {
     morning_digest_hour: 8,
     morning_digest_agenda: true,
     morning_digest_finance: true,
+    morning_digest_indicators: [],
+    indicators_offered_at: null,
     email: null,
     preferred_payment_method: null,
     plan_status_updated_at: null,

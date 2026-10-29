@@ -339,6 +339,8 @@ export interface MorningDigestPreferencesInput {
   hour?: number;
   includeAgenda?: boolean;
   includeFinance?: boolean;
+  /** Códigos dos indicadores econômicos; [] remove todos. Mexer aqui também marca a oferta como feita. */
+  indicators?: string[];
 }
 
 /** Só grava o que veio (undefined = não mexe) — a pessoa costuma mudar uma coisa por vez. */
@@ -348,6 +350,10 @@ export async function saveMorningDigestPreferences(userId: string, input: Mornin
   if (input.hour !== undefined) update.morning_digest_hour = input.hour;
   if (input.includeAgenda !== undefined) update.morning_digest_agenda = input.includeAgenda;
   if (input.includeFinance !== undefined) update.morning_digest_finance = input.includeFinance;
+  if (input.indicators !== undefined) {
+    update.morning_digest_indicators = input.indicators;
+    update.indicators_offered_at = new Date().toISOString();
+  }
 
   const { data, error } = await getSupabaseClient().from('users').update(update).eq('id', userId).select('*').single();
   if (error) throw error;
@@ -448,4 +454,10 @@ export async function getOnboardingFunnel(): Promise<OnboardingFunnelVariantStat
     stalledOver24h: bucket.stalledOver24h,
     avgCompletionMinutes: bucket.completed > 0 ? Math.round(bucket.completionMinutesSum / bucket.completed) : null,
   }));
+}
+
+/** Marca que a oferta de indicadores econômicos já foi feita (uma vez só). */
+export async function markIndicatorsOffered(userId: string): Promise<void> {
+  const { error } = await getSupabaseClient().from('users').update({ indicators_offered_at: new Date().toISOString() }).eq('id', userId);
+  if (error) throw error;
 }

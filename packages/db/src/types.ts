@@ -32,6 +32,10 @@ export interface User {
   morning_digest_hour: number;
   morning_digest_agenda: boolean;
   morning_digest_finance: boolean;
+  /** Códigos dos indicadores econômicos que a pessoa quer após o bom dia (usd, eur, gbp, selic, cdi, ipca, ipca_12m); vazio = nenhum (migration 0029). */
+  morning_digest_indicators: string[];
+  /** Quando a oferta de indicadores já foi feita (ou a pessoa configurou); null = ainda vai ser oferecida uma vez. */
+  indicators_offered_at: string | null;
   /** Só a preferência declarada (nunca dado de pagamento real) — ver migration 0021. */
   preferred_payment_method: PreferredPaymentMethod | null;
   /** Exigência da Asaas (POST /customers) pra gerar checkout real — ver migration 0020. */

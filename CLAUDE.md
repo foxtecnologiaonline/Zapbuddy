@@ -707,6 +707,23 @@ Migration `0028_tom_capabilities.sql` precisa ser aplicada no Supabase ANTES do 
 `routine_*` de `users`). Não validado com usuários reais: observar se os balões ficam naturais, quantos check-ins viram
 resposta e se o resumo da conversa carrega ruído.
 
+## Indicadores econômicos no bom dia (2026-10, pedido do dono do produto)
+
+Mensagem **à parte, depois do bom dia**, com os indicadores que a pessoa escolheu: dólar, euro, libra, Selic (meta), CDI, IPCA do
+mês e IPCA em 12 meses (`markets/digest.ts`; dados do Banco Central via `markets/bcb.ts`, os mesmos da tool `get_market_rate`).
+- **Oferta única**: quem nunca foi perguntado (`users.indicators_offered_at` nulo) recebe, no fim do resumo, uma mensagem que lista
+  as opções e pergunta se quer; vai pro histórico da conversa (pra "quero o dólar e a Selic" fazer sentido) e só é marcada como feita
+  DEPOIS de entregue. Nunca no mesmo dia da pergunta de tarefa atrasada (duas perguntas seguidas confundem a resposta; fica pro dia
+  seguinte). Ignorou = não pergunta de novo.
+- **Escolha** via `set_morning_digest_preferences(indicators: [...])` (sem tool nova; "todos" = os 7 códigos; `[]` remove). Vale a partir
+  do dia seguinte, no mesmo sweep/handler do resumo (`morning-digest-generate.ts`), sem fila nova.
+- Honestidade: indicador que a fonte não trouxe sai da mensagem; nenhum valor = a mensagem não sai. Câmbio é a taxa de venda do último
+  fechamento, e a mensagem diz isso.
+- Migration `0029_morning_digest_indicators.sql` precisa ser aplicada no Supabase ANTES do deploy (o sweep horário seleciona as colunas novas).
+- **Clima ausente no bom dia (diagnóstico de 2026-10-29):** o código só omite a previsão sem `OPENWEATHERMAP_API_KEY` **no `.env` do worker
+  (VPS)** — não basta estar na Vercel — ou com chave recém-criada (OpenWeatherMap leva de minutos a ~2h para ativar, 401 até lá). O worker
+  agora loga `weather_api_key_missing` (uma vez por processo) quando falta a chave; chave inválida/inativa aparece como `weather_forecast_http_error`.
+
 ## Recados para outras pessoas — o Tom redige, a pessoa envia (2026-10, motivo documentado)
 
 Decisão do dono do produto: ao pedir "tom, manda um bom dia pra Aline", o Tom **gera a mensagem** e entrega um link

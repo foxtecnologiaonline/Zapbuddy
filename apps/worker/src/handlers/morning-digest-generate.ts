@@ -6,21 +6,28 @@ import {
   listPendingTasksDueBetween,
   logImportantDateReminder,
   logger,
+  markIndicatorsOffered,
   markTaskFollowUpAsked,
 } from '@zapbuddy/db';
 import {
+  appendTurns,
   billsDueWithin,
   composeMorningDigest,
   datePartsInZone,
   daysOverdue,
   describeHolidayToday,
   estacaoDoAno,
+  fetchMarketRate,
+  formatIndicatorsMessage,
+  formatIndicatorsOffer,
   formatMorningExtras,
   formatTaskFollowUpMessage,
   getTodayAndTomorrowAgendaEvents,
   getTodayRange,
   getTomorrowRange,
   getTodayWeatherSummary,
+  normalizeIndicatorSelection,
+  type MarketRate,
   sendWhatsappTextMessage,
   type MorningDigestGenerateJob,
   type TodayAndTomorrowAgenda,
@@ -65,6 +72,7 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
   const { accountId, ownerWhatsappNumber, ownerTimezone } = job.data;
   const includeAgenda = job.data.includeAgenda ?? true;
   const includeFinance = job.data.includeFinance ?? true;
+  const indicatorCodes = normalizeIndicatorSelection(job.data.indicators ?? []);
 
   const now = new Date();
   const { year, month, day } = datePartsInZone(ownerTimezone, now);
@@ -86,13 +94,18 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
   // Tudo em paralelo: agenda de hoje+amanhã numa chamada só (o token da agenda é renovado a cada uso),
   // tarefas de hoje+amanhã numa consulta só, e as informações extras junto das demais fontes.
   const tomorrow = getTomorrowRange(ownerTimezone, now);
-  const [weather, agenda, tasksWindow, overdueTasks, recurringBills, loadedExtras] = await Promise.all([
+  const todayKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const [weather, agenda, tasksWindow, overdueTasks, recurringBills, loadedExtras, indicatorRates] = await Promise.all([
     safely('weather', () => getTodayWeatherSummary({ latitude: location.latitude, longitude: location.longitude, timezone: ownerTimezone }), null),
     includeAgenda ? safely('agenda', () => getTodayAndTomorrowAgendaEvents(accountId, ownerTimezone, now), NO_AGENDA) : Promise.resolve(NO_AGENDA),
     includeAgenda ? safely('tasks', () => listPendingTasksDueBetween(accountId, today.startIso, tomorrow.endIso), []) : Promise.resolve([]),
     includeAgenda ? safely('overdue_tasks', () => listOverdueTasksAwaitingFollowUp(accountId, today.startIso), []) : Promise.resolve([]),
     includeFinance ? safely('bills', () => listActiveRecurringBills(accountId), []) : Promise.resolve([]),
     loadMorningExtras({ accountId, timezone: ownerTimezone, now, year, month, day, includeAgenda, includeFinance, safely }),
+    // Indicadores escolhidos pela pessoa; cada um sem valor da fonte simplesmente sai da mensagem.
+    indicatorCodes.length > 0
+      ? safely('indicators', async () => (await Promise.all(indicatorCodes.map((code) => fetchMarketRate(code, todayKey)))).filter((rate): rate is MarketRate => rate !== null), [] as MarketRate[])
+      : Promise.resolve([] as MarketRate[]),
   ]);
 
   // due_at do Supabase vem como "+00:00", não "Z" — compara instantes, não texto.
@@ -152,6 +165,18 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     }
   }
 
+  // Indicadores econômicos (só quem escolheu): mensagem à parte, depois do resto do bom dia.
+  const indicatorsMessage = indicatorCodes.length > 0 ? formatIndicatorsMessage(indicatorRates) : null;
+  if (indicatorsMessage !== null) {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_MESSAGES_MS));
+      await sendWhatsappTextMessage(ownerWhatsappNumber, indicatorsMessage);
+      delivered += 1;
+    } catch (error) {
+      logger.error('morning_digest_indicators_failed', { accountId, error: describeError(error) });
+    }
+  }
+
   // Pergunta de conclusão: mensagem à parte, e só marca como perguntada DEPOIS
   // de entregue — se o envio falhar, a pergunta tenta de novo no próximo dia.
   const followUps = overdueTasks.map((task) => {
@@ -170,6 +195,26 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     }
   }
 
+  // Oferta única de indicadores: só pra quem ainda não escolheu nem foi perguntado, e nunca no mesmo dia da
+  // pergunta de tarefa atrasada (duas perguntas seguidas confundem a resposta; fica pro dia seguinte).
+  let offeredIndicators = false;
+  if (indicatorCodes.length === 0 && job.data.indicatorsOffered === false && job.data.ownerUserId && followUpMessage === null) {
+    try {
+      const offer = formatIndicatorsOffer();
+      await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_MESSAGES_MS));
+      await sendWhatsappTextMessage(ownerWhatsappNumber, offer);
+      delivered += 1;
+      offeredIndicators = true;
+      // A resposta ("quero o dólar e a Selic") só faz sentido se o Tom lembra da pergunta; e marca pra não repetir.
+      await appendTurns(ownerWhatsappNumber, [{ role: 'assistant', content: offer, at: new Date().toISOString() }]).catch((error) =>
+        logger.warn('morning_digest_offer_history_failed', { accountId, error: describeError(error) }),
+      );
+      await markIndicatorsOffered(job.data.ownerUserId);
+    } catch (error) {
+      logger.error('morning_digest_indicators_offer_failed', { accountId, error: describeError(error) });
+    }
+  }
+
   logger.info('morning_digest_sent', {
     accountId,
     messages: delivered,
@@ -179,6 +224,8 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     tasks: tasksDueToday.length,
     followUps: followUps.length,
     extras: extrasText !== null,
+    indicators: indicatorsMessage !== null,
+    indicatorsOffered: offeredIndicators,
     bills: bills.length,
     cityKnown: job.data.city != null,
   });
