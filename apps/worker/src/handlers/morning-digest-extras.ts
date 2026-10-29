@@ -5,19 +5,15 @@ import {
   listGoals,
   listHabitCheckinDates,
   listImportantDates,
-  listPendingTasksDueBetween,
   summarizeTransactions,
 } from '@zapbuddy/db';
 import {
   computeHabitStats,
   getMonthComparisonRanges,
-  getTomorrowAgendaEvents,
-  getTomorrowRange,
   getYesterdayRange,
   localDateKey,
   upcomingImportantDates,
   type MorningExtrasData,
-  type TodayWeatherSummary,
   type UpcomingImportantDate,
 } from '@zapbuddy/core';
 
@@ -32,11 +28,11 @@ export interface MorningExtrasInput {
   day: number;
   includeAgenda: boolean;
   includeFinance: boolean;
-  weather: TodayWeatherSummary | null;
   safely: Safely;
 }
 
 const DAY_MS = 86_400_000;
+const MAX_ROWS_PER_SUMMARY = 2000;
 
 function daysBetweenKeys(fromKey: string, toKey: string): number {
   return Math.round((new Date(`${toKey}T00:00:00Z`).getTime() - new Date(`${fromKey}T00:00:00Z`).getTime()) / DAY_MS);
@@ -54,11 +50,10 @@ function daysBetweenKeys(fromKey: string, toKey: string): number {
  * não repetir a mesma informação.
  */
 export async function loadMorningExtras(input: MorningExtrasInput): Promise<{ extras: MorningExtrasData; todayDates: UpcomingImportantDate[] }> {
-  const { accountId, timezone, now, year, month, day, includeAgenda, includeFinance, weather, safely } = input;
+  const { accountId, timezone, now, year, month, day, includeAgenda, includeFinance, safely } = input;
   const todayKey = localDateKey(timezone, now);
-  const tomorrowRange = getTomorrowRange(timezone, now);
 
-  const [importantDates, tomorrowEvents, tomorrowTasks, habits, goals, finance] = await Promise.all([
+  const [importantDates, habits, goals, finance] = await Promise.all([
     includeAgenda
       ? safely(
           'extras_dates',
@@ -72,10 +67,6 @@ export async function loadMorningExtras(input: MorningExtrasInput): Promise<{ ex
           [] as UpcomingImportantDate[],
         )
       : Promise.resolve([] as UpcomingImportantDate[]),
-    includeAgenda ? safely('extras_tomorrow_events', () => getTomorrowAgendaEvents(accountId, timezone), []) : Promise.resolve([]),
-    includeAgenda
-      ? safely('extras_tomorrow_tasks', () => listPendingTasksDueBetween(accountId, tomorrowRange.startIso, tomorrowRange.endIso), [])
-      : Promise.resolve([]),
     includeAgenda
       ? safely(
           'extras_habits',
@@ -116,14 +107,17 @@ export async function loadMorningExtras(input: MorningExtrasInput): Promise<{ ex
               comparison ? summarizeTransactions(accountId, comparison.previous.startIso, comparison.previous.endIso) : Promise.resolve(null),
               comparison ? listBudgets(accountId) : Promise.resolve([]),
             ]);
+            // A listagem de transações tem teto (2000 por consulta): se bateu nele, o total do mês
+            // estaria incompleto — melhor omitir a linha do que mostrar um número errado.
+            const complete = (summary: { count: number } | null) => summary !== null && summary.count < MAX_ROWS_PER_SUMMARY;
             return {
               yesterdayExpenseCents: yesterdaySummary.totalExpenseCents,
-              monthExpenseCents: current?.totalExpenseCents ?? null,
-              previousMonthExpenseCents: previous?.totalExpenseCents ?? null,
+              monthExpenseCents: complete(current) ? current!.totalExpenseCents : null,
+              previousMonthExpenseCents: complete(previous) ? previous!.totalExpenseCents : null,
               budgets: budgets.map((budget) => ({
                 category: budget.category,
                 limitCents: budget.limit_cents,
-                spentCents: current?.byCategory[budget.category] ?? 0,
+                spentCents: complete(current) ? (current!.byCategory[budget.category] ?? 0) : 0,
               })),
             };
           },
@@ -132,17 +126,9 @@ export async function loadMorningExtras(input: MorningExtrasInput): Promise<{ ex
       : Promise.resolve(null),
   ]);
 
-  const tomorrowWeather = weather?.tomorrow ?? null;
-  const tomorrow = includeAgenda
-    ? {
-        events: tomorrowEvents,
-        tasks: tomorrowTasks.map((task) => ({ title: task.title })),
-        weather: tomorrowWeather,
-      }
-    : null;
-
   return {
-    extras: { importantDates, finance, habits, goals, tomorrow },
+    // `tomorrow` (agenda, tarefas e previsão) o handler monta: usa o que ele já buscou pro dia de hoje.
+    extras: { importantDates, finance, habits, goals, tomorrow: null },
     todayDates: importantDates.filter((item) => item.offsetDays === 0),
   };
 }

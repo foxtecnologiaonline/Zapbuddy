@@ -1,6 +1,7 @@
 import { getCalendarConnection } from '@zapbuddy/db';
 import { decryptSecret } from '../security/crypto.js';
-import { getTodayRange, getTomorrowRange, type DateRange } from '../time/zoned-ranges.js';
+import { getTodayRange, getTomorrowRange } from '../time/zoned-ranges.js';
+import { localDateKey, shiftDateKey } from '../habits/streak.js';
 import {
   refreshGoogleAccessToken,
   createGoogleCalendarEvent,
@@ -70,22 +71,46 @@ export interface TodayAgendaEvent {
   title: string;
 }
 
-/** Eventos de hoje (fuso da pessoa) em ordem de horário; vazio quando não há agenda conectada. */
-export async function getTodayAgendaEvents(accountId: string, timeZone: string): Promise<TodayAgendaEvent[]> {
-  return getAgendaEventsInRange(accountId, getTodayRange(timeZone));
+export interface TodayAndTomorrowAgenda {
+  today: TodayAgendaEvent[];
+  tomorrow: TodayAgendaEvent[];
 }
 
-/** Eventos de amanhã (fuso da pessoa) em ordem de horário — prévia do resumo matinal. */
-export async function getTomorrowAgendaEvents(accountId: string, timeZone: string): Promise<TodayAgendaEvent[]> {
-  return getAgendaEventsInRange(accountId, getTomorrowRange(timeZone));
+/**
+ * Pura: separa eventos já listados em "hoje" e "amanhã". Evento com hora vai
+ * pro dia pelo instante; evento de dia inteiro (só a data, sem "T") pela data.
+ * Evento que começou antes e atravessa o dia fica em "hoje" (como a listagem
+ * só de hoje já fazia).
+ */
+export function splitAgendaByDay(events: TodayAgendaEvent[], tomorrowStartIso: string, tomorrowDateKey: string): TodayAndTomorrowAgenda {
+  const tomorrowStartMs = new Date(tomorrowStartIso).getTime();
+  const sorted = [...events].sort((a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime());
+  const result: TodayAndTomorrowAgenda = { today: [], tomorrow: [] };
+  for (const event of sorted) {
+    const isTomorrow = event.startIso.includes('T')
+      ? new Date(event.startIso).getTime() >= tomorrowStartMs
+      : event.startIso.slice(0, 10) >= tomorrowDateKey;
+    (isTomorrow ? result.tomorrow : result.today).push(event);
+  }
+  return result;
 }
 
-async function getAgendaEventsInRange(accountId: string, range: DateRange): Promise<TodayAgendaEvent[]> {
+/**
+ * Eventos de hoje e de amanhã (fuso da pessoa) numa chamada só: o access token
+ * é renovado a cada uso (ADR 0002, decisão 3, sem cache), então buscar os dois
+ * dias separados custaria 2 renovações + 2 listagens por pessoa todo dia.
+ * Vazio quando não há agenda conectada.
+ */
+export async function getTodayAndTomorrowAgendaEvents(accountId: string, timeZone: string, now: Date = new Date()): Promise<TodayAndTomorrowAgenda> {
   const access = await getFreshCalendarAccess(accountId);
-  if (!access) return [];
+  if (!access) return { today: [], tomorrow: [] };
 
-  const events = await listCalendarEvents(access, range.startIso, range.endIso);
-  return events
-    .map((event) => ({ startIso: event.startIso, title: event.summary }))
-    .sort((a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime());
+  const today = getTodayRange(timeZone, now);
+  const tomorrow = getTomorrowRange(timeZone, now);
+  const events = await listCalendarEvents(access, today.startIso, tomorrow.endIso);
+  return splitAgendaByDay(
+    events.map((event) => ({ startIso: event.startIso, title: event.summary })),
+    tomorrow.startIso,
+    shiftDateKey(localDateKey(timeZone, now), 1),
+  );
 }

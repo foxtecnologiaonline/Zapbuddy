@@ -17,11 +17,13 @@ import {
   estacaoDoAno,
   formatMorningExtras,
   formatTaskFollowUpMessage,
-  getTodayAgendaEvents,
+  getTodayAndTomorrowAgendaEvents,
   getTodayRange,
+  getTomorrowRange,
   getTodayWeatherSummary,
   sendWhatsappTextMessage,
   type MorningDigestGenerateJob,
+  type TodayAndTomorrowAgenda,
 } from '@zapbuddy/core';
 import { loadMorningExtras } from './morning-digest-extras.js';
 
@@ -29,6 +31,7 @@ import { loadMorningExtras } from './morning-digest-extras.js';
 // garante 1-2-3 e dá cara de "alguém digitando".
 const GAP_BETWEEN_MESSAGES_MS = 1_500;
 const DEFAULT_DIGEST_HOUR = 8;
+const NO_AGENDA: TodayAndTomorrowAgenda = { today: [], tomorrow: [] };
 
 /** O aviso das 9h pula datas já avisadas no ano (idempotência de important_date_logs) — marcar aqui evita a mensagem repetida. Best-effort. */
 async function markTodayDatesAsReminded(ids: string[], year: number): Promise<void> {
@@ -80,13 +83,32 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     }
   };
 
-  const [weather, agendaEvents, tasksDueToday, overdueTasks, recurringBills] = await Promise.all([
+  // Tudo em paralelo: agenda de hoje+amanhã numa chamada só (o token da agenda é renovado a cada uso),
+  // tarefas de hoje+amanhã numa consulta só, e as informações extras junto das demais fontes.
+  const tomorrow = getTomorrowRange(ownerTimezone, now);
+  const [weather, agenda, tasksWindow, overdueTasks, recurringBills, loadedExtras] = await Promise.all([
     safely('weather', () => getTodayWeatherSummary({ latitude: location.latitude, longitude: location.longitude, timezone: ownerTimezone }), null),
-    includeAgenda ? safely('agenda', () => getTodayAgendaEvents(accountId, ownerTimezone), []) : Promise.resolve([]),
-    includeAgenda ? safely('tasks', () => listPendingTasksDueBetween(accountId, today.startIso, today.endIso), []) : Promise.resolve([]),
+    includeAgenda ? safely('agenda', () => getTodayAndTomorrowAgendaEvents(accountId, ownerTimezone, now), NO_AGENDA) : Promise.resolve(NO_AGENDA),
+    includeAgenda ? safely('tasks', () => listPendingTasksDueBetween(accountId, today.startIso, tomorrow.endIso), []) : Promise.resolve([]),
     includeAgenda ? safely('overdue_tasks', () => listOverdueTasksAwaitingFollowUp(accountId, today.startIso), []) : Promise.resolve([]),
     includeFinance ? safely('bills', () => listActiveRecurringBills(accountId), []) : Promise.resolve([]),
+    loadMorningExtras({ accountId, timezone: ownerTimezone, now, year, month, day, includeAgenda, includeFinance, safely }),
   ]);
+
+  // due_at do Supabase vem como "+00:00", não "Z" — compara instantes, não texto.
+  const todayEndMs = new Date(today.endIso).getTime();
+  const tasksDueToday = tasksWindow.filter((task) => task.due_at !== null && new Date(task.due_at).getTime() <= todayEndMs);
+  const tasksDueTomorrow = tasksWindow.filter((task) => task.due_at !== null && new Date(task.due_at).getTime() > todayEndMs);
+  const agendaEvents = agenda.today;
+
+  const { todayDates } = loadedExtras;
+  const extras = {
+    ...loadedExtras.extras,
+    tomorrow: includeAgenda
+      ? { events: agenda.tomorrow, tasks: tasksDueTomorrow.map((task) => ({ title: task.title })), weather: weather?.tomorrow ?? null }
+      : null,
+  };
+  const extrasText = formatMorningExtras(extras, ownerTimezone);
 
   const bills = billsDueWithin(
     recurringBills.map((bill) => ({ name: bill.name, amountCents: bill.amount_cents, dueDay: bill.due_day })),
@@ -94,20 +116,6 @@ export async function handleMorningDigestGenerate(job: Job<MorningDigestGenerate
     month,
     day,
   );
-
-  const { extras, todayDates } = await loadMorningExtras({
-    accountId,
-    timezone: ownerTimezone,
-    now,
-    year,
-    month,
-    day,
-    includeAgenda,
-    includeFinance,
-    weather,
-    safely,
-  });
-  const extrasText = formatMorningExtras(extras, ownerTimezone);
 
   const holiday = describeHolidayToday(location.uf, year, month, day);
   const messages = composeMorningDigest({

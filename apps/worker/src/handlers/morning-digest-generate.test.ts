@@ -24,8 +24,7 @@ vi.mock('@zapbuddy/core', async () => {
   return {
     ...actual,
     getTodayWeatherSummary: vi.fn(),
-    getTodayAgendaEvents: vi.fn(),
-    getTomorrowAgendaEvents: vi.fn(),
+    getTodayAndTomorrowAgendaEvents: vi.fn(),
     sendWhatsappTextMessage: vi.fn(),
   };
 });
@@ -44,7 +43,7 @@ import {
   logger,
   summarizeTransactions,
 } from '@zapbuddy/db';
-import { getTodayAgendaEvents, getTodayWeatherSummary, getTomorrowAgendaEvents, sendWhatsappTextMessage, type MorningDigestGenerateJob } from '@zapbuddy/core';
+import { getTodayAndTomorrowAgendaEvents, getTodayWeatherSummary, sendWhatsappTextMessage, type MorningDigestGenerateJob } from '@zapbuddy/core';
 import { handleMorningDigestGenerate } from './morning-digest-generate.js';
 
 function job(data: Partial<MorningDigestGenerateJob> = {}): Job<MorningDigestGenerateJob> {
@@ -73,10 +72,9 @@ beforeEach(() => {
   // 2026-10-22 08:00 em São Paulo; a conta recorrente "Aluguel" vence dia 22.
   vi.setSystemTime(new Date(Date.UTC(2026, 9, 22, 11, 0, 0)));
   vi.mocked(getTodayWeatherSummary).mockReset().mockResolvedValue(null);
-  vi.mocked(getTodayAgendaEvents).mockReset().mockResolvedValue([]);
+  vi.mocked(getTodayAndTomorrowAgendaEvents).mockReset().mockResolvedValue({ today: [], tomorrow: [] });
   vi.mocked(listPendingTasksDueBetween).mockReset().mockResolvedValue([]);
   vi.mocked(listActiveRecurringBills).mockReset().mockResolvedValue([]);
-  vi.mocked(getTomorrowAgendaEvents).mockReset().mockResolvedValue([]);
   vi.mocked(listOverdueTasksAwaitingFollowUp).mockReset().mockResolvedValue([]);
   vi.mocked(listImportantDates).mockReset().mockResolvedValue([]);
   vi.mocked(hasSentImportantDateReminderThisYear).mockReset().mockResolvedValue(false);
@@ -104,13 +102,11 @@ describe('handleMorningDigestGenerate', () => {
   });
 
   it('agenda, tarefa e conta: 3 mensagens na ordem narrativa → agenda → financeiro', async () => {
-    vi.mocked(getTodayAgendaEvents).mockResolvedValue([
+    vi.mocked(getTodayAndTomorrowAgendaEvents).mockResolvedValue({ today: [
       { startIso: '2026-10-22T12:00:00.000Z', title: 'Dentista' },
       { startIso: '2026-10-22T17:00:00.000Z', title: 'Reunião' },
-    ]);
-    vi.mocked(listPendingTasksDueBetween)
-      .mockResolvedValueOnce([{ title: 'Pagar IPTU', due_at: '2026-10-23T02:59:59.000Z' }] as never)
-      .mockResolvedValue([]);
+    ], tomorrow: [] });
+    vi.mocked(listPendingTasksDueBetween).mockResolvedValue([{ title: 'Pagar IPTU', due_at: '2026-10-23T02:59:59+00:00' }] as never);
     vi.mocked(listActiveRecurringBills).mockResolvedValue([{ name: 'Aluguel', amount_cents: 120000, due_day: 22 }] as never);
 
     await run();
@@ -124,8 +120,7 @@ describe('handleMorningDigestGenerate', () => {
   it('seções desligadas nem são buscadas', async () => {
     await run({ includeAgenda: false, includeFinance: false });
 
-    expect(getTodayAgendaEvents).not.toHaveBeenCalled();
-    expect(getTomorrowAgendaEvents).not.toHaveBeenCalled();
+    expect(getTodayAndTomorrowAgendaEvents).not.toHaveBeenCalled();
     expect(listImportantDates).not.toHaveBeenCalled();
     expect(listActiveHabits).not.toHaveBeenCalled();
     expect(summarizeTransactions).not.toHaveBeenCalled();
@@ -140,7 +135,7 @@ describe('handleMorningDigestGenerate', () => {
   });
 
   it('agenda fora do ar: manda o resto e NÃO diz que o dia está livre', async () => {
-    vi.mocked(getTodayAgendaEvents).mockRejectedValue(new Error('google 503'));
+    vi.mocked(getTodayAndTomorrowAgendaEvents).mockRejectedValue(new Error('google 503'));
 
     await run();
 
@@ -159,10 +154,10 @@ describe('handleMorningDigestGenerate', () => {
   });
 
   it('falha no envio da 2ª mensagem não propaga (evita reenviar a narrativa num retry) e a 3ª ainda é tentada', async () => {
-    vi.mocked(getTodayAgendaEvents).mockResolvedValue([
+    vi.mocked(getTodayAndTomorrowAgendaEvents).mockResolvedValue({ today: [
       { startIso: '2026-10-22T12:00:00.000Z', title: 'Dentista' },
       { startIso: '2026-10-22T17:00:00.000Z', title: 'Reunião' },
-    ]);
+    ], tomorrow: [] });
     vi.mocked(listActiveRecurringBills).mockResolvedValue([{ name: 'Aluguel', amount_cents: 120000, due_day: 22 }] as never);
     vi.mocked(sendWhatsappTextMessage).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('whatsapp 500')).mockResolvedValue(undefined);
 
@@ -245,8 +240,8 @@ describe('handleMorningDigestGenerate', () => {
     });
 
     it('prévia de amanhã com compromissos, tarefas e a previsão de amanhã', async () => {
-      vi.mocked(getTomorrowAgendaEvents).mockResolvedValue([{ startIso: '2026-10-23T12:00:00.000Z', title: 'Dentista' }]);
-      vi.mocked(listPendingTasksDueBetween).mockResolvedValueOnce([]).mockResolvedValueOnce([{ title: 'Ligar pro banco' }] as never);
+      vi.mocked(getTodayAndTomorrowAgendaEvents).mockResolvedValue({ today: [], tomorrow: [{ startIso: '2026-10-23T12:00:00.000Z', title: 'Dentista' }] });
+      vi.mocked(listPendingTasksDueBetween).mockResolvedValue([{ title: 'Ligar pro banco', due_at: '2026-10-23T15:00:00+00:00' }] as never);
       vi.mocked(getTodayWeatherSummary).mockResolvedValue({
         minTempC: 18,
         maxTempC: 28,
@@ -275,6 +270,41 @@ describe('handleMorningDigestGenerate', () => {
       expect(sent()[1]).toContain('Leitura');
       expect(sent()[1]).not.toContain('🗓️');
       expect(logger.error).toHaveBeenCalledWith('morning_digest_source_failed', expect.objectContaining({ source: 'extras_dates' }));
+    });
+  });
+
+  describe('eficiência', () => {
+    it('agenda de hoje+amanhã numa chamada só e tarefas numa consulta só (uma renovação de token, não duas)', async () => {
+      await run();
+
+      expect(getTodayAndTomorrowAgendaEvents).toHaveBeenCalledTimes(1);
+      expect(listPendingTasksDueBetween).toHaveBeenCalledTimes(1);
+    });
+
+    it('tarefa de hoje e de amanhã saem da mesma consulta, separadas pelo instante (formato +00:00 do Supabase)', async () => {
+      vi.mocked(listPendingTasksDueBetween).mockResolvedValue([
+        { title: 'Pagar IPTU', due_at: '2026-10-22T20:00:00+00:00' },
+        { title: 'Ligar pro banco', due_at: '2026-10-23T15:00:00+00:00' },
+      ] as never);
+
+      await run();
+
+      expect(sent()[1]).toContain('Pagar IPTU');
+      expect(sent()[1]).not.toContain('Ligar pro banco');
+      expect(sent().at(-1)).toContain('1 tarefa');
+    });
+
+    it('total do mês que bateu no teto de 2000 transações é omitido em vez de mostrar número incompleto', async () => {
+      vi.mocked(summarizeTransactions)
+        .mockResolvedValueOnce({ totalIncomeCents: 0, totalExpenseCents: 8500, byCategory: {}, count: 1 })
+        .mockResolvedValueOnce({ totalIncomeCents: 0, totalExpenseCents: 999999, byCategory: {}, count: 2000 })
+        .mockResolvedValueOnce({ totalIncomeCents: 0, totalExpenseCents: 200000, byCategory: {}, count: 10 });
+
+      await run();
+
+      const extras = sent()[1]!.replace(/\u00a0/g, ' ');
+      expect(extras).toContain('• Ontem: R$ 85,00 em gastos');
+      expect(extras).not.toContain('No mês');
     });
   });
 });
