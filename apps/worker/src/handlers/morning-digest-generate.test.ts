@@ -133,7 +133,7 @@ describe('indicadores econômicos', () => {
     await run({ ownerUserId: 'u1', indicators: [], indicatorsOffered: false });
 
     expect(sent()).toHaveLength(2);
-    expect(sent()[1]).toContain('Quer indicadores econômicos no bom dia?');
+    expect(sent()[1]).toContain('Quer um panorama da economia no bom dia?');
     expect(sent()[1]).toContain('Dólar');
     expect(appendTurns).toHaveBeenCalledWith('5511999999999', [expect.objectContaining({ role: 'assistant', content: sent()[1] })]);
     expect(markIndicatorsOffered).toHaveBeenCalledWith('u1');
@@ -150,7 +150,7 @@ describe('indicadores econômicos', () => {
   it('não pergunta no mesmo dia da pergunta de tarefa atrasada (fica pro dia seguinte, sem marcar)', async () => {
     vi.mocked(listOverdueTasksAwaitingFollowUp).mockResolvedValue([{ id: 't1', title: 'Ligar pro contador', due_at: '2026-10-20T15:00:00+00:00' }] as never);
     await run({ ownerUserId: 'u1', indicators: [], indicatorsOffered: false });
-    expect(sent().some((message) => message.includes('indicadores econômicos'))).toBe(false);
+    expect(sent().some((message) => message.includes('panorama da economia'))).toBe(false);
     expect(markIndicatorsOffered).not.toHaveBeenCalled();
   });
 

@@ -87,8 +87,8 @@ export function formatIndicatorsMessage(rates: MarketRate[]): string | null {
 /** A oferta única: lista o que dá pra incluir e pergunta se a pessoa quer. */
 export function formatIndicatorsOffer(): string {
   return [
-    '📊 *Quer indicadores econômicos no bom dia?*',
-    'Posso mandar, logo depois do bom dia, os números do dia. Dá pra escolher entre:',
+    '📊 *Quer um panorama da economia no bom dia?*',
+    'Posso mandar, logo depois do bom dia, os indicadores do dia (câmbio, juros e inflação). Dá pra escolher entre:',
     ...INDICATOR_CHOICES.map((choice) => `${choice.emoji} ${choice.label}`),
     '',
     'Se quiser, me diz quais (ou "todos") que a partir de amanhã eles chegam junto do bom dia. Se não quiser, é só ignorar: não pergunto de novo.',
