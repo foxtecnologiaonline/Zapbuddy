@@ -411,3 +411,44 @@ export interface MessageDraft {
   replied_at: string | null;
   created_at: string;
 }
+
+export interface UserList {
+  id: string;
+  account_id: string;
+  name: string;
+  name_key: string;
+  created_at: string;
+}
+
+export interface UserListItem {
+  id: string;
+  list_id: string;
+  account_id: string;
+  text: string;
+  done: boolean;
+  done_at: string | null;
+  created_at: string;
+}
+
+export type InstallmentPlanStatus = 'active' | 'cancelled';
+
+export interface InstallmentPlan {
+  id: string;
+  account_id: string;
+  description: string;
+  installment_cents: number;
+  total_installments: number;
+  /** Primeiro dia do mês da 1ª parcela (YYYY-MM-01). */
+  first_due_month: string;
+  due_day: number;
+  status: InstallmentPlanStatus;
+  created_by_user_id: string;
+  created_at: string;
+}
+
+export interface RoutinePrefs {
+  routine_checkins: boolean;
+  routine_weekly_tip: boolean;
+  routine_day_close: boolean;
+  routine_week_review: boolean;
+}

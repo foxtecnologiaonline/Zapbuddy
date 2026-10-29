@@ -5,10 +5,7 @@ import { defineTool } from '../tool-types.js';
 export const rememberImportantDateTool = defineTool({
   name: 'remember_important_date',
   description:
-    'Guarda uma data recorrente (aniversário, data comemorativa) que se repete todo ano — você passa a ' +
-    'lembrar sozinho dela, sem a pessoa precisar contar de novo. Ex.: "aniversário da minha mãe é 15 de ' +
-    'março" → label: "aniversário da mãe", month: 3, day: 15. Diferente de create_calendar_event (evento ' +
-    'único com data completa, não recorrente) e de remember_fact (fato sem data associada).',
+    'Guarda data que se repete todo ano (aniversário): você avisa sozinho no dia. "aniversário da mãe, 15 de março" → label, month 3, day 15. Evento único é create_calendar_event.',
   schema: z.object({
     label: z.string().min(1).max(200),
     month: z.number().int().min(1).max(12),
@@ -33,8 +30,7 @@ export const listImportantDatesTool = defineTool({
 export const forgetImportantDateTool = defineTool({
   name: 'forget_important_date',
   description:
-    'Esquece uma data importante guardada anteriormente, dado o important_date_id. Se não existir mais ' +
-    'nessa conta, retorna forgotten: false.',
+    'Esquece uma data importante (important_date_id).',
   schema: z.object({
     important_date_id: z.string().uuid(),
   }),

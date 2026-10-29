@@ -45,6 +45,19 @@ export class EvolutionChannel implements WhatsappChannel {
     }
   }
 
+  /** Melhor esforço: formato do sendPresence varia por versão da Evolution; falha é engolida. Reação não é suportada aqui (o id da mensagem recebida não é garantido) — o chamador manda texto curto. */
+  async sendTyping(to: string, _waMessageId: string): Promise<void> {
+    try {
+      await fetchWithRetry(
+        `${baseUrl()}/chat/sendPresence/${instanceName()}`,
+        { method: 'POST', headers: headers(), body: JSON.stringify({ number: to.replace(/\D/g, ''), delay: 1200, presence: 'composing' }) },
+        4_000,
+      );
+    } catch {
+      // Enfeite.
+    }
+  }
+
   async downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {
     if (ref.provider !== 'evolution') {
       throw new Error(`EvolutionChannel recebeu mediaRef de provider errado: ${ref.provider}`);

@@ -12,7 +12,7 @@
  * dashboard já calculava corretamente, em vez de duplicar a lógica (ou,
  * pior, deixar o modelo gerar from/to livres sem âncora de fuso).
  */
-function zonedWallTimeToUtc(
+export function zonedWallTimeToUtc(
   year: number,
   month: number, // 1-12
   day: number,

@@ -7,9 +7,7 @@ import { assertFutureDate } from '../date-sanity.js';
 export const createReminderTool = defineTool({
   name: 'create_reminder',
   description:
-    'Agenda um lembrete para o usuário em uma data/hora futura específica. Use recurrence quando a ' +
-    'pessoa pedir algo que se repete (ex.: "todo dia", "toda semana", "todo mês") — cada disparo ' +
-    'recorrente cria automaticamente a próxima ocorrência, sem precisar pedir de novo.',
+    'Agenda um lembrete numa data/hora futura. recurrence (daily/weekly/monthly) pro que se repete: a próxima ocorrência é criada sozinha.',
   schema: z.object({
     message: z.string().min(1),
     remind_at: z.string().datetime(),
@@ -42,9 +40,7 @@ export const createReminderTool = defineTool({
 export const cancelReminderTool = defineTool({
   name: 'cancel_reminder',
   description:
-    'Cancela um lembrete ainda não disparado, dado o reminder_id — use quando a pessoa não quer mais ' +
-    'ser avisada daquilo (ex.: já resolveu, mudou de ideia). Se não existir mais / já tiver disparado, ' +
-    'retorna cancelled: false.',
+    'Cancela um lembrete pendente (reminder_id). cancelled:false se não existe ou já disparou.',
   schema: z.object({
     reminder_id: z.string().uuid(),
   }),
@@ -67,9 +63,7 @@ export const cancelReminderTool = defineTool({
 export const listRemindersTool = defineTool({
   name: 'list_reminders',
   description:
-    'Lista os lembretes ainda pendentes da pessoa, do mais próximo pro mais distante, com o reminder_id de cada ' +
-    'um — use pra "quais lembretes eu tenho" e pra achar o reminder_id antes de cancel_reminder ou ' +
-    'update_reminder.',
+    'Lembretes pendentes, do mais próximo ao mais distante, com reminder_id (pra cancel_reminder/update_reminder).',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const reminders = await listPendingReminders(ctx.accountId);
@@ -87,10 +81,7 @@ export const listRemindersTool = defineTool({
 export const updateReminderTool = defineTool({
   name: 'update_reminder',
   description:
-    'Altera um lembrete ainda pendente (mudar o horário, o texto ou a recorrência), dado o reminder_id de ' +
-    'list_reminders. Informe só o que muda; recurrence: "none" torna o lembrete único. NUNCA crie um lembrete ' +
-    'novo pra "remarcar" — ficariam dois avisos. Se não existir mais / já tiver disparado, retorna ' +
-    'updated: false (aí pergunte se quer criar um novo).',
+    'Altera um lembrete pendente (horário, texto, recorrência; reminder_id de list_reminders). Só o que muda; recurrence:"none" = único. NUNCA crie outro pra remarcar. updated:false → pergunte se quer criar um novo.',
   schema: z
     .object({
       reminder_id: z.string().uuid(),

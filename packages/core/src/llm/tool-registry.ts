@@ -37,6 +37,10 @@ import {
 import { undoLastActionTool } from './tools/undo.js';
 import { rememberImportantDateTool, listImportantDatesTool, forgetImportantDateTool } from './tools/important-dates.js';
 import { tellJokeTool } from './tools/jokes.js';
+import { manageListTool } from './tools/lists.js';
+import { calculateTool } from './tools/calculator.js';
+import { manageInstallmentsTool } from './tools/installments.js';
+import { timeUtilsTool, getDayOverviewTool } from './tools/time-utils.js';
 import { createPersonalGoalTool, listPersonalGoalsTool, completePersonalGoalTool, deletePersonalGoalTool } from './tools/goals.js';
 
 export const ALL_TOOLS: ToolDefinition<any>[] = [
@@ -104,6 +108,11 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   draftMessageForContactTool,
   updateMessageStatusTool,
   listMessageLogTool,
+  manageListTool,
+  calculateTool,
+  manageInstallmentsTool,
+  timeUtilsTool,
+  getDayOverviewTool,
 ];
 
 /** Tools que só existem com o painel / a cobrança ligados (features.ts) — desligados, o modelo nem as vê. */

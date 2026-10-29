@@ -7,9 +7,7 @@ import { mergeHybridResults, SEMANTIC_MIN_SIMILARITY, SEMANTIC_RELATED_LIMIT } f
 export const createNoteTool = defineTool({
   name: 'create_note',
   description:
-    'Cria uma nota pessoal livre pra pessoa, sem data e sem conceito de "concluir" (diferente de ' +
-    'tarefa — use create_task quando é algo a fazer). Use quando a pessoa pedir explicitamente pra ' +
-    'anotar algo ("anota aí: ...", "guarda isso pra mim") sem que seja um compromisso/ação.',
+    'Cria uma nota livre, sem data nem "concluir", quando ela pede pra anotar ("anota aí", "guarda isso"). Algo a fazer é create_task.',
   schema: z.object({
     content: z.string().min(1).max(2000),
   }),
@@ -23,10 +21,7 @@ export const createNoteTool = defineTool({
 export const listNotesTool = defineTool({
   name: 'list_notes',
   description:
-    'Lista as notas pessoais da pessoa, mais recentes primeiro. Passe query pra buscar (ex.: "o que eu anotei ' +
-    'sobre o aluguel" → query: "aluguel"): acha notas que contêm o termo (match: "exact") e também notas ' +
-    'PARECIDAS em assunto mesmo sem a palavra (match: "related") — trate "related" como possível, não como ' +
-    'certeza, e diga isso se for o único resultado. Sem query, lista tudo.',
+    'Notas, mais recentes primeiro. Com query: match "exact" (contém o termo) e "related" (parecido em assunto; trate como possível). Sem query, todas.',
   schema: z.object({
     query: z.string().min(1).max(200).optional(),
   }),
@@ -50,8 +45,7 @@ export const listNotesTool = defineTool({
 export const deleteNoteTool = defineTool({
   name: 'delete_note',
   description:
-    'Exclui definitivamente uma nota pessoal, dado o note_id — use quando a pessoa não quer mais ' +
-    'aquela nota. Se o note_id não existir mais nessa conta, retorna deleted: false.',
+    'Exclui uma nota (note_id). deleted:false se não existe.',
   schema: z.object({
     note_id: z.string().uuid(),
   }),
@@ -64,9 +58,7 @@ export const deleteNoteTool = defineTool({
 export const updateNoteTool = defineTool({
   name: 'update_note',
   description:
-    'Reescreve o texto de uma nota que já existe, dado o note_id de list_notes — use quando a pessoa quiser ' +
-    'corrigir ou completar uma nota ("muda aquela nota pra...", "acrescenta na nota do aluguel"). Mande o texto ' +
-    'COMPLETO novo (inclusive a parte que ficou igual). Se o note_id não existir mais, retorna updated: false.',
+    'Reescreve uma nota (note_id de list_notes) com o texto COMPLETO novo. updated:false se não existe.',
   schema: z.object({
     note_id: z.string().uuid(),
     content: z.string().min(1).max(2000),

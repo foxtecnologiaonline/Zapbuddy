@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   findUserById,
   saveMorningDigestPreferences,
+  saveRoutinePrefs,
   saveUserCity,
   saveUserEmail,
   setOccupation,
@@ -19,8 +20,7 @@ import { defineTool } from '../tool-types.js';
 export const updateOccupationTool = defineTool({
   name: 'update_occupation',
   description:
-    'Guarda a ocupação/profissão da pessoa quando ela menciona de passagem (nunca pergunte isso separado, sem necessidade) — ' +
-    'usado só pra dar mais contexto na categorização de gasto, nunca repetido de volta pra ela.',
+    'Guarda a ocupação quando ela mencionar de passagem (nunca pergunte à toa); só contexto de categorização.',
   schema: z.object({ occupation: z.string().min(1).max(200) }),
   execute: async (params, ctx) => {
     await setOccupation(ctx.userId, params.occupation);
@@ -31,8 +31,7 @@ export const updateOccupationTool = defineTool({
 export const setEmailTool = defineTool({
   name: 'set_email',
   description:
-    'Guarda o e-mail da pessoa, só quando ela mesma informar (nunca invente, nunca exija pra usar o Tom) — ' +
-    'serve como segundo contato, útil se um dia ela precisar recuperar a conta.',
+    'Guarda o e-mail, só se ela informar; nunca exija.',
   schema: z.object({ email: z.string().email() }),
   execute: async (params, ctx) => {
     await saveUserEmail(ctx.userId, params.email);
@@ -43,9 +42,7 @@ export const setEmailTool = defineTool({
 export const setQuietHoursTool = defineTool({
   name: 'set_quiet_hours',
   description:
-    'Define o horário de silêncio: nenhuma mensagem proativa (resumo do dia, insight, resumo semanal) é enviada ' +
-    'entre start_hour e end_hour no horário local da pessoa. Ex.: 22 e 7 = de 22h às 7h. Não afeta lembretes que ' +
-    'a pessoa agendou — esses são pedidos explícitos com hora marcada.',
+    'Horário de silêncio (start_hour a end_hour locais, ex. 22 e 7): sem mensagem proativa (resumo, insight, semanal). Lembretes que ela agendou continuam.',
   schema: z.object({
     start_hour: z.number().int().min(0).max(23),
     end_hour: z.number().int().min(0).max(23),
@@ -59,9 +56,7 @@ export const setQuietHoursTool = defineTool({
 export const setCityTool = defineTool({
   name: 'set_city',
   description:
-    'Guarda a cidade onde a pessoa mora, só quando ela mesma disser. Melhora a previsão do tempo do resumo da manhã ' +
-    '(sem isso, o Tom estima pela região do DDD do WhatsApp). Passe uf (sigla) se ela falar o estado ou se a cidade ' +
-    'tiver nome comum em vários estados. Se voltar saved=false, diga que não conseguiu localizar e peça cidade e estado.',
+    'Guarda a cidade onde ela mora, só se ela disser (melhora o clima do resumo). Passe uf se ela disser o estado ou a cidade for ambígua. saved:false → peça cidade e estado.',
   schema: z.object({
     city: z.string().min(2).max(100),
     uf: z.string().length(2).optional(),
@@ -77,19 +72,35 @@ export const setCityTool = defineTool({
 export const setMorningDigestPreferencesTool = defineTool({
   name: 'set_morning_digest_preferences',
   description:
-    'Ajusta o resumo da manhã que o Tom manda sozinho: ligar/desligar (enabled), horário local de chegada (hour, 0-23), ' +
-    'e se inclui a parte de agenda/tarefas (include_agenda) e a parte financeira (include_finance). Só passe o que ' +
-    'a pessoa pediu pra mudar. Ex.: "me manda o resumo às 7h" → hour 7; "tira a parte financeira" → ' +
-    'include_finance false; "não quero mais o resumo" → enabled false.',
+    'Ajusta o que o Tom manda sozinho. Resumo da manhã: enabled, hour (0-23), include_agenda, include_finance. ' +
+    'Rotinas: checkins ("como foi?" depois de compromisso/tarefa; ligadas por padrão), weekly_tip (dica semanal; ' +
+    'ligada), day_close (fechamento do dia à noite; DESLIGADO — só liga se ela pedir) e week_review (revisão no ' +
+    'domingo; desligada). Só passe o que a pessoa pediu pra mudar.',
   schema: z.object({
     enabled: z.boolean().optional(),
     hour: z.number().int().min(0).max(23).optional(),
     include_agenda: z.boolean().optional(),
     include_finance: z.boolean().optional(),
+    checkins: z.boolean().optional(),
+    weekly_tip: z.boolean().optional(),
+    day_close: z.boolean().optional(),
+    week_review: z.boolean().optional(),
   }),
   execute: async (params, ctx) => {
-    if (params.enabled === undefined && params.hour === undefined && params.include_agenda === undefined && params.include_finance === undefined) {
+    const routinePatch = {
+      ...(params.checkins !== undefined ? { routine_checkins: params.checkins } : {}),
+      ...(params.weekly_tip !== undefined ? { routine_weekly_tip: params.weekly_tip } : {}),
+      ...(params.day_close !== undefined ? { routine_day_close: params.day_close } : {}),
+      ...(params.week_review !== undefined ? { routine_week_review: params.week_review } : {}),
+    };
+    const digestUntouched =
+      params.enabled === undefined && params.hour === undefined && params.include_agenda === undefined && params.include_finance === undefined;
+    if (digestUntouched && Object.keys(routinePatch).length === 0) {
       return { saved: false, reason: 'nothing_to_change' };
+    }
+    if (digestUntouched) {
+      const routines = await saveRoutinePrefs(ctx.userId, routinePatch);
+      return { saved: true, routines };
     }
 
     if (params.hour !== undefined) {
@@ -111,8 +122,10 @@ export const setMorningDigestPreferencesTool = defineTool({
       includeAgenda: params.include_agenda,
       includeFinance: params.include_finance,
     });
+    const routines = Object.keys(routinePatch).length > 0 ? await saveRoutinePrefs(ctx.userId, routinePatch) : undefined;
     return {
       saved: true,
+      ...(routines ? { routines } : {}),
       enabled: user.morning_digest_enabled,
       hour: user.morning_digest_hour,
       include_agenda: user.morning_digest_agenda,

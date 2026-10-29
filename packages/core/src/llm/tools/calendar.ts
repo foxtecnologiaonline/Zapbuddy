@@ -14,9 +14,7 @@ import { assertPlausibleTimestamp } from '../date-sanity.js';
 export const createCalendarEventTool = defineTool({
   name: 'create_calendar_event',
   description:
-    'Cria um evento na agenda conectada da conta (Google ou Outlook). Exige que a conta já tenha uma agenda ' +
-    'conectada — se connected:false vier no retorno, a agenda não está conectada: siga as instruções do ' +
-    'sistema sobre isso (não tente de novo na mesma resposta).',
+    'Cria evento na agenda conectada (Google/Outlook). connected:false = agenda não conectada: siga as instruções do sistema, sem tentar de novo na mesma resposta.',
   schema: z.object({
     summary: z.string().min(1),
     start_at: z.string().datetime(),
@@ -51,11 +49,7 @@ export const createCalendarEventTool = defineTool({
 export const listCalendarEventsTool = defineTool({
   name: 'list_calendar_events',
   description:
-    "Lista eventos da agenda conectada da conta (Google ou Outlook). Use period: 'today' (hoje), 'tomorrow' " +
-    "(amanhã), 'next_7_days' (hoje + 6 dias à frente — pra \"o que tenho essa semana\") ou 'last_7_days' " +
-    "(hoje + 6 dias PARA TRÁS, só passado). Pra uma data ou intervalo específico (\"dia 30\", \"mês que vem\"), " +
-    'passe from_date e to_date (YYYY-MM-DD, datas locais da pessoa) em vez de period. Cada evento traz event_id, ' +
-    'necessário pra update_calendar_event / delete_calendar_event.',
+    'Eventos da agenda conectada. period: \'today\', \'tomorrow\', \'next_7_days\' ou \'last_7_days\' (passado). Data/intervalo específico: from_date e to_date (YYYY-MM-DD locais) no lugar de period. Cada evento traz event_id (pra update/delete).',
   schema: z
     .object({
       period: z.enum(['today', 'tomorrow', 'next_7_days', 'last_7_days']).optional(),
@@ -92,10 +86,7 @@ export const listCalendarEventsTool = defineTool({
 export const updateCalendarEventTool = defineTool({
   name: 'update_calendar_event',
   description:
-    'Altera um evento que já existe na agenda conectada (remarcar, trocar título, ajustar descrição), dado o ' +
-    'event_id que vem de list_calendar_events — consulte a agenda primeiro se não souber qual é. Informe só o que ' +
-    'muda; pra mudar o horário, mande start_at E end_at juntos. NUNCA crie um evento novo pra "remarcar". Se ' +
-    'connected:false, a agenda não está conectada. Se o novo horário colidir com outro evento, vem conflicts.',
+    'Altera um evento (event_id de list_calendar_events): título, descrição ou horário (start_at E end_at juntos). Só o que muda. NUNCA crie outro pra remarcar. connected:false = sem agenda; conflicts = colide com outro evento.',
   schema: z
     .object({
       event_id: z.string().min(1),
@@ -143,9 +134,7 @@ export const updateCalendarEventTool = defineTool({
 export const deleteCalendarEventTool = defineTool({
   name: 'delete_calendar_event',
   description:
-    'Remove um evento da agenda conectada, dado o event_id de list_calendar_events. Use só quando a pessoa pedir ' +
-    'pra cancelar/apagar aquele compromisso. Isso NÃO dá pra desfazer depois — se houver mais de um evento ' +
-    'possível, confirme qual antes. Se connected:false, a agenda não está conectada.',
+    'Remove um evento (event_id) só se ela pediu. IRREVERSÍVEL: com mais de um possível, confirme qual. connected:false = sem agenda.',
   schema: z.object({
     event_id: z.string().min(1),
   }),

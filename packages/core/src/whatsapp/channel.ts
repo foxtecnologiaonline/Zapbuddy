@@ -28,6 +28,25 @@ export async function sendWhatsappTextMessage(to: string, body: string): Promise
   await getWhatsappChannel().sendText(to, body);
 }
 
+/** "Digitando…" — melhor esforço, nunca lança. */
+export async function sendWhatsappTyping(to: string, waMessageId: string): Promise<void> {
+  try {
+    await getWhatsappChannel().sendTyping?.(to, waMessageId);
+  } catch {
+    // Enfeite.
+  }
+}
+
+/** Reação com emoji a uma mensagem da pessoa. false = não foi possível (canal sem suporte ou falha); nunca lança. */
+export async function sendWhatsappReaction(to: string, waMessageId: string, emoji: string): Promise<boolean> {
+  try {
+    const channel = getWhatsappChannel();
+    return channel.sendReaction ? await channel.sendReaction(to, waMessageId, emoji) : false;
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadWhatsappMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {
   return getWhatsappChannel().downloadMedia(ref);
 }

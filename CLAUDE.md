@@ -670,7 +670,42 @@ trade-offs em `docs/adr/0006-alcance-do-tom-edicao-habitos-pesquisa-visao.md` �
 
 Migrations `0025_habits.sql` e `0026_semantic_search_and_document_reading.sql` precisam ser aplicadas no Supabase
 antes do deploy. Tools registradas: 43 → 55 (~28,5KB de schema, ~7,1K tokens estimados; perto do patamar de ~10K
-onde `tool_search`/`defer_loading` compensa — remedir na próxima rodada que adicionar tools).
+onde `tool_search`/`defer_loading` compensa). **Atualizado em 2026-10:** 67 tools / ~6,9K tokens depois de enxugar descrições
+(ver seção "Capacidades do Tom" abaixo e o teste de orçamento).
+
+## Capacidades do Tom — balões, memória, listas, contas, dia e rotinas (2026-10, motivo documentado)
+
+Pedido do dono do produto: implementar 14 das 16 sugestões de uma lista de capacidades (1, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+12, 13, 14, 15; **fora**: 2 resposta em áudio e 16 atalhos de captura rápida). Detalhe e trade-offs em
+`docs/adr/0009-capacidades-do-tom-listas-contas-rotinas.md` — resumo:
+
+- **Orçamento de tools respeitado**: o schema estava em 62 tools / ~8,1K tokens. Só 5 tools novas, cada uma com várias
+  ações (`manage_list`, `calculate`, `manage_installments`, `time_utils`, `get_day_overview`) + `set_morning_digest_preferences`
+  estendida, e as descrições existentes foram enxugadas: **67 tools, ~27,5KB ≈ 6,9K tokens**. `tool-registry.budget.test.ts`
+  trava o teto (7,4K padrão / 8,2K com painel e cobrança ligados) e o tamanho de cada descrição. Capacidade nova entra como
+  ação de tool existente. `tool_search`/`defer_loading` segue **não implementado** (abaixo do patamar de ~10K; sem como validar).
+- **Comandos diretos sem LLM** (`commands/`): só mensagem inteira e exata — `hoje`, `amanhã`, `semana`, `tarefas`, `gastos`,
+  `listas`, `lista de <nome>`, `desfazer`, `ajuda [assunto]`, `dica`, `foco [N]`, `fechamento do dia`, `revisão da semana`,
+  ligar/desligar resumo, dicas, fechamento, revisão e check-ins. Frase maior vai pro LLM. `null`/erro do atalho cai no LLM.
+  **Resposta curta a uma pergunta do Tom nunca é comando** ("amanhã" respondendo "pra quando?" vai pro LLM).
+  "O que você faz?" continua conversa (nunca bula) e aponta pro `ajuda`.
+- **Balões + "digitando…" + reação**: linha em branco na resposta = novo balão (máx. 3); falha no 1º balão propaga (retry da
+  fila), falha depois nunca propaga (duplicaria). Agradecimento puro vira ❤️ (só agradecimento, nunca depois de pergunta do
+  Tom; `ok`/`blz` vão pro LLM). Cloud API completa; Evolution só "digitando…".
+- **Memória longa da conversa**: resumo rolante em Postgres (`conversation_summaries`), atualizado depois da resposta enviada a
+  cada ~8 trocas, injetado como DADO na camada semi-estável. **Espelho do jeito de escrever**: heurística pura, camada volátil.
+- **Listas, conta exata, parcelas, dia**: o Tom nunca faz aritmética de cabeça (`calculate`); parcelas **não lançam gasto**;
+  "monta meu dia" usa agenda + tarefas + lembretes + horários livres na janela acordada (derivada do horário de silêncio) e
+  nunca afirma "dia livre" se uma fonte falhou; hora em outros lugares só da tabela fechada (desconhecido = "não sei").
+- **Rotinas proativas dentro do sweep horário** (sem fila nova, por causa da cota do Redis; idempotentes via
+  `proactive_message_logs`): check-in "como foi?" (ligado; compromissos criados pelo Tom + tarefas com hora; ≤2/dia, 8h–20h),
+  dica semanal de habilidade ainda não usada (ligada; quarta 11h, ≥3 dias de uso, nunca repete), **fechamento do dia (20h) e
+  revisão da semana (domingo 18h) opt-in**. Respeitam o horário de silêncio. Limitação: evento criado fora do Tom não gera check-in.
+- Sem painel, preço ou teste grátis nos textos novos (teste garante) e no máximo 1 emoji por linha.
+
+Migration `0028_tom_capabilities.sql` precisa ser aplicada no Supabase ANTES do deploy (o sweep horário passou a selecionar
+`routine_*` de `users`). Não validado com usuários reais: observar se os balões ficam naturais, quantos check-ins viram
+resposta e se o resumo da conversa carrega ruído.
 
 ## Recados para outras pessoas — o Tom redige, a pessoa envia (2026-10, motivo documentado)
 

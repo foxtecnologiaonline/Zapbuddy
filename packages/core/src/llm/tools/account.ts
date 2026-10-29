@@ -7,9 +7,7 @@ import { buildReferralWhatsappDeepLink, WhatsappNumberNotConfiguredError } from 
 export const inviteMemberTool = defineTool({
   name: 'invite_member',
   description:
-    'Gera um código pra convidar outra pessoa a entrar na mesma conta (financeiro/tarefas/lembretes ' +
-    'compartilhados — ex.: sócio, cônjuge). Só o dono da conta pode convidar. O código vale 15 minutos; ' +
-    'diga à pessoa pra mandar "entrar <código>" no WhatsApp dela como uma das primeiras mensagens.',
+    'Gera código pra outra pessoa entrar na mesma conta (sócio, cônjuge). Só o dono; vale 15 min; ela manda "entrar <código>" no WhatsApp dela.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     if (ctx.role !== 'owner') {
@@ -33,11 +31,7 @@ export const listMembersTool = defineTool({
 export const getReferralInfoTool = defineTool({
   name: 'get_referral_info',
   description:
-    'Retorna o código de indicação da conta, quantas pessoas já se cadastraram usando ele, e um link ' +
-    'wa.me pronto (texto "Indicado <código>" já preenchido) pra mandar direto pra pessoa indicada clicar ' +
-    'e abrir a conversa com você. Use quando perguntarem "como funciona a indicação", "meu código", ' +
-    '"quantas pessoas eu indiquei" etc. Se referral_link vier ausente, mande só o código mesmo — a pessoa ' +
-    'indicada ainda pode mandar "indicado <código>" manualmente.',
+    'Código de indicação, quantas pessoas já entraram e link wa.me pronto ("Indicado <código>"). Sem referral_link, mande só o código.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const stats = await getReferralStats(ctx.accountId);

@@ -5,8 +5,7 @@ import { defineTool } from '../tool-types.js';
 export const createGoalTool = defineTool({
   name: 'create_goal',
   description:
-    'Cria uma meta de economia com valor-alvo e prazo opcional (ex.: "juntar R$ 2.000 até dezembro"). ' +
-    'Valor e prazo vêm sempre da pessoa. Nunca prometa rendimento nem sugira quanto render a meta.',
+    'Cria meta de economia com valor-alvo e prazo opcional, ambos dela. Nunca prometa rendimento.',
   schema: z.object({
     title: z.string().min(1).max(120),
     target_amount: z.number().positive().max(100_000_000),
@@ -27,8 +26,7 @@ export const createGoalTool = defineTool({
 export const addGoalProgressTool = defineTool({
   name: 'add_goal_progress',
   description:
-    'Soma um valor que a pessoa disse ter guardado numa meta, dado o goal_id. O valor é o que ela declarou — ' +
-    'nunca estime. Se a meta for atingida, o retorno vem com completed: true.',
+    'Soma o valor que ela disse ter guardado numa meta (goal_id), nunca estimado. completed:true se atingiu.',
   schema: z.object({
     goal_id: z.string().uuid(),
     amount: z.number().positive().max(100_000_000),

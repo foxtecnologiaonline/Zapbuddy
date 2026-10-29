@@ -5,10 +5,7 @@ import { defineTool } from '../tool-types.js';
 export const completeOnboardingTool = defineTool({
   name: 'complete_onboarding',
   description:
-    'Finaliza o cadastro do usuário salvando o nome informado por ele, e a ocupação/tipo de ' +
-    'negócio se ela tiver sido mencionada (ajuda a categorização automática — nunca pergunte de ' +
-    'novo nem insista nisso, é opcional). Chame esta tool assim que o usuário informar o nome ' +
-    'dele durante o onboarding.',
+    'Finaliza o cadastro com o nome que ela informou (e a ocupação, se mencionada — opcional, nunca insista). Chame assim que ela disser o nome no onboarding.',
   schema: z.object({
     name: z.string().min(1),
     occupation: z.string().min(1).optional(),
@@ -22,9 +19,7 @@ export const completeOnboardingTool = defineTool({
 export const setPreferredNameTool = defineTool({
   name: 'set_preferred_name',
   description:
-    'Salva como a pessoa pediu pra ser chamada (ex.: "pode me chamar de Mari", "me chama de Zé"), ' +
-    'diferente do nome completo do cadastro. Use sempre que ela pedir isso explicitamente, mesmo ' +
-    'fora do onboarding. Passe preferred_name: null se ela disser pra voltar a usar o nome normal.',
+    'Salva como ela quer ser chamada ("me chama de Zé"), mesmo fora do onboarding. preferred_name:null volta ao nome normal.',
   schema: z.object({
     preferred_name: z.string().min(1).nullable(),
   }),

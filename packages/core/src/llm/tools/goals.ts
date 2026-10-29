@@ -5,9 +5,7 @@ import { defineTool } from '../tool-types.js';
 export const createPersonalGoalTool = defineTool({
   name: 'create_personal_goal',
   description:
-    'Cria uma meta pessoal qualitativa, pessoal ou profissional (ex.: "quero ler mais", "ir mais na ' +
-    'academia", "fechar mais 2 clientes esse trimestre") — diferente de create_task (sem prazo único, ' +
-    'algo a fazer até tal dia) e de create_note (é algo pra acompanhar/concluir, não só um texto solto).',
+    'Cria meta pessoal/profissional qualitativa, sem valor ("quero ler mais"). Algo a fazer até uma data é create_task; juntar dinheiro é create_goal.',
   schema: z.object({
     description: z.string().min(1).max(300),
   }),
@@ -44,9 +42,7 @@ export const completePersonalGoalTool = defineTool({
 export const deletePersonalGoalTool = defineTool({
   name: 'delete_personal_goal',
   description:
-    'Exclui definitivamente uma meta pessoal, dado o goal_id — use quando a pessoa desistir dela ou ' +
-    'tiver criado por engano (nunca pra "concluir", isso é complete_personal_goal). Se o goal_id não ' +
-    'existir mais nessa conta, retorna deleted: false.',
+    'Exclui uma meta pessoal (goal_id) que ela desistiu ou criou errado — concluir é complete_personal_goal.',
   schema: z.object({
     goal_id: z.string().uuid(),
   }),

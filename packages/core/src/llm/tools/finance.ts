@@ -9,12 +9,7 @@ import { assertReasonableOccurredAt } from '../date-sanity.js';
 export const recordTransactionTool = defineTool({
   name: 'record_transaction',
   description:
-    'Registra uma transação financeira (gasto ou receita) do usuário. ' +
-    'OBRIGATÓRIO chamar esta tool antes de confirmar qualquer gasto/receita — ' +
-    'nunca confirme um valor financeiro sem ter chamado esta tool primeiro. ' +
-    `Categorias de gasto preferidas: ${EXPENSE_CATEGORIES.join(', ')}. ` +
-    `Categorias de receita preferidas: ${INCOME_CATEGORIES.join(', ')}. ` +
-    "Se nenhuma encaixar bem, use 'outros' — qualquer outro valor também é aceito e cai em 'outros'.",
+    `Registra um gasto ou receita. OBRIGATÓRIO chamar antes de confirmar qualquer valor financeiro. Categorias de gasto: ${EXPENSE_CATEGORIES.join(', ')}. De receita: ${INCOME_CATEGORIES.join(', ')}. Sem encaixe, 'outros'.`,
   schema: z.object({
     type: z.enum(['expense', 'income']),
     amount_cents: z.number().int().positive(),
@@ -85,12 +80,7 @@ export const recordTransactionTool = defineTool({
 export const correctLastTransactionTool = defineTool({
   name: 'correct_last_transaction',
   description:
-    'Corrige a transação financeira mais recente do usuário (registrada há no máximo 30 minutos), ' +
-    'para quando a pessoa avisa logo em seguida que errou algo (ex.: "errei, foi 54 não 45"). ' +
-    'Informe só os campos que mudaram. NUNCA use record_transaction para "consertar" um lançamento ' +
-    'recente — isso duplicaria o gasto/receita. Se não houver transação recente o bastante, a tool ' +
-    'retorna corrected: false — nesse caso, diga à pessoa que não achou um lançamento recente para ' +
-    'corrigir e pergunte se quer registrar como um novo gasto/receita.',
+    'Corrige o lançamento mais recente (até 30 min) quando ela avisa logo depois que errou ("errei, foi 54 não 45"). Só os campos que mudaram. NUNCA use record_transaction pra consertar (duplicaria). corrected:false → diga que não achou lançamento recente e ofereça registrar como novo.',
   schema: z
     .object({
       amount_cents: z.number().int().positive().optional(),
@@ -126,10 +116,7 @@ export const correctLastTransactionTool = defineTool({
 export const setBudgetAlertTool = defineTool({
   name: 'set_budget_alert',
   description:
-    'Define (ou substitui) um limite de gasto mensal para uma categoria — ex.: "me avisa se eu ' +
-    'passar de 500 reais em mercado". A partir daí, toda vez que um gasto fizer o total do mês ' +
-    'nessa categoria atingir o limite, record_transaction vai sinalizar isso automaticamente. ' +
-    'Pedir de novo para a mesma categoria substitui o limite anterior.',
+    'Define/substitui o limite mensal de uma categoria ("me avisa se passar de 500 em mercado"); record_transaction sinaliza ao atingir.',
   schema: z.object({
     category: z.string().min(1),
     limit_cents: z.number().int().positive(),
@@ -144,10 +131,7 @@ export const setBudgetAlertTool = defineTool({
 export const getSummaryTool = defineTool({
   name: 'get_financial_summary',
   description:
-    "Retorna o resumo financeiro (receitas, gastos, por categoria) do período pedido: 'today' " +
-    "(hoje), 'last_7_days' (últimos 7 dias), 'this_month' (do dia 1 até agora) ou 'last_month' " +
-    '(mês anterior inteiro). Os limites de data são calculados no fuso do usuário — nunca gere ' +
-    'from/to manualmente. Para "quanto gastei com X", use o byCategory do resultado.',
+    'Resumo financeiro (receitas, gastos, byCategory) de \'today\', \'last_7_days\', \'this_month\' ou \'last_month\', já no fuso dela — nunca gere datas. "Quanto gastei com X" → byCategory.',
   schema: z.object({
     period: z.enum(['today', 'last_7_days', 'this_month', 'last_month']),
   }),

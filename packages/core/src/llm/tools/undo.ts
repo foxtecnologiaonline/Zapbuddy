@@ -39,6 +39,8 @@ const UNDOABLE_ACTIONS: Record<string, string> = {
  * surpreendente (ex.: editar uma tarefa e pedir "desfaz" apagaria a tarefa).
  */
 const NON_UNDOABLE_ACTIONS = [
+  'manage_list',
+  'manage_installments',
   'update_task',
   'update_note',
   'update_reminder',
@@ -94,11 +96,7 @@ async function revertAction(toolName: string, resultId: string, ctx: ToolContext
 export const undoLastActionTool = defineTool({
   name: 'undo_last_action',
   description:
-    'Desfaz a última coisa que a pessoa acabou de criar (lançamento, tarefa, lembrete, nota, conta recorrente, meta ' +
-    'com valor, meta pessoal, data importante, hábito, check-in de hábito ou evento), se for dos últimos 10 minutos. Use quando ela disser ' +
-    '"desfaz", "cancela isso", "foi engano". Nunca desfaz algo mais antigo e não desfaz duas vezes seguidas — se ' +
-    'não houver nada, diga isso. Se a última coisa foi uma edição, conclusão ou exclusão (reason: ' +
-    'last_action_not_undoable), diga que isso não dá pra desfazer por aqui e ofereça corrigir na conversa.',
+    'Desfaz a última criação dela (lançamento, tarefa, lembrete, nota, conta, meta, data, hábito, check-in ou evento) se tiver menos de 10 min. Use em "desfaz"/"foi engano". Não desfaz duas vezes nem algo mais antigo; reason last_action_not_undoable = a última foi edição/conclusão/exclusão: diga que não dá e ofereça corrigir na conversa.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const sinceIso = new Date(Date.now() - UNDO_WINDOW_MINUTES * 60 * 1000).toISOString();

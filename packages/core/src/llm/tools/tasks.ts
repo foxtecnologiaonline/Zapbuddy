@@ -7,8 +7,7 @@ import { assertPlausibleTimestamp } from '../date-sanity.js';
 export const createTaskTool = defineTool({
   name: 'create_task',
   description:
-    'Cria uma nova tarefa para o usuário. due_at é opcional: se a pessoa só deu o DIA (sem hora), use 23:59:59 daquele ' +
-    'dia no fuso dela — o Tom entende isso como "o dia todo" e não mostra hora; só ponha uma hora específica se ela disse.',
+    'Cria uma tarefa. due_at opcional: se ela deu só o DIA, use 23:59:59 daquele dia no fuso dela ("o dia todo", sem hora); hora específica só se ela disse.',
   schema: z.object({
     title: z.string().min(1),
     due_at: z.string().datetime().optional(),
@@ -48,9 +47,7 @@ export const completeTaskTool = defineTool({
 export const deleteTaskTool = defineTool({
   name: 'delete_task',
   description:
-    'Exclui definitivamente uma tarefa do usuário, dado o task_id — use quando a pessoa disser que ' +
-    'criou por engano, duplicou, ou simplesmente não quer mais aquela tarefa (nunca para "concluir", ' +
-    'isso é complete_task). Se o task_id não existir mais nessa conta, retorna deleted: false.',
+    'Exclui uma tarefa (task_id) criada por engano, duplicada ou sem interesse — nunca pra concluir (complete_task). deleted:false se não existe.',
   schema: z.object({
     task_id: z.string().uuid(),
   }),
@@ -63,10 +60,7 @@ export const deleteTaskTool = defineTool({
 export const updateTaskTool = defineTool({
   name: 'update_task',
   description:
-    'Altera uma tarefa que já existe (trocar o texto, mudar o prazo ou tirar o prazo), dado o task_id de ' +
-    'list_tasks — consulte a lista primeiro se não souber qual é. Informe só o que muda; due_at: null remove o ' +
-    'prazo. NUNCA crie uma tarefa nova nem apague e recrie pra "ajustar" — isso muda o id e perde o histórico. ' +
-    'Se o task_id não existir mais nessa conta, retorna updated: false.',
+    'Altera título e/ou prazo de uma tarefa (task_id de list_tasks). Só o que muda; due_at:null remove o prazo. NUNCA crie outra nem apague e recrie. updated:false se não existe.',
   schema: z
     .object({
       task_id: z.string().uuid(),

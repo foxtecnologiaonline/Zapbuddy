@@ -6,10 +6,7 @@ import { getWeatherForecast } from '../../weather/openweathermap.js';
 export const getWeatherTool = defineTool({
   name: 'get_weather',
   description:
-    'Previsão do tempo pros próximos dias (até 5) de uma cidade do Brasil — use pra "vai chover amanhã?", "como ' +
-    'tá o tempo em Curitiba no fim de semana", "preciso de guarda-chuva?". Sem city, usa a cidade que a pessoa cadastrou (ou, sem cadastro, a região do DDD) ' +
-    '(devolvida em place — diga qual cidade usou se não foi ela que pediu). Os números vêm do provedor; se vier ' +
-    'status diferente de ok, diga que não conseguiu checar agora — nunca chute o tempo.',
+    'Previsão de até 5 dias pra uma cidade do Brasil. Sem city usa a cidade cadastrada (ou a região do DDD) — diga qual usou (place) se ela não pediu. status diferente de ok → diga que não conseguiu checar, nunca chute.',
   schema: z.object({
     city: z.string().min(1).max(80).optional().describe('Cidade (ex.: "Curitiba"). Omita pra usar a região da pessoa.'),
     days: z.number().int().min(1).max(5).default(2).describe('Quantos dias de previsão, começando por hoje.'),

@@ -8,9 +8,7 @@ import { maskWhatsappNumber, normalizeBrazilianWhatsappNumber } from '../../cont
 export const saveContactTool = defineTool({
   name: 'save_contact',
   description:
-    'Salva (ou corrige o nome de) um contato com o número de WhatsApp, pra o link dos recados que você redige abrir ' +
-    'direto na conversa certa. Use quando a pessoa disser o número de alguém ("o da Aline é 11 99999-9999") ou ' +
-    'encaminhar um cartão de contato ("[Contato compartilhado ...]"). Só números do Brasil.',
+    'Salva/corrige contato (nome + WhatsApp do Brasil) pro link dos recados abrir na conversa certa. Use quando ela disser o número ou encaminhar um cartão "[Contato compartilhado ...]".',
   schema: z.object({
     name: z.string().min(1).max(80),
     whatsapp_number: z.string().min(8).max(25),
@@ -56,11 +54,7 @@ export const deleteContactTool = defineTool({
 export const draftMessageForContactTool = defineTool({
   name: 'draft_message_for_contact',
   description:
-    'Redige um recado pra OUTRA pessoa ("manda um bom dia pra Aline") e devolve um link do WhatsApp com o texto já ' +
-    'preenchido: a PESSOA toca, abre a conversa e ela mesma envia. Você NUNCA envia nada a terceiros. Escreva ' +
-    'message na voz dela, só com o que ela pediu (sem inventar conteúdo, valor, promessa ou compromisso). Na ' +
-    'resposta mostre o texto (pra ela poder copiar) e o link. contact_saved:false = não há número salvo, o link ' +
-    'deixa ela escolher a conversa — ofereça salvar o número (save_contact). ambiguous = pergunte qual contato.',
+    'Redige um recado pra OUTRA pessoa e devolve link wa.me com o texto: ELA envia, você NUNCA envia a terceiros. message na voz dela, só com o que pediu (nada inventado). Mostre o texto e o link. contact_saved:false = sem número (ofereça save_contact); ambiguous = pergunte qual contato.',
   schema: z.object({
     contact_name: z.string().min(1).max(80).optional(),
     message: z.string().min(1).max(1000),
@@ -93,10 +87,7 @@ export const draftMessageForContactTool = defineTool({
 export const updateMessageStatusTool = defineTool({
   name: 'update_message_status',
   description:
-    'Registra no log o que a pessoa CONTOU sobre um recado que você redigiu: sent ("mandei"), replied ("ela ' +
-    'respondeu ..." — guarde o resumo em reply_summary) ou discarded ("não mandei / deixa pra lá"). Atualiza o ' +
-    'recado mais recente (do contato citado, se houver). Você não vê o que acontece fora da conversa: só registre ' +
-    'o que ela disse.',
+    'Registra o que ELA contou de um recado: sent, replied (reply_summary) ou discarded. Atualiza o mais recente (do contato citado). Só registre o que ela disse.',
   schema: z.object({
     contact_name: z.string().min(1).max(80).optional(),
     status: z.enum(['sent', 'replied', 'discarded']),
@@ -117,9 +108,7 @@ export const updateMessageStatusTool = defineTool({
 export const listMessageLogTool = defineTool({
   name: 'list_message_log',
   description:
-    'O log dos recados que você redigiu pra outras pessoas e o que a pessoa contou de cada um (redigido, mandado, ' +
-    'respondido). Use pra "o que eu mandei pra Aline?", "ela respondeu?". Os status vêm do que ELA informou — ' +
-    'você não sabe se foi enviado ou respondido por conta própria; diga isso se perguntarem.',
+    'Log dos recados redigidos e do que ela contou de cada um (o status vem dela; você não sabe se foi enviado ou respondido).',
   schema: z.object({ contact_name: z.string().min(1).max(80).optional() }),
   execute: async (params, ctx) => {
     const wanted = params.contact_name ? normalizeContactName(params.contact_name) : null;

@@ -5,9 +5,7 @@ import { JOKE_THEMES, pickJoke } from '../jokes.js';
 export const tellJokeTool = defineTool({
   name: 'tell_joke',
   description:
-    'Devolve uma piada do banco curado do Tom. Use SOMENTE quando a pessoa pedir uma piada, ' +
-    'nunca por conta própria. Conte o texto exatamente como veio, sem reescrever nem explicar. ' +
-    'Em already_told_ids passe os ids que você já contou nessa conversa, pra não repetir.',
+    'Piada do banco curado do Tom. SOMENTE quando ela pedir. Conte exatamente como veio. already_told_ids: ids já contados nesta conversa.',
   schema: z.object({
     theme: z.enum(JOKE_THEMES).optional(),
     already_told_ids: z.array(z.string()).optional(),

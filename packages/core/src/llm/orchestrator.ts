@@ -1,5 +1,7 @@
 import type { User } from '@zapbuddy/db';
 import {
+  logger,
+  getConversationSummary,
   getAccountForUser,
   createAccountForUser,
   redeemAccountInvite,
@@ -15,6 +17,11 @@ import { getCurrentStreakDays } from '../streak/compute.js';
 import { runLlmWithFallback } from './providers/orchestration.js';
 import { MESSAGES } from '../messages.js';
 import { isAccessBlocked, handleBlockedMessage } from '../payments/trial-gate.js';
+import { parseCommand } from '../commands/parse.js';
+import { executeCommand } from '../commands/execute.js';
+import { GRATITUDE_REACTION, isGratitudeOnly, lastAssistantAskedQuestion } from '../conversation/ack.js';
+import { analyzeStyle, formatStyleBlock } from '../conversation/style.js';
+import { formatSummaryBlock, updateConversationSummaryIfNeeded } from '../conversation/summary.js';
 
 export interface OrchestrateInput {
   user: User;
@@ -24,7 +31,13 @@ export interface OrchestrateInput {
 
 export interface OrchestrateResult {
   replyText: string;
+  /** Emoji pra reagir à mensagem da pessoa no lugar de mandar texto (agradecimento puro); replyText vira o texto curto de reserva se a reação não puder ser enviada. */
+  reaction?: string;
+  /** Trabalho de manutenção pra rodar DEPOIS da resposta enviada (ex.: resumo da conversa). Nunca lança. */
+  afterSend?: () => Promise<void>;
 }
+
+const GRATITUDE_FALLBACKS = ['Por nada! 🙂', 'Imagina, tô aqui pra isso!', 'Sempre que precisar 🤝'];
 
 // Exportado pra poder ser reaproveitado por outros pontos de entrada que não
 // passam pelo loop normal de mensagem de texto (ex.: document-upload.ts, que
@@ -111,13 +124,63 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     role: account.role,
   };
 
-  const [history, recentCategorizations, streakDays, memoryFacts] = await Promise.all([
-    getRecentTurns(user.whatsapp_number),
+  const onboarded = Boolean(user.onboarding_completed_at);
+
+  // O histórico vem primeiro porque decide dois atalhos: se o Tom acabou de fazer uma
+  // pergunta, a resposta curta da pessoa ("amanhã", "hoje", "foco", "valeu") é a RESPOSTA —
+  // nunca um comando nem só um agradecimento.
+  const history = await getRecentTurns(user.whatsapp_number);
+  const answeringQuestion = lastAssistantAskedQuestion(history);
+
+  // Comandos diretos (sugestão #13): mensagem inteira e exata, sem LLM — resposta
+  // instantânea e sem custo de token. Só depois do onboarding (antes dele o Tom conduz
+  // a conversa). Falha ou "não sei resolver" cai no LLM normalmente.
+  if (onboarded && !answeringQuestion) {
+    const command = parseCommand(messageText);
+    if (command) {
+      try {
+        const commandReply = await executeCommand(command, { user, toolContext });
+        if (commandReply) {
+          const at = new Date().toISOString();
+          await appendTurns(user.whatsapp_number, [
+            { role: 'user', content: messageText, at },
+            { role: 'assistant', content: commandReply, at },
+          ]);
+          logger.info('direct_command_handled', { userId: user.id, command: command.kind });
+          return { replyText: commandReply };
+        }
+      } catch (error) {
+        logger.warn('direct_command_failed', { userId: user.id, command: command.kind, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+  }
+
+  const [recentCategorizations, streakDays, memoryFacts, summary] = await Promise.all([
     listRecentCategorizedTransactions(account.accountId),
     getCurrentStreakDays(account.accountId, user.timezone),
     listMemoryFacts(account.accountId),
+    // Resumo da conversa é bônus: tabela ausente/erro nunca pode impedir a resposta.
+    onboarded ? getConversationSummary(user.id).catch(() => null) : Promise.resolve(null),
   ]);
-  const system = buildSystemPromptBlocks(user, recentCategorizations, streakDays, memoryFacts);
+
+  // Agradecimento puro vira reação (sugestão #3) — a menos que o Tom tenha acabado de
+  // fazer uma pergunta ("valeu, pode ser" é resposta, não só agradecimento).
+  if (onboarded && isGratitudeOnly(messageText) && !answeringQuestion) {
+    const at = new Date().toISOString();
+    await appendTurns(user.whatsapp_number, [
+      { role: 'user', content: messageText, at },
+      { role: 'assistant', content: GRATITUDE_REACTION, at },
+    ]);
+    return { replyText: GRATITUDE_FALLBACKS[history.length % GRATITUDE_FALLBACKS.length]!, reaction: GRATITUDE_REACTION };
+  }
+
+  const styleBlock = onboarded
+    ? formatStyleBlock(analyzeStyle([...history.filter((turn) => turn.role === 'user').map((turn) => turn.content), messageText].slice(-12)))
+    : '';
+  const system = buildSystemPromptBlocks(user, recentCategorizations, streakDays, memoryFacts, {
+    conversationSummary: summary?.summary ?? null,
+    styleBlock,
+  });
 
   const { replyText } = await runLlmWithFallback({
     system,
@@ -126,10 +189,17 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     toolContext,
   });
 
-  await appendTurns(user.whatsapp_number, [
-    { role: 'user', content: messageText, at: new Date().toISOString() },
-    { role: 'assistant', content: replyText, at: new Date().toISOString() },
-  ]);
+  const userTurn = { role: 'user' as const, content: messageText, at: new Date().toISOString() };
+  const assistantTurn = { role: 'assistant' as const, content: replyText, at: new Date().toISOString() };
+  await appendTurns(user.whatsapp_number, [userTurn, assistantTurn]);
 
-  return { replyText };
+  // Resumo rolante da conversa (sugestão #4): depois da resposta já enviada, usando o
+  // histórico que já temos em mãos (nenhuma leitura extra do Redis).
+  const afterSend = onboarded
+    ? async () => {
+        await updateConversationSummaryIfNeeded(user.id, [...history, userTurn, assistantTurn], summary);
+      }
+    : undefined;
+
+  return { replyText, afterSend };
 }

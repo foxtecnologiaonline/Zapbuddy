@@ -5,14 +5,7 @@ import { searchWeb } from '../web-search/client.js';
 export const webSearchTool = defineTool({
   name: 'web_search',
   description:
-    'Busca informação na web. Use pra: (1) dúvida geral que você não tem certeza de saber ou que pode ter mudado ' +
-    '(reason: general_question — ex.: "o que é o MEI", "taxa do Simples Nacional esse ano", horário/endereço de ' +
-    'um lugar); (2) o que muda no dia — notícia, resultado de jogo, evento, cotação de cripto/ação, lançamento ' +
-    '(reason: current_info; só aceita cache de poucos minutos e olha notícias dos últimos dias); (3) identificar ' +
-    'um estabelecimento desconhecido ANTES de escolher a categoria de um gasto (reason: categorization_support). ' +
-    'Previsão do tempo, dólar/euro/libra, Selic, CDI e IPCA têm tool própria (get_weather, get_market_rate) — ' +
-    'prefira essas. Nunca use pra confirmar ou inventar valor/data de transação: isso vem só do que a pessoa ' +
-    'disse. Cite de onde veio quando for informação atual e deixe claro a data que a fonte informa.',
+    'Busca na web. reason: general_question (dúvida geral que pode ter mudado), current_info (notícia, jogo, evento, cripto/ação; cache curto) ou categorization_support (identificar estabelecimento ANTES de categorizar gasto). Clima e dólar/Selic/CDI/IPCA têm tool própria (get_weather, get_market_rate). Nunca use pra inventar ou confirmar valor/data de transação. Cite a fonte e a data que ela informa.',
   schema: z.object({
     query: z.string().min(1),
     reason: z

@@ -3,12 +3,17 @@ import { findUserById, logger } from '@zapbuddy/db';
 import {
   orchestrateTurn,
   sendWhatsappTextMessage,
+  sendWhatsappTyping,
+  deliverReply,
+  encodeReply,
+  decodeReply,
   downloadWhatsappMedia,
   isAccessBlocked,
   getCachedReply,
   setCachedReply,
   MESSAGES,
   type AudioTranscriptionJob,
+  type ReplyEnvelope,
 } from '@zapbuddy/core';
 import { getAudioTranscriber } from '../audio/get-transcriber.js';
 import { AudioTooLongError } from '../audio/whisper-transcriber.js';
@@ -39,15 +44,21 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
   // Idempotência: se a transcrição+orquestração já rodou numa tentativa
   // anterior (e só o envio falhou), reusa a resposta em vez de transcrever
   // e rodar a IA de novo — evita custo duplicado e duplicar tool calls.
-  let replyText = await getCachedReply(waMessageId);
-  if (replyText === null) {
+  let reply: ReplyEnvelope;
+  let afterSend: (() => Promise<void>) | undefined;
+  const cached = await getCachedReply(waMessageId);
+  if (cached !== null) {
+    reply = decodeReply(cached);
+  } else {
     try {
       const { buffer, mimeType } = await downloadWhatsappMedia(audioRef);
       const transcript = await getAudioTranscriber().transcribe(buffer, mimeType);
 
+      void sendWhatsappTyping(user.whatsapp_number, waMessageId);
       const result = await orchestrateTurn({ user, messageText: transcript, messageSource: 'audio' });
-      replyText = result.replyText;
-      await setCachedReply(waMessageId, replyText);
+      reply = { text: result.replyText, reaction: result.reaction };
+      afterSend = result.afterSend;
+      await setCachedReply(waMessageId, encodeReply(reply));
     } catch (error) {
       if (error instanceof AudioTooLongError) {
         // Erro permanente — repetir não muda o resultado. Avisa direto e
@@ -60,5 +71,11 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
     }
   }
 
-  await sendWhatsappTextMessage(user.whatsapp_number, replyText);
+  await deliverReply({ to: user.whatsapp_number, waMessageId, reply });
+
+  if (afterSend) {
+    await afterSend().catch((error) => {
+      logger.warn('after_send_failed', { userId, error: error instanceof Error ? error.message : String(error) });
+    });
+  }
 }

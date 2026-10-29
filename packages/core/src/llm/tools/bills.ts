@@ -5,9 +5,7 @@ import { defineTool } from '../tool-types.js';
 export const createRecurringBillTool = defineTool({
   name: 'create_recurring_bill',
   description:
-    'Cadastra uma conta que se repete todo mês (aluguel, luz, internet, assinatura) pra que o Tom avise antes do ' +
-    'vencimento. Só com valor e dia de vencimento que a pessoa informou — nunca cria transação de pagamento sozinho. ' +
-    'Pra registrar que a conta foi paga, use record_transaction.',
+    'Cadastra conta mensal (aluguel, luz, assinatura) pra avisar antes do vencimento, só com valor e dia que ela informou. Nunca cria pagamento — pago é record_transaction.',
   schema: z.object({
     name: z.string().min(1).max(80),
     amount: z.number().positive().max(10_000_000),
@@ -39,7 +37,7 @@ export const listRecurringBillsTool = defineTool({
 
 export const cancelRecurringBillTool = defineTool({
   name: 'cancel_recurring_bill',
-  description: 'Para os avisos de uma conta recorrente, dado o bill_id. Use quando a pessoa não quer mais ser avisada dela.',
+  description: 'Para os avisos de uma conta recorrente (bill_id).',
   schema: z.object({
     bill_id: z.string().uuid(),
   }),

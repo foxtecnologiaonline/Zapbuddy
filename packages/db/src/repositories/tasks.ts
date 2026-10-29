@@ -147,3 +147,46 @@ export async function updateTask(accountId: string, taskId: string, input: Updat
   if (error) throw error;
   return (data as Task | null) ?? null;
 }
+
+/** Tarefas concluídas numa janela (fechamento do dia / revisão da semana). */
+export async function listCompletedTasksBetween(accountId: string, fromIso: string, toIso: string, limit = 50): Promise<Task[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'completed')
+    .gte('completed_at', fromIso)
+    .lte('completed_at', toIso)
+    .order('completed_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Task[];
+}
+
+/** Pendentes com prazo já vencido (mais antigas primeiro). */
+export async function listOverduePendingTasks(accountId: string, beforeIso: string, limit = 20): Promise<Task[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .lt('due_at', beforeIso)
+    .order('due_at', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Task[];
+}
+
+/** Pendentes sem prazo nenhum (a "caixa de entrada" de tarefas). */
+export async function listUndatedPendingTasks(accountId: string, limit = 10): Promise<Task[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tasks')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'pending')
+    .is('due_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Task[];
+}

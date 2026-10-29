@@ -34,3 +34,8 @@ export * from './repositories/personal-goals.js';
 export * from './repositories/habits.js';
 export * from './repositories/contacts.js';
 export * from './repositories/message-drafts.js';
+export * from './repositories/lists.js';
+export * from './repositories/installments.js';
+export * from './repositories/conversation-summaries.js';
+export * from './repositories/proactive-logs.js';
+export * from './repositories/routine-prefs.js';

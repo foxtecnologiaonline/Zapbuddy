@@ -14,12 +14,7 @@ import { mergeHybridResults, SEMANTIC_MIN_SIMILARITY, SEMANTIC_RELATED_LIMIT, ty
 export const findDocumentTool = defineTool({
   name: 'find_document',
   description:
-    'Procura documentos/imagens que a pessoa já mandou. Acha por nome do arquivo, pela legenda e pelo CONTEÚDO ' +
-    'que o Tom leu no arquivo (ex.: "aquele comprovante do mercado", "o boleto da luz") — e também por ' +
-    'significado (match: "related" é só parecido, trate como possível). Cada resultado traz o que foi lido ' +
-    '(summary e extracted: tipo, estabelecimento, valor, datas), então dá pra responder "quanto foi aquele ' +
-    'comprovante" sem reabrir o arquivo — mas só com o que veio aqui, nunca complete de cabeça. Arquivos ' +
-    'antigos ou de tipo não suportado podem não ter leitura (summary: null). Sem "query", retorna os mais recentes.',
+    'Procura arquivos/imagens enviados, por nome, legenda, CONTEÚDO lido e significado (match:"related" = só parecido, trate como possível). Cada resultado traz o que foi lido (summary, extracted: tipo, estabelecimento, valor, datas): responda só com isso, nunca complete de cabeça. summary:null = sem leitura. Sem query, os mais recentes.',
   schema: z.object({
     query: z.string().min(1).optional(),
   }),

@@ -9,9 +9,7 @@ const MAX_BACKFILL_DAYS = 7;
 export const createHabitTool = defineTool({
   name: 'create_habit',
   description:
-    'Cria um hábito/rotina pra acompanhar a constância (ex.: "ir à academia", "ler 20 minutos", "beber 2L de ' +
-    'água") — algo que se REPETE e que a pessoa vai marcar como feito nos dias. Diferente de create_personal_goal ' +
-    '(algo a alcançar, sem rotina), de create_task (uma vez só) e de create_reminder (avisar numa hora).',
+    'Cria hábito que se REPETE e ela marca nos dias ("academia", "ler 20 min"). Algo a alcançar é create_personal_goal; uma vez só, create_task; avisar numa hora, create_reminder.',
   schema: z.object({
     name: z.string().min(1).max(120),
   }),
@@ -30,10 +28,7 @@ export const createHabitTool = defineTool({
 export const logHabitCheckinTool = defineTool({
   name: 'log_habit_checkin',
   description:
-    'Marca que a pessoa FEZ o hábito (ex.: "fui pra academia hoje", "li ontem"). habit_id vem de list_habits — ' +
-    'consulte antes se não souber qual é. date (YYYY-MM-DD, data local dela) é opcional: sem ela, vale hoje; ' +
-    `aceita até ${MAX_BACKFILL_DAYS} dias pra trás e nunca o futuro. Marcar o mesmo dia de novo é seguro ` +
-    '(already_logged: true). Devolve a sequência atual — comemore sem exagero, e só com o número que vier aqui.',
+    'Marca que ela FEZ o hábito (habit_id de list_habits). date YYYY-MM-DD opcional (padrão hoje; até 7 dias atrás, nunca futuro). Repetir é seguro (already_logged). Comemore só com a sequência que a tool devolver.',
   schema: z.object({
     habit_id: z.string().uuid(),
     date: z
@@ -71,9 +66,7 @@ export const logHabitCheckinTool = defineTool({
 export const listHabitsTool = defineTool({
   name: 'list_habits',
   description:
-    'Lista os hábitos ativos da pessoa com o habit_id, se já foi feito hoje, a sequência atual (dias seguidos) e ' +
-    'quantos dos últimos 7 dias foram feitos. Use pra "como estão meus hábitos" e pra achar o habit_id antes de ' +
-    'log_habit_checkin ou archive_habit. Os números vêm calculados daqui — nunca estime sequência de cabeça.',
+    'Hábitos ativos com habit_id, feito hoje, sequência e últimos 7 dias. Números sempre daqui, nunca de cabeça.',
   schema: z.object({}),
   execute: async (_params, ctx) => {
     const todayKey = localDateKey(ctx.timezone);
@@ -96,8 +89,7 @@ export const listHabitsTool = defineTool({
 export const archiveHabitTool = defineTool({
   name: 'archive_habit',
   description:
-    'Para de acompanhar um hábito (a pessoa desistiu ou não faz mais parte da rotina), dado o habit_id de ' +
-    'list_habits. O histórico fica guardado. Se não existir mais, retorna archived: false.',
+    'Para de acompanhar um hábito (habit_id); o histórico fica.',
   schema: z.object({
     habit_id: z.string().uuid(),
   }),

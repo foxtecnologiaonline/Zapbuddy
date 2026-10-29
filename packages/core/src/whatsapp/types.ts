@@ -19,6 +19,13 @@ export interface WhatsappChannel {
   readonly provider: MediaRef['provider'];
   sendText(to: string, body: string): Promise<void>;
   downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }>;
+  /**
+   * Mostra "digitando…" pra pessoa enquanto o Tom prepara o próximo balão. Só enfeite:
+   * qualquer falha é engolida (nunca pode atrapalhar a entrega da resposta).
+   */
+  sendTyping?(to: string, waMessageId: string): Promise<void>;
+  /** Reage a uma mensagem da pessoa com um emoji. true = reação enviada; false = canal não suporta/falhou (o chamador manda texto curto no lugar). Nunca lança. */
+  sendReaction?(to: string, waMessageId: string, emoji: string): Promise<boolean>;
   /** Usado só pelo card de status do admin — nunca lançar, sempre devolver { ok: false, detail } em erro. */
   checkConnection(): Promise<ConnectionCheck>;
 }

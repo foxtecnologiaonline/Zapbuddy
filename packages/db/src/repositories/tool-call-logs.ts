@@ -246,3 +246,36 @@ export async function findLastSuccessfulToolCall(
   if (error) throw error;
   return (data as ToolCallLog | null) ?? null;
 }
+
+/** Chamadas bem-sucedidas de certas tools por uma pessoa desde uma data — base dos check-ins pós-evento e da dica de habilidade nova. */
+export async function listSuccessfulToolCallsSince(
+  userId: string,
+  toolNames: string[],
+  sinceIso: string,
+  limit = 200,
+): Promise<Pick<ToolCallLog, 'tool_name' | 'parameters' | 'result' | 'created_at'>[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tool_call_logs')
+    .select('tool_name, parameters, result, created_at')
+    .eq('user_id', userId)
+    .eq('success', true)
+    .in('tool_name', toolNames)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Pick<ToolCallLog, 'tool_name' | 'parameters' | 'result' | 'created_at'>[];
+}
+
+/** Nomes distintos de tools que a pessoa já usou com sucesso desde uma data. */
+export async function listDistinctToolNamesUsedSince(userId: string, sinceIso: string): Promise<string[]> {
+  const { data, error } = await getSupabaseClient()
+    .from('tool_call_logs')
+    .select('tool_name')
+    .eq('user_id', userId)
+    .eq('success', true)
+    .gte('created_at', sinceIso)
+    .limit(5000);
+  if (error) throw error;
+  return [...new Set(((data ?? []) as Array<{ tool_name: string }>).map((row) => row.tool_name))];
+}

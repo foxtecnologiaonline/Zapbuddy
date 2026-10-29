@@ -41,6 +41,53 @@ export class CloudApiChannel implements WhatsappChannel {
     }
   }
 
+  /**
+   * "Digitando…" na Cloud API é o próprio status "lida" da mensagem recebida com
+   * `typing_indicator` (dura até ~25s ou até a próxima mensagem enviada).
+   */
+  async sendTyping(_to: string, waMessageId: string): Promise<void> {
+    try {
+      const phoneNumberId = requireEnv('WHATSAPP_PHONE_NUMBER_ID');
+      const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
+      await fetchWithRetry(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: waMessageId, typing_indicator: { type: 'text' } }),
+        },
+        5_000,
+      );
+    } catch {
+      // Enfeite: falhar aqui não pode derrubar a resposta.
+    }
+  }
+
+  async sendReaction(to: string, waMessageId: string, emoji: string): Promise<boolean> {
+    try {
+      const phoneNumberId = requireEnv('WHATSAPP_PHONE_NUMBER_ID');
+      const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
+      const response = await fetchWithRetry(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to,
+            type: 'reaction',
+            reaction: { message_id: waMessageId, emoji },
+          }),
+        },
+        8_000,
+      );
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }> {
     if (ref.provider !== 'cloud-api') {
       throw new Error(`CloudApiChannel recebeu mediaRef de provider errado: ${ref.provider}`);

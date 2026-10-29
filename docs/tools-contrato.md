@@ -313,3 +313,46 @@ julgamento é qualitativo.
   tool (ver regra em `system-prompt.ts`: "valor ausente ou claramente ambíguo, pergunte").
 - **Falha de escrita no banco:** `logToolCall` registra `success: false` e `error`; a resposta
   ao usuário não deve confirmar a ação (mesma regra não-negociável do `CLAUDE.md`).
+
+
+# Capacidades do Tom (2026-10, docs/adr/0009) — 5 tools novas + atalhos que não são tools
+
+Orçamento de schema: 67 tools ≈ 6,9 mil tokens (teto travado em `tool-registry.budget.test.ts`). Capacidade nova entra
+como ação de uma tool existente.
+
+## `manage_list` (`tools/lists.ts`)
+`action`: `add` (list + items; cria a lista; ignora o que já está pendente), `show`, `check`/`uncheck`, `remove`,
+`clear_done`, `delete` (só se a pessoa pediu), `show_all`. Itens casam por texto (sem acento, plural simples).
+Retorno de `check`/`uncheck`/`remove`: `affected`, `ambiguous: [{query, options}]`, `not_found`, `pending_count`.
+Sem `list` e com uma lista só, vale ela; com várias → `reason: list_name_required` + `lists`.
+
+## `calculate` (`tools/calculator.ts`)
+`operation`: `expression`, `percent_of`, `percent_change`, `split_bill`, `installments`, `installments_total`,
+`compound_interest` (simulation_only). Valores em reais; saída já formatada (R$). Erro de conta →
+`{ ok: false, reason }`, nunca exceção. Falta de campo → `reason: *_required`.
+
+## `manage_installments` (`tools/installments.ts`)
+`action`: `create` (description, installment_amount, total_installments, due_day, first_due_month?), `list`,
+`commitments` (months, padrão 6: parcelas + contas recorrentes por mês), `cancel` (plan_id). **Não lança gasto**
+(`purchase_not_recorded_as_expense: true`). Pagas = parcelas com data anterior a hoje.
+
+## `time_utils` (`tools/time-utils.ts`)
+`action`: `now_in` (place; `found:false` se fora da tabela), `days_until` (date YYYY-MM-DD; negativo = passou),
+`next_holiday` (nacional), `focus` (minutes 5–120; cria lembrete comum na fila).
+
+## `get_day_overview` (`tools/time-utils.ts`)
+`period`: `today` (padrão), `tomorrow`, `week`. Devolve `events` (com fim), `tasksDue`, `reminders`, `overdue`,
+`undated`, `habitsPending`, `freeWindows` e `failedSources` (não vazio ⇒ não afirmar "dia livre").
+
+## `set_morning_digest_preferences` (estendida)
+Além do resumo da manhã: `checkins`, `weekly_tip` (ligados por padrão), `day_close`, `week_review` (desligados).
+
+## Atalhos de mensagem inteira — não são tools (`commands/`)
+`hoje`/`amanhã`/`semana`, `tarefas`, `gastos` (+ `de hoje`/`da semana`), `listas`, `lista de <nome>`, `desfazer`,
+`ajuda [assunto]`, `dica`, `foco [N]`, `fechamento do dia`, `revisão da semana`, e ligar/desligar resumo, dicas,
+fechamento do dia, revisão da semana e check-ins. Resolvidos em `orchestrateTurn` sem LLM; `null`/erro cai no LLM.
+
+## Rotinas proativas e conversa — não são tools
+Check-in "como foi?", fechamento do dia, revisão da semana e dica semanal (`apps/worker/.../proactive-routines.ts`);
+resumo rolante da conversa (`conversation/summary.ts`); balões, "digitando…" e reação (`conversation/deliver.ts`);
+estilo da pessoa (`conversation/style.ts`).

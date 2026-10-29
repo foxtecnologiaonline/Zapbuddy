@@ -20,6 +20,9 @@ export async function exportAccountData(accountId: string): Promise<Record<strin
     'habit_checkins',
     'contacts',
     'message_drafts',
+    'lists',
+    'list_items',
+    'installment_plans',
   ] as const;
 
   const results = await Promise.all(
