@@ -100,20 +100,30 @@ const SEASON_PHRASE: Record<Estacao, string> = {
   primavera: 'já estamos na primavera por aqui',
 };
 
-const SEASON_EMOJI: Record<Estacao, string> = { verão: '☀️', outono: '🍂', inverno: '🧣', primavera: '🌸' };
+// Emoji da estação só aparece NO CORPO, junto da frase da estação (nunca no início da mensagem).
+const SEASON_EMOJI: Record<Estacao, string> = { verão: '🏖️', outono: '🍂', inverno: '🧣', primavera: '🌸' };
+
+// Cabeçalho pela hora do dia — distinto dos emojis de clima e de estação pra não repetir no mesmo texto.
+function headerEmojiForHour(hour: number): string {
+  if (hour < 12) return '🌅';
+  if (hour < 18) return '👋';
+  return '🌙';
+}
 
 // Abertura por dia da semana (0=domingo). Vazio = sem frase extra.
 const WEEKDAY_OPENERS: Record<number, string[]> = {
-  0: ['Domingo de descanso!', 'Domingão!'],
-  1: ['Começo de semana!', 'Segunda-feira chegou.'],
-  3: ['Meio da semana, seguimos.'],
-  5: ['Sextou!', 'Chegamos na sexta.'],
-  6: ['Sábado!', 'Fim de semana!'],
+  0: ['Domingo de descanso! 😌', 'Domingão! 🛋️'],
+  1: ['Começo de semana! 💪', 'Segunda-feira chegou. ☕'],
+  2: ['Terça-feira, bora! 🚀'],
+  3: ['Meio da semana, seguimos. 🙌'],
+  4: ['Quinta-feira, já dá pra ver a sexta daqui. 👀'],
+  5: ['Sextou! 🎉', 'Chegamos na sexta. 🙌'],
+  6: ['Sábado! 😎', 'Fim de semana! 🎈'],
 };
 
 const FREE_DAY_LINES = [
-  'Não tenho nada registrado pra hoje — se quiser marcar algo, é só me falar.',
-  'Por enquanto seu dia está livre. Me chama se quiser encaixar alguma coisa.',
+  'Não tenho nada registrado pra hoje 🙂 — se quiser marcar algo, é só me falar.',
+  'Por enquanto seu dia está livre 😌 Me chama se quiser encaixar alguma coisa.',
 ];
 const FOLLOW_UP_LINES = ['Já te mando o que tem pra hoje 👇', 'Olha o que tem pra hoje 👇'];
 
@@ -134,7 +144,7 @@ function greetingForHour(hour: number): string {
  * omitidos (não inventados) quando não há dado. Formatação do WhatsApp: *negrito*.
  */
 export function formatMorningNarrative(input: MorningNarrativeInput): string {
-  const headerEmoji = input.weather ? weatherEmoji(input.weather.conditionId) : SEASON_EMOJI[input.season];
+  const headerEmoji = headerEmojiForHour(input.digestHour);
   // Nome vem da pessoa: tira os caracteres de formatação do WhatsApp pra "*Ana*" não quebrar o negrito do cumprimento.
   const safeName = input.name?.replace(/[*_~`]/g, '').trim() ?? '';
   const greeting = `${greetingForHour(input.digestHour)}${safeName ? `, ${safeName}` : ''}!`;
@@ -142,12 +152,25 @@ export function formatMorningNarrative(input: MorningNarrativeInput): string {
 
   const openerOptions = WEEKDAY_OPENERS[input.weekdayIndex];
   const opener = openerOptions ? `${pickVariant(openerOptions, input.month, input.day)} ` : '';
-  paragraphs.push(`${opener}Hoje é *${input.weekdayLabel}, ${input.dateLabel}* — ${SEASON_PHRASE[input.season]}.`);
+  paragraphs.push(
+    `${opener}Hoje é *${input.weekdayLabel}, ${input.dateLabel}* — ${SEASON_PHRASE[input.season]} ${SEASON_EMOJI[input.season]}`,
+  );
 
   if (input.weather) {
-    const { minTempC, maxTempC, description } = input.weather;
+    const { minTempC, maxTempC, description, rainChancePercent, periods } = input.weather;
     const forecast = `${weatherEmoji(input.weather.conditionId)} A previsão é de ${minTempC}°C a ${maxTempC}°C, com ${description}.`;
-    paragraphs.push([forecast, ...buildWeatherTips(input.weather)].join(' '));
+
+    const periodParts = [
+      periods.morning ? `Manhã ${periods.morning.avgTempC}°C` : null,
+      periods.afternoon ? `Tarde ${periods.afternoon.avgTempC}°C` : null,
+      periods.evening ? `Noite ${periods.evening.avgTempC}°C` : null,
+    ].filter((part): part is string => part !== null);
+    const periodsLine = periodParts.length >= 2 ? `🌡️ ${periodParts.join(' · ')}` : null;
+
+    const rainLine = rainChancePercent >= 20 ? `💧 Chance de chuva: ${rainChancePercent}%.` : null;
+    const tipsLine = [rainLine, ...buildWeatherTips(input.weather)].filter((part): part is string => part !== null).join(' ');
+
+    paragraphs.push([forecast, periodsLine, tipsLine || null].filter((part): part is string => part !== null).join('\n'));
   }
 
   if (input.holiday) {

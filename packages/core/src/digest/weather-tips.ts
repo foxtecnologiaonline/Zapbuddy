@@ -29,22 +29,22 @@ export function buildWeatherTips(weather: TodayWeatherSummary): string[] {
     ].filter((p): p is string => p !== null);
     tips.push(
       rainPeriods.length === 1
-        ? `Vai chover ${rainPeriods[0]} — leve o guarda-chuva.`
-        : 'Tem chance de chuva hoje — vale levar o guarda-chuva.',
+        ? `☂️ Vai chover ${rainPeriods[0]} — leve o guarda-chuva.`
+        : '☂️ Tem chance de chuva hoje — vale levar o guarda-chuva.',
     );
   }
 
   const swing = weather.maxTempC - weather.minTempC;
   if (weather.maxTempC <= 17) {
-    tips.push('Dia frio — vá bem agasalhado.');
+    tips.push('🧥 Dia frio — vá bem agasalhado.');
   } else if ((morning && morning.avgTempC <= 16) || weather.minTempC <= 15) {
-    tips.push(swing >= 8 ? 'Começa fresquinho, leve um casaco — esquenta ao longo do dia.' : 'Está fresquinho, leve um casaco.');
+    tips.push(swing >= 8 ? '🧥 Começa fresquinho, leve um casaco — esquenta ao longo do dia.' : '🧥 Está fresquinho, leve um casaco.');
   }
 
   if (weather.maxTempC >= 31) {
-    tips.push('Calorão: capricha na água e no protetor solar.');
+    tips.push('🥵 Calorão: capricha na água e no protetor solar.');
   } else if (weather.maxTempC >= 28 && !weather.rainExpected) {
-    tips.push('Dia quente — protetor solar e bastante água.');
+    tips.push('😎 Dia quente — protetor solar e bastante água.');
   }
 
   return tips.slice(0, 2);

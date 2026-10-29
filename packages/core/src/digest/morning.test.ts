@@ -90,6 +90,7 @@ const sunnyWeather: TodayWeatherSummary = {
   description: 'céu limpo',
   conditionId: 800,
   rainExpected: false,
+  rainChancePercent: 0,
   periods: { morning: null, afternoon: null, evening: null },
 };
 
@@ -268,5 +269,50 @@ describe('daysOverdue / formatTaskFollowUpMessage (pergunta de conclusão — mi
     expect(text).toContain('• Ligar pro banco (era pra ontem)');
     expect(text).toContain('• Pagar IPTU (era pra 3 dias atrás)');
     expect(text).toContain('Alguma dessas já rolou?');
+  });
+});
+
+describe('formatMorningNarrative — emojis e detalhe do tempo', () => {
+  it('a flor da primavera aparece só no corpo, junto da frase da estação — nunca no início', () => {
+    const text = formatMorningNarrative({ ...baseNarrative, season: 'primavera' });
+    expect(text.startsWith('🌸')).toBe(false);
+    expect(text.split('\n')[0]).not.toContain('🌸');
+    expect(text).toContain('já estamos na primavera por aqui 🌸');
+  });
+
+  it('o cabeçalho tem emoji pela hora do dia, não pelo clima nem pela estação', () => {
+    expect(formatMorningNarrative({ ...baseNarrative, digestHour: 8 }).startsWith('🌅 *Bom dia!*')).toBe(true);
+    expect(formatMorningNarrative({ ...baseNarrative, digestHour: 14 }).startsWith('👋 *Boa tarde!*')).toBe(true);
+    expect(formatMorningNarrative({ ...baseNarrative, digestHour: 20 }).startsWith('🌙 *Boa noite!*')).toBe(true);
+    const withWeather = formatMorningNarrative({ ...baseNarrative, weather: { ...sunnyWeather, conditionId: 500 } });
+    expect(withWeather.startsWith('🌅')).toBe(true);
+  });
+
+  it('todo dia da semana tem abertura com emoji', () => {
+    for (let weekdayIndex = 0; weekdayIndex <= 6; weekdayIndex++) {
+      const text = formatMorningNarrative({ ...baseNarrative, weekdayIndex });
+      expect(text.split('\n\n')[1]).toMatch(/\p{Extended_Pictographic} Hoje é/u);
+    }
+    expect(formatMorningNarrative({ ...baseNarrative, weekdayIndex: 3 })).toContain('Meio da semana, seguimos. 🙌');
+  });
+
+  it('o clima traz temperatura por período e chance de chuva (só quando relevante)', () => {
+    const text = formatMorningNarrative({
+      ...baseNarrative,
+      weather: {
+        ...sunnyWeather,
+        conditionId: 500,
+        description: 'chuva leve',
+        rainExpected: true,
+        rainChancePercent: 60,
+        periods: { morning: { avgTempC: 19, rain: false }, afternoon: { avgTempC: 27, rain: true }, evening: { avgTempC: 22, rain: false } },
+      },
+    });
+    expect(text).toContain('🌡️ Manhã 19°C · Tarde 27°C · Noite 22°C');
+    expect(text).toContain('💧 Chance de chuva: 60%.');
+
+    const dry = formatMorningNarrative({ ...baseNarrative, weather: { ...sunnyWeather, rainChancePercent: 10 } });
+    expect(dry).not.toContain('Chance de chuva');
+    expect(dry).not.toContain('🌡️');
   });
 });

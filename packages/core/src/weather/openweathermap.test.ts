@@ -66,6 +66,7 @@ describe('summarizeForecast', () => {
     );
 
     expect(summary).toMatchObject({ minTempC: 17, maxTempC: 27, description: 'nuvens esparsas', conditionId: 802, rainExpected: false });
+    expect(summary?.rainChancePercent).toBeGreaterThanOrEqual(0);
     expect(summary?.periods).toEqual({
       morning: { avgTempC: 18, rain: false },
       afternoon: { avgTempC: 25, rain: false },

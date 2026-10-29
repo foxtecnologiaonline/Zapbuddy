@@ -9,6 +9,7 @@ function weather(overrides: Partial<TodayWeatherSummary> = {}): TodayWeatherSumm
     description: 'céu limpo',
     conditionId: 800,
     rainExpected: false,
+    rainChancePercent: 0,
     periods: { morning: null, afternoon: null, evening: null },
     ...overrides,
   };
@@ -36,7 +37,7 @@ describe('buildWeatherTips', () => {
     const tips = buildWeatherTips(
       weather({ rainExpected: true, periods: { morning: { avgTempC: 22, rain: false }, afternoon: { avgTempC: 24, rain: true }, evening: null } }),
     );
-    expect(tips).toEqual(['Vai chover à tarde — leve o guarda-chuva.']);
+    expect(tips).toEqual(['☂️ Vai chover à tarde — leve o guarda-chuva.']);
   });
 
   it('chuva em mais de um período (ou sem detalhe) vira aviso genérico', () => {
@@ -47,11 +48,11 @@ describe('buildWeatherTips', () => {
     const tips = buildWeatherTips(
       weather({ minTempC: 14, maxTempC: 32, periods: { morning: { avgTempC: 15, rain: false }, afternoon: null, evening: null } }),
     );
-    expect(tips).toEqual(['Começa fresquinho, leve um casaco — esquenta ao longo do dia.', 'Calorão: capricha na água e no protetor solar.']);
+    expect(tips).toEqual(['🧥 Começa fresquinho, leve um casaco — esquenta ao longo do dia.', '🥵 Calorão: capricha na água e no protetor solar.']);
   });
 
   it('dia frio o dia todo', () => {
-    expect(buildWeatherTips(weather({ minTempC: 9, maxTempC: 16 }))).toEqual(['Dia frio — vá bem agasalhado.']);
+    expect(buildWeatherTips(weather({ minTempC: 9, maxTempC: 16 }))).toEqual(['🧥 Dia frio — vá bem agasalhado.']);
   });
 
   it('no máximo 2 dicas', () => {

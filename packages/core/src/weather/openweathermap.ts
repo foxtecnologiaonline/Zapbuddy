@@ -16,6 +16,8 @@ export interface TodayWeatherSummary {
   /** ID de condição do OpenWeatherMap (2xx trovoada, 3xx garoa, 5xx chuva, 6xx neve, 7xx névoa, 800 limpo, 80x nuvens) — pro emoji. */
   conditionId: number;
   rainExpected: boolean;
+  /** Maior chance de chuva (0-100) entre as janelas de 3h que restam do dia, como o provedor informa. */
+  rainChancePercent: number;
   /** Manhã (5h-11h), tarde (12h-17h) e noite (18h-23h) locais; null quando a previsão restante do dia não cobre o período. */
   periods: { morning: WeatherPeriod | null; afternoon: WeatherPeriod | null; evening: WeatherPeriod | null };
 }
@@ -88,6 +90,7 @@ export function summarizeForecast(
     description: midday.entry.weather[0]?.description ?? 'tempo variável',
     conditionId: midday.entry.weather[0]?.id ?? 800,
     rainExpected: todayEntries.some(({ entry }) => entryMeansRain(entry)),
+    rainChancePercent: Math.round(Math.max(...todayEntries.map(({ entry }) => entry.pop)) * 100),
     periods: {
       morning: summarizePeriod(inRange(5, 11)),
       afternoon: summarizePeriod(inRange(12, 17)),
