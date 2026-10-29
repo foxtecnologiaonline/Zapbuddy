@@ -92,3 +92,9 @@ do banco/da agenda, com aviso quando uma fonte falha; piada continua só sob ped
   "digitando…", reação cai no texto curto).
 - Não validado com usuários reais: observar (1) se a quebra em balões fica natural ou picotada, (2) quantos
   check-ins viram resposta vs. silêncio, (3) se o resumo da conversa mantém o que importa e não carrega ruído.
+
+## Adendo (2026-10-29): indicadores econômicos no bom dia
+
+Pedido do dono do produto depois de ver o resumo em produção. Detalhe na seção "Indicadores econômicos no bom dia" do CLAUDE.md.
+Escolhas: oferta **uma vez** e opt-in (a pessoa escolhe quais), reaproveitando `set_morning_digest_preferences` em vez de uma tool nova (orçamento
+de tools: o schema segue abaixo de 7,4 mil tokens, travado pelo teste), mensagem separada no fim do resumo e dados só do Banco Central.

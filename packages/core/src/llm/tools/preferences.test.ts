@@ -34,8 +34,33 @@ describe('set_morning_digest_preferences', () => {
 
     const result = await setMorningDigestPreferencesTool.execute({ hour: 7, include_finance: false }, ctx);
 
-    expect(saveMorningDigestPreferences).toHaveBeenCalledWith('u1', { enabled: undefined, hour: 7, includeAgenda: undefined, includeFinance: false });
-    expect(result).toEqual({ saved: true, enabled: true, hour: 7, include_agenda: true, include_finance: false });
+    expect(saveMorningDigestPreferences).toHaveBeenCalledWith('u1', { enabled: undefined, hour: 7, includeAgenda: undefined, includeFinance: false, indicators: undefined });
+    expect(result).toEqual({ saved: true, enabled: true, hour: 7, include_agenda: true, include_finance: false, indicators: [] });
+  });
+
+  it('indicadores econômicos: normaliza (sem lixo/repetição, na ordem de exibição) e devolve o estado', async () => {
+    vi.mocked(saveMorningDigestPreferences).mockResolvedValue({
+      morning_digest_enabled: true,
+      morning_digest_hour: 8,
+      morning_digest_agenda: true,
+      morning_digest_finance: true,
+      morning_digest_indicators: ['usd', 'selic'],
+    } as never);
+
+    const result = await setMorningDigestPreferencesTool.execute({ indicators: ['selic', 'usd', 'selic'] }, ctx);
+
+    expect(saveMorningDigestPreferences).toHaveBeenCalledWith('u1', expect.objectContaining({ indicators: ['usd', 'selic'] }));
+    expect(result).toMatchObject({ saved: true, indicators: ['usd', 'selic'] });
+  });
+
+  it('indicators vazio remove todos (e conta como mudança)', async () => {
+    vi.mocked(saveMorningDigestPreferences).mockResolvedValue({ morning_digest_indicators: [] } as never);
+    await setMorningDigestPreferencesTool.execute({ indicators: [] }, ctx);
+    expect(saveMorningDigestPreferences).toHaveBeenCalledWith('u1', expect.objectContaining({ indicators: [] }));
+  });
+
+  it('código inexistente é recusado pelo schema', () => {
+    expect(setMorningDigestPreferencesTool.schema.safeParse({ indicators: ['bitcoin'] }).success).toBe(false);
   });
 
   it('sem nenhum campo, não grava (update vazio)', async () => {

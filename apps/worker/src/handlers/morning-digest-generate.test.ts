@@ -7,6 +7,7 @@ vi.mock('@zapbuddy/db', () => ({
   listPendingTasksDueBetween: vi.fn(),
   listOverdueTasksAwaitingFollowUp: vi.fn(),
   markTaskFollowUpAsked: vi.fn(),
+  markIndicatorsOffered: vi.fn(),
   listImportantDates: vi.fn(),
   hasSentImportantDateReminderThisYear: vi.fn(),
   logImportantDateReminder: vi.fn(),
@@ -26,6 +27,8 @@ vi.mock('@zapbuddy/core', async () => {
     getTodayWeatherSummary: vi.fn(),
     getTodayAndTomorrowAgendaEvents: vi.fn(),
     sendWhatsappTextMessage: vi.fn(),
+    fetchMarketRate: vi.fn(),
+    appendTurns: vi.fn(),
   };
 });
 
@@ -41,9 +44,10 @@ import {
   listPendingTasksDueBetween,
   logImportantDateReminder,
   logger,
+  markIndicatorsOffered,
   summarizeTransactions,
 } from '@zapbuddy/db';
-import { getTodayAndTomorrowAgendaEvents, getTodayWeatherSummary, sendWhatsappTextMessage, type MorningDigestGenerateJob } from '@zapbuddy/core';
+import { appendTurns, fetchMarketRate, getTodayAndTomorrowAgendaEvents, getTodayWeatherSummary, sendWhatsappTextMessage, type MorningDigestGenerateJob } from '@zapbuddy/core';
 import { handleMorningDigestGenerate } from './morning-digest-generate.js';
 
 function job(data: Partial<MorningDigestGenerateJob> = {}): Job<MorningDigestGenerateJob> {
@@ -86,10 +90,75 @@ beforeEach(() => {
   vi.mocked(summarizeTransactions).mockReset().mockResolvedValue({ totalIncomeCents: 0, totalExpenseCents: 0, byCategory: {}, count: 0 });
   vi.mocked(sendWhatsappTextMessage).mockReset().mockResolvedValue(undefined);
   vi.mocked(logger.error).mockClear();
+  vi.mocked(fetchMarketRate).mockReset().mockResolvedValue(null);
+  vi.mocked(appendTurns).mockReset().mockResolvedValue(undefined);
+  vi.mocked(markIndicatorsOffered).mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe('indicadores econômicos', () => {
+  const rateOf = (indicator: string, value: number, referenceDate: string) => ({ indicator, label: indicator, value, unit: '', referenceDate, source: 'BCB' });
+
+  it('quem escolheu recebe a mensagem de indicadores depois do bom dia, só com os escolhidos', async () => {
+    vi.mocked(fetchMarketRate).mockImplementation(async (code) => (code === 'usd' ? rateOf('usd', 5.04, '2026-10-21') : rateOf('selic', 14.25, '2026-09-17')) as never);
+
+    await run({ ownerUserId: 'u1', indicators: ['usd', 'selic'], indicatorsOffered: true });
+
+    expect(fetchMarketRate).toHaveBeenCalledTimes(2);
+    expect(sent()).toHaveLength(2);
+    expect(sent()[0]).toContain('*Bom dia, Ana!*');
+    expect(sent()[1]).toContain('Indicadores de hoje');
+    expect(sent()[1]).toContain('Dólar');
+    expect(sent()[1]).toContain('Selic');
+    expect(sent()[1]).not.toContain('CDI');
+    expect(markIndicatorsOffered).not.toHaveBeenCalled();
+  });
+
+  it('fonte fora do ar: o indicador sai da mensagem; se nenhum veio, a mensagem não sai', async () => {
+    vi.mocked(fetchMarketRate).mockImplementation(async (code) => (code === 'usd' ? (rateOf('usd', 5.04, '2026-10-21') as never) : null));
+    await run({ ownerUserId: 'u1', indicators: ['usd', 'selic'], indicatorsOffered: true });
+    expect(sent()[1]).toContain('Dólar');
+    expect(sent()[1]).not.toContain('Selic');
+
+    vi.mocked(sendWhatsappTextMessage).mockClear();
+    vi.mocked(fetchMarketRate).mockResolvedValue(null);
+    await run({ ownerUserId: 'u1', indicators: ['usd'], indicatorsOffered: true });
+    expect(sent()).toHaveLength(1);
+  });
+
+  it('quem nunca foi perguntado recebe a oferta (uma vez): lista as opções, entra no histórico e marca', async () => {
+    await run({ ownerUserId: 'u1', indicators: [], indicatorsOffered: false });
+
+    expect(sent()).toHaveLength(2);
+    expect(sent()[1]).toContain('Quer indicadores econômicos no bom dia?');
+    expect(sent()[1]).toContain('Dólar');
+    expect(appendTurns).toHaveBeenCalledWith('5511999999999', [expect.objectContaining({ role: 'assistant', content: sent()[1] })]);
+    expect(markIndicatorsOffered).toHaveBeenCalledWith('u1');
+    expect(fetchMarketRate).not.toHaveBeenCalled();
+  });
+
+  it('já perguntado (ou sem dono no job) não recebe a oferta de novo', async () => {
+    await run({ ownerUserId: 'u1', indicators: [], indicatorsOffered: true });
+    await run({ indicators: [], indicatorsOffered: false });
+    expect(sent()).toHaveLength(2); // só a narrativa de cada execução
+    expect(markIndicatorsOffered).not.toHaveBeenCalled();
+  });
+
+  it('não pergunta no mesmo dia da pergunta de tarefa atrasada (fica pro dia seguinte, sem marcar)', async () => {
+    vi.mocked(listOverdueTasksAwaitingFollowUp).mockResolvedValue([{ id: 't1', title: 'Ligar pro contador', due_at: '2026-10-20T15:00:00+00:00' }] as never);
+    await run({ ownerUserId: 'u1', indicators: [], indicatorsOffered: false });
+    expect(sent().some((message) => message.includes('indicadores econômicos'))).toBe(false);
+    expect(markIndicatorsOffered).not.toHaveBeenCalled();
+  });
+
+  it('oferta que não foi entregue não é marcada (tenta de novo amanhã)', async () => {
+    vi.mocked(sendWhatsappTextMessage).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('rede'));
+    await run({ ownerUserId: 'u1', indicators: [], indicatorsOffered: false });
+    expect(markIndicatorsOffered).not.toHaveBeenCalled();
+  });
 });
 
 describe('handleMorningDigestGenerate', () => {

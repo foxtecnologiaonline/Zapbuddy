@@ -181,13 +181,24 @@ async function fetchTodayWeather(input: { latitude: number; longitude: number; t
  * (ou da mesma cidade) divide uma chamada só. Pedidos simultâneos pro mesmo
  * lugar (concurrency 5 do worker) compartilham a mesma requisição em voo.
  */
+let warnedMissingKey = false;
+/** Sem a chave o resumo sai sem clima em silêncio — um aviso (uma vez por processo) deixa o motivo nos logs do worker. */
+function warnMissingWeatherKeyOnce(): void {
+  if (warnedMissingKey) return;
+  warnedMissingKey = true;
+  logger.warn('weather_api_key_missing', { hint: 'OPENWEATHERMAP_API_KEY precisa estar no .env do WORKER (VPS), não só na Vercel' });
+}
+
 export async function getTodayWeatherSummary(input: {
   latitude: number;
   longitude: number;
   timezone: string;
 }): Promise<TodayWeatherSummary | null> {
   const apiKey = process.env.OPENWEATHERMAP_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    warnMissingWeatherKeyOnce();
+    return null;
+  }
 
   const today = datePartsInZone(input.timezone, new Date());
   const key = `${input.latitude.toFixed(2)},${input.longitude.toFixed(2)}|${input.timezone}|${today.year}-${today.month}-${today.day}`;

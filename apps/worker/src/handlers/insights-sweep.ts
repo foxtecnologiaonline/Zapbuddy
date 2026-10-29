@@ -149,6 +149,9 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
             digestHour: localHour,
             includeAgenda: account.morningDigestAgenda,
             includeFinance: account.morningDigestFinance,
+            ownerUserId: account.ownerUserId,
+            indicators: account.morningDigestIndicators,
+            indicatorsOffered: account.indicatorsOffered,
           },
           { jobId: `morning:${account.accountId}:${today.startIso.slice(0, 10)}` },
         );

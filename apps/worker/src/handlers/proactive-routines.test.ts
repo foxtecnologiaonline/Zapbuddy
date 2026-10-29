@@ -35,6 +35,8 @@ const account = {
   morningDigestHour: 8,
   morningDigestAgenda: true,
   morningDigestFinance: true,
+  morningDigestIndicators: [] as string[],
+  indicatorsOffered: true,
   userCreatedAt: '2026-10-01T00:00:00Z',
   routineCheckins: true,
   routineWeeklyTip: true,
