@@ -32,7 +32,7 @@ export const setEmailTool = defineTool({
   name: 'set_email',
   description:
     'Guarda o e-mail da pessoa, só quando ela mesma informar (nunca invente, nunca exija pra usar o Tom) — ' +
-    'útil pra ela recuperar acesso ao painel depois.',
+    'serve como segundo contato, útil se um dia ela precisar recuperar a conta.',
   schema: z.object({ email: z.string().email() }),
   execute: async (params, ctx) => {
     await saveUserEmail(ctx.userId, params.email);

@@ -206,7 +206,7 @@ export function formatHabitsAndGoals(habits: HabitLine[], goals: GoalDeadlineLin
     if (streak === 0) {
       lines.push(`• ${habit.name}: sem sequência por enquanto — hoje é um bom dia pra começar`);
     } else if (habit.doneToday) {
-      lines.push(`• ${habit.name}: ${days}${streak >= 2 ? ' 🔥' : ''} (hoje já marcado ✅)`);
+      lines.push(`• ${habit.name}: ${days}${streak >= 2 ? ' 🔥' : ''} (hoje já marcado)`);
     } else {
       lines.push(`• ${habit.name}: ${days}${streak >= 2 ? ' 🔥' : ''} — hoje ainda falta marcar`);
     }
@@ -264,7 +264,9 @@ export function formatTomorrowPreview(input: TomorrowPreviewInput, timeZone: str
   // Sem agenda nem tarefa não dá pra afirmar "nada marcado" (a busca pode ter falhado): só mostra se houver algo a dizer.
   if (agendaParts.length === 0 && weatherPart === null) return null;
   const agenda = agendaParts.length > 0 ? agendaParts.join(' e ') : null;
-  return `🔜 *Amanhã*: ${[agenda, weatherPart].filter((part): part is string => part !== null).join(' · ')}`;
+  // Um emoji por linha: a previsão (que tem o seu) vai na linha de baixo.
+  const head = agenda ? `🔜 *Amanhã*: ${agenda}` : '🔜 *Amanhã*';
+  return weatherPart ? `${head}\n${weatherPart}` : head;
 }
 
 // ---------------------------------------------------------------------------

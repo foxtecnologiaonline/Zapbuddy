@@ -146,3 +146,9 @@ docker compose up -d --build
   precisa estar em sync com os `package.json` dos workspaces; rode
   `npm install` localmente e commite o lockfile atualizado antes de
   reimplantar.
+
+## Painel e cobrança (interruptores)
+
+`DASHBOARD_ENABLED` e `BILLING_ENABLED` ficam **desligados por padrão** (2026-10, "inibir até próxima ordem"):
+não precisam estar no `.env`. Pra religar, coloque `true` neste `.env` **e** nas variáveis da Vercel e faça
+redeploy dos dois. Ver `docs/adr/0008-onboarding-sem-painel-e-sem-cobranca.md`.

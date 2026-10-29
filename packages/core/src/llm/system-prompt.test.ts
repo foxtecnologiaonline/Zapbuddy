@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@zapbuddy/db';
 import { buildSystemPrompt, buildSystemPromptBlocks } from './system-prompt.js';
 
@@ -49,6 +49,15 @@ function baseUser(overrides: Partial<User> = {}): User {
   };
 }
 
+
+// Painel e cobrança estão inibidos por padrão (features.ts). Os testes que cobrem o
+// comportamento deles LIGADOS chamam enableAll(); os do comportamento padrão não ligam nada.
+const enableAll = () => {
+  vi.stubEnv('DASHBOARD_ENABLED', 'true');
+  vi.stubEnv('BILLING_ENABLED', 'true');
+};
+afterEach(() => vi.unstubAllEnvs());
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 function createdDaysAgo(days: number): string {
   return new Date(Date.now() - days * DAY_MS).toISOString();
@@ -56,6 +65,7 @@ function createdDaysAgo(days: number): string {
 
 describe('buildSystemPrompt', () => {
   it('inclui a triagem de assunto com os 5 destinos esperados', () => {
+    enableAll();
     const prompt = buildSystemPrompt(baseUser());
 
     expect(prompt).toContain('Triagem de assunto');
@@ -102,7 +112,7 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
 
     expect(prompt).toContain('complete_onboarding');
-    expect(prompt).toMatch(/primeira interação/i);
+    expect(prompt).toMatch(/Estado atual: onboarding/);
   });
 
   it('não repete o bloco de onboarding pra usuário já cadastrado', () => {
@@ -118,6 +128,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('avisa que o teste tá no fim no último dia (3 dias de trial), sem forçar convite', () => {
+    enableAll();
     const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
 
     expect(prompt).toContain('Teste quase no fim');
@@ -126,6 +137,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('só segue o fluxo de assinatura se a PRÓPRIA pessoa trouxer o assunto — nunca empurra', () => {
+    enableAll();
     const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
 
     expect(prompt).toMatch(/se a PRÓPRIA pessoa trouxer o assunto/i);
@@ -134,6 +146,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('cita o preço real da assinatura e pede CPF/CNPJ, mas nunca inventa desconto, urgência falsa ou prova social', () => {
+    enableAll();
     const prompt = buildSystemPrompt(baseUser({ created_at: createdDaysAgo(2) }));
 
     expect(prompt).toMatch(/R\$ 27,90\/mês/);
@@ -150,6 +163,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('inclui a indicação proativa e o pedido de cancelamento pra qualquer usuário já cadastrado', () => {
+    enableAll();
     const prompt = buildSystemPrompt(baseUser({ plan_status: 'active', created_at: createdDaysAgo(30) }));
 
     expect(prompt).toContain('Indicação proativa');
@@ -161,38 +175,112 @@ describe('buildSystemPrompt', () => {
   });
 
   it('exige register_plan_intent antes de confirmar intenção de assinar ou cancelar', () => {
+    enableAll();
     const prompt = buildSystemPrompt(baseUser());
 
     expect(prompt).toMatch(/nunca diga "anotei"\/"vou providenciar" sem/i);
     expect(prompt).toContain('register_plan_intent');
   });
 
-  it('abertura é um script fixo em 3 frases (apresentação, aviso do teste de 3 dias, nome+e-mail) — não varia mais por onboarding_variant', () => {
-    const promptA = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_name_first' }));
-    const promptB = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_action_first' }));
+  describe('onboarding (painel e cobrança inibidos — padrão)', () => {
+    const onboardingPrompt = () => buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
 
-    for (const prompt of [promptA, promptB]) {
-      expect(prompt).toMatch(/Se apresente como o Tom/);
-      expect(prompt).toMatch(/teste grátis começa hoje e vale por 3 dias/);
-      expect(prompt).toMatch(/Pergunte o nome E o e-mail dela juntos/);
-    }
-    expect(promptA).toBe(promptB);
+    it('não vem do A/B: o mesmo texto pra qualquer variante', () => {
+      const a = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_name_first' }));
+      const b = buildSystemPrompt(baseUser({ onboarding_completed_at: null, onboarding_variant: 'ask_action_first' }));
+      expect(a).toBe(b);
+    });
+
+    it('passo 1: apresenta o Tom, diz o que ele faz e pergunta SÓ o nome (e-mail fica pra depois)', () => {
+      const prompt = onboardingPrompt();
+      expect(prompt).toContain('Eu sou o Tom, seu parceiro aqui no WhatsApp');
+      expect(prompt).toContain('Cuido da sua agenda, das tarefas, das notas e do seu dinheiro');
+      expect(prompt).toContain('como posso te chamar?');
+      expect(prompt).not.toMatch(/nome E o e-mail/);
+      expect(prompt).toMatch(/não peça agora/);
+    });
+
+    it('não fala de teste grátis nem de painel/link quando os recursos estão inibidos', () => {
+      const prompt = onboardingPrompt();
+      expect(prompt).not.toMatch(/3 dias de teste/);
+      expect(prompt).not.toContain('send_dashboard_login_link');
+      expect(prompt).not.toContain('register_plan_intent');
+      expect(prompt).toMatch(/por enquanto o Tom está liberado, sem cobrança/);
+    });
+
+    it('passo 2: complete_onboarding na hora, ocupação só como bônus, e 4 exemplos de uso (dinheiro, tarefa, nota, agenda)', () => {
+      const prompt = onboardingPrompt();
+      expect(prompt).toMatch(/Chame complete_onboarding na hora com o nome/);
+      expect(prompt).toMatch(/nunca pergunte isso/);
+      expect(prompt).toContain('💸 "gastei 45 no almoço"');
+      expect(prompt).toContain('✅ "me lembra de ligar pro dentista amanhã às 10"');
+      expect(prompt).toContain('📝 "anota: ideia de presente pra minha mãe"');
+      expect(prompt).toContain('📅 "o que eu tenho pra hoje?"');
+      expect(prompt).toContain('Qual é a primeira coisa que você quer organizar?');
+    });
+
+    it('o roteiro de referência respeita a regra: no máximo um emoji por linha', () => {
+      const referenceLines = onboardingPrompt()
+        .split('\n')
+        .filter((line) => /^["💸✅📝📅]/u.test(line));
+      expect(referenceLines.length).toBeGreaterThanOrEqual(8);
+      for (const line of referenceLines) {
+        expect(line.match(/\p{Extended_Pictographic}/gu)?.length ?? 0).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it('valor antes de burocracia: pedido na primeira mensagem é atendido antes de pedir o nome', () => {
+      expect(onboardingPrompt()).toMatch(/faça o pedido PRIMEIRO/);
+    });
+
+    it('trata os casos de borda: repetição, "o que você faz?", recusa de nome, sobrenome', () => {
+      const prompt = onboardingPrompt();
+      expect(prompt).toMatch(/Nunca repita a apresentação/);
+      expect(prompt).toMatch(/o que você faz\?/);
+      expect(prompt).toMatch(/aceite um apelido/);
+      expect(prompt).toMatch(/use só o primeiro nome/);
+    });
   });
 
-  it('se o e-mail vier junto do nome, chama set_email; se não vier, não insiste', () => {
-    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
-
-    expect(prompt).toContain('complete_onboarding');
-    expect(prompt).toMatch(/tiver dado o e-mail nessa resposta, chame set_email/);
-    expect(prompt).toMatch(/não der o e-mail agora, sem problema — não insista/);
+  describe('onboarding (painel e cobrança ligados)', () => {
+    it('volta o aviso dos 3 dias de teste e o link do painel nas boas-vindas', () => {
+      enableAll();
+      const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
+      expect(prompt).toContain('Você tem 3 dias de teste, por minha conta');
+      expect(prompt).toMatch(/chame send_dashboard_login_link e inclua o link nas boas-vindas/);
+    });
   });
 
-  it('onboarding instrui capturar ocupação como bônus e mandar o link do painel proativamente', () => {
-    const prompt = buildSystemPrompt(baseUser({ onboarding_completed_at: null }));
+  describe('painel e cobrança inibidos (padrão) — usuário já cadastrado', () => {
+    const registered = () => buildSystemPrompt(baseUser({ created_at: createdDaysAgo(10) }));
 
-    expect(prompt).toMatch(/nunca pergunte isso\s+separado nem insista/i);
-    expect(prompt).toMatch(/occupation só se ela\s+tiver mencionado o que faz/i);
-    expect(prompt).toMatch(/chame\s+send_dashboard_login_link e inclua o link na mesma mensagem/i);
+    it('o Tom não conhece send_dashboard_login_link nem register_plan_intent e não cita preço', () => {
+      const prompt = registered();
+      expect(prompt).not.toContain('send_dashboard_login_link');
+      expect(prompt).not.toContain('register_plan_intent');
+      expect(prompt).not.toMatch(/R\$ 27,90/);
+      expect(prompt).not.toContain('Momento de venda');
+      expect(prompt).not.toContain('Teste quase no fim');
+      expect(prompt).not.toContain('Pedido de cancelamento');
+    });
+
+    it('se perguntarem de preço/assinatura: liberado, sem cobrança, sem prometer futuro', () => {
+      expect(registered()).toMatch(/por enquanto o Tom está liberado, sem cobrança e sem plano/);
+    });
+
+    it('painel fora do ar: não inventa link e oferece mostrar na conversa', () => {
+      expect(registered()).toMatch(/o painel está fora do ar por enquanto/);
+    });
+
+    it('agenda não conectada: não manda ninguém pro painel, sugere salvar como tarefa', () => {
+      const prompt = registered();
+      expect(prompt).toMatch(/conectar\s+a agenda ainda não está disponível/);
+      expect(prompt).toMatch(/salvar o compromisso como tarefa/);
+    });
+
+    it('exportação: sem painel, não promete download', () => {
+      expect(registered()).toMatch(/a exportação completa não está disponível por enquanto/);
+    });
   });
 
   it('inclui a ocupação da pessoa como contexto quando já capturada, sem pedir de novo', () => {
@@ -271,7 +359,8 @@ describe('buildSystemPrompt', () => {
     const emojis = new Set(palette.match(/\p{Extended_Pictographic}/gu) ?? []);
 
     expect(emojis.size).toBeGreaterThanOrEqual(25);
-    expect(prompt).toMatch(/no máximo UM por mensagem/);
+    expect(prompt).toMatch(/no máximo UM por linha/);
+    expect(prompt).toMatch(/nunca dois na mesma linha/);
   });
 
   it('cobre a amplitude atual (agenda, meta, nota, financeiro) ao descrever o que o Tom faz, sem parar só no financeiro', () => {

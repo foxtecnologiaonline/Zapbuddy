@@ -126,8 +126,8 @@ const FREE_DAY_LINES = [
 ];
 const FOLLOW_UP_LINES = ['Já te mando o que tem pra hoje 👇', 'Olha o que tem pra hoje 👇'];
 const FREE_DAY_WITH_EXTRAS_LINES = [
-  'Seu dia está livre 😌 mas separei umas informações úteis pra você 👇',
-  'Nada marcado pra hoje 🙂 Olha o que separei pra você 👇',
+  'Seu dia está livre, mas separei umas informações úteis pra você 👇',
+  'Nada marcado pra hoje. Olha o que separei pra você 👇',
 ];
 const EXTRAS_ONLY_LINES = ['Separei umas informações úteis pra você 👇', 'Olha o que separei pra você hoje 👇'];
 
@@ -156,9 +156,9 @@ export function formatMorningNarrative(input: MorningNarrativeInput): string {
 
   const openerOptions = WEEKDAY_OPENERS[input.weekdayIndex];
   const opener = openerOptions ? `${pickVariant(openerOptions, input.month, input.day)} ` : '';
-  paragraphs.push(
-    `${opener}Hoje é *${input.weekdayLabel}, ${input.dateLabel}* — ${SEASON_PHRASE[input.season]} ${SEASON_EMOJI[input.season]}`,
-  );
+  // Regra de emoji: no máximo um por linha — a abertura (com o seu emoji) e a frase da estação ficam em linhas separadas.
+  const dateLine = `Hoje é *${input.weekdayLabel}, ${input.dateLabel}* — ${SEASON_PHRASE[input.season]} ${SEASON_EMOJI[input.season]}`;
+  paragraphs.push(opener ? `${opener.trim()}\n${dateLine}` : dateLine);
 
   if (input.weather) {
     const { minTempC, maxTempC, description, rainChancePercent, periods } = input.weather;
@@ -172,9 +172,8 @@ export function formatMorningNarrative(input: MorningNarrativeInput): string {
     const periodsLine = periodParts.length >= 2 ? `🌡️ ${periodParts.join(' · ')}` : null;
 
     const rainLine = rainChancePercent >= 20 ? `💧 Chance de chuva: ${rainChancePercent}%.` : null;
-    const tipsLine = [rainLine, ...buildWeatherTips(input.weather)].filter((part): part is string => part !== null).join(' ');
-
-    paragraphs.push([forecast, periodsLine, tipsLine || null].filter((part): part is string => part !== null).join('\n'));
+    const weatherLines = [forecast, periodsLine, rainLine, ...buildWeatherTips(input.weather)].filter((line): line is string => line !== null);
+    paragraphs.push(weatherLines.join('\n'));
   }
 
   if (input.holiday) {

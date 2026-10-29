@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { ToolDefinition } from './tool-types.js';
+import { isBillingEnabled, isDashboardEnabled } from '../features.js';
 import { recordTransactionTool, correctLastTransactionTool, getSummaryTool, setBudgetAlertTool } from './tools/finance.js';
 import { createTaskTool, listTasksTool, completeTaskTool, deleteTaskTool, updateTaskTool } from './tools/tasks.js';
 import { createReminderTool, cancelReminderTool, listRemindersTool, updateReminderTool } from './tools/reminders.js';
@@ -105,8 +106,19 @@ export const ALL_TOOLS: ToolDefinition<any>[] = [
   listMessageLogTool,
 ];
 
+/** Tools que só existem com o painel / a cobrança ligados (features.ts) — desligados, o modelo nem as vê. */
+const DASHBOARD_TOOLS = new Set(['send_dashboard_login_link']);
+const BILLING_TOOLS = new Set(['register_plan_intent']);
+
+/** As tools oferecidas ao modelo agora: ALL_TOOLS menos as dos recursos inibidos. */
+export function getActiveTools(): ToolDefinition<any>[] {
+  const dashboard = isDashboardEnabled();
+  const billing = isBillingEnabled();
+  return ALL_TOOLS.filter((tool) => (dashboard || !DASHBOARD_TOOLS.has(tool.name)) && (billing || !BILLING_TOOLS.has(tool.name)));
+}
+
 export function getToolByName(name: string) {
-  return ALL_TOOLS.find((tool) => tool.name === name);
+  return getActiveTools().find((tool) => tool.name === name);
 }
 
 /**
@@ -127,7 +139,7 @@ function toolParameterSchema(tool: ToolDefinition<any>): Record<string, unknown>
 
 /** Anthropic Messages API tool definitions (JSON Schema input). */
 export function toAnthropicToolSpecs(): Anthropic.Tool[] {
-  return ALL_TOOLS.map((tool) => ({
+  return getActiveTools().map((tool) => ({
     name: tool.name,
     description: tool.description,
     input_schema: toolParameterSchema(tool) as Anthropic.Tool['input_schema'],
@@ -136,7 +148,7 @@ export function toAnthropicToolSpecs(): Anthropic.Tool[] {
 
 /** OpenAI Chat Completions function-calling tool definitions — usado só pelo provider de fallback. */
 export function toOpenAiToolSpecs(): ChatCompletionTool[] {
-  return ALL_TOOLS.map((tool) => ({
+  return getActiveTools().map((tool) => ({
     type: 'function',
     function: {
       name: tool.name,

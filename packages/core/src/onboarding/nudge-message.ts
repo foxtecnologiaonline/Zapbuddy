@@ -4,15 +4,15 @@ import type { OnboardingNudgeStage } from '../queues/definitions.js';
 // insights/message.ts (template fixo, sem chamada ao LLM, mas isso não
 // precisa significar sempre a mesma frase).
 const NUDGE_2H_TEMPLATES = [
-  'Oi! Vi que a gente começou a se conhecer mas não terminou — me diz seu nome que eu já te mostro como funciono 🙂',
-  'Ei, ainda não peguei seu nome pra fechar seu cadastro. Me conta rapidinho que eu já começo a te ajudar.',
-  'Oi, sou eu de novo, o Tom 🙂 Falta só seu nome pra eu deixar tudo pronto por aqui.',
+  'Oi! Aqui é o Tom 🙂 A gente começou e não terminou — me diz como posso te chamar e já te mostro como funciono.',
+  'Ei, ainda não peguei seu nome. Me conta rapidinho que eu já começo a organizar sua agenda, suas tarefas e seus gastos.',
+  'Oi, sou eu de novo, o Tom 🙂 Falta só seu nome pra deixar tudo pronto por aqui.',
 ];
 
 const NUDGE_24H_TEMPLATES = [
-  'Ainda dá tempo de organizar seus gastos e tarefas comigo — é só me mandar seu nome que eu começo. Qualquer coisa, só escrever.',
-  'Fico por aqui se quiser continuar de onde paramos — só preciso do seu nome pra liberar seu cadastro.',
-  'Sem pressa, tá? Quando quiser retomar, me manda seu nome e a gente começa de onde parou — agenda, tarefas, gastos, o que for mais útil pra você.',
+  'Deixo a porta aberta por aqui 🙂 Me manda seu nome e a primeira coisa que você quer organizar — tarefa, gasto, lembrete, o que vier.',
+  'Fico por aqui se quiser continuar de onde paramos. Me diz seu nome e manda a primeira coisa (tipo "gastei 30 no almoço") que eu cuido do resto.',
+  'Sem pressa, tá? Quando quiser, me manda seu nome e a gente começa — agenda, tarefas, notas ou gastos, o que for mais útil pra você.',
 ];
 
 function pickTemplate(templates: string[]): string {

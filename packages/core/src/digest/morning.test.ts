@@ -291,7 +291,7 @@ describe('formatMorningNarrative — emojis e detalhe do tempo', () => {
   it('todo dia da semana tem abertura com emoji', () => {
     for (let weekdayIndex = 0; weekdayIndex <= 6; weekdayIndex++) {
       const text = formatMorningNarrative({ ...baseNarrative, weekdayIndex });
-      expect(text.split('\n\n')[1]).toMatch(/\p{Extended_Pictographic} Hoje é/u);
+      expect(text.split('\n\n')[1]).toMatch(/\p{Extended_Pictographic}\nHoje é/u);
     }
     expect(formatMorningNarrative({ ...baseNarrative, weekdayIndex: 3 })).toContain('Meio da semana, seguimos. 🙌');
   });
@@ -363,5 +363,31 @@ describe('composeMorningDigest — informações extras', () => {
     const messages = composeMorningDigest({ ...baseData, agendaEvents: [{ startIso: '2026-10-22T12:15:00.000Z', title: 'Dentista' }] });
     expect(messages[1]).toContain('⏰ Seu primeiro compromisso é às 9h15, daqui a 1h15.');
     expect(messages[1]!.indexOf('Dentista')).toBeLessThan(messages[1]!.indexOf('⏰ Seu primeiro'));
+  });
+});
+
+describe('regra de emoji: no máximo um por linha (narrativa)', () => {
+  const emojiCount = (line: string) => line.match(/\p{Extended_Pictographic}/gu)?.length ?? 0;
+
+  it('qualquer dia da semana, estação e clima', () => {
+    const rainy: TodayWeatherSummary = {
+      ...sunnyWeather,
+      conditionId: 500,
+      description: 'chuva leve',
+      rainExpected: true,
+      rainChancePercent: 70,
+      periods: { morning: { avgTempC: 19, rain: false }, afternoon: { avgTempC: 33, rain: true }, evening: { avgTempC: 22, rain: false } },
+      maxTempC: 33,
+    };
+    for (const weekdayIndex of [0, 1, 2, 3, 4, 5, 6]) {
+      for (const season of ['verão', 'outono', 'inverno', 'primavera'] as const) {
+        for (const extra of [{ nothingScheduled: true, extrasComing: true }, { followUpComing: true }, { extrasComing: true }]) {
+          for (const weather of [null, rainy]) {
+            const text = formatMorningNarrative({ ...baseNarrative, weekdayIndex, season, weather, ...extra });
+            for (const line of text.split('\n')) expect(emojiCount(line), line).toBeLessThanOrEqual(1);
+          }
+        }
+      }
+    }
   });
 });

@@ -417,6 +417,25 @@ a rodar o LLM** — `orchestrateTurn` intercepta antes (`packages/core/src/payme
   bloqueio agir — o convite único/loop de objeção limitado do ADR 0004 original continua valendo
   nesse caso oportunista, só não é mais forçado pelo Tom por conta própria.
 
+## Painel e cobrança inibidos; onboarding reescrito (2026-10, ordem do dono do produto — "até próxima ordem")
+
+Detalhe em `docs/adr/0008-onboarding-sem-painel-e-sem-cobranca.md`. **Isto sobrepõe o que as seções de vendas,
+trial e onboarding abaixo dizem sobre painel, teste de 3 dias, bloqueio e checkout enquanto os interruptores
+estiverem desligados** (e eles estão desligados por padrão — nada a configurar):
+
+- `DASHBOARD_ENABLED` / `BILLING_ENABLED` (`packages/core/src/features.ts`), só `true` liga. Desligado, o Tom não
+  oferece painel/link/exportação, ninguém é bloqueado por trial, e preço/plano/assinatura viram "por enquanto o
+  Tom está liberado, sem cobrança". O site mostra "painel indisponível" (`apps/web/middleware.ts`).
+- Conectar agenda (OAuth) depende do painel — novas conexões ficam indisponíveis; o Tom sugere salvar o
+  compromisso como tarefa com data e hora.
+- **Onboarding**: abertura = apresentação + o que faz + só o NOME (e-mail saiu da abertura, volta no cadastro
+  progressivo); pedido na primeira mensagem é atendido antes de pedir o nome; boas-vindas com 4 exemplos
+  concretos; primeira ação do 1º dia convida ao resumo matinal pedindo a cidade. Sobrepõe o roteiro de 3 frases
+  do amendamento de onboarding abaixo.
+- **Regra de emoji mudou** (pedido do dono do produto): **no máximo 1 emoji por LINHA** (antes: 1 por mensagem). Vale
+  pro prompt do Tom e pras mensagens automáticas (resumo da manhã etc., com teste que garante); mensagem de várias
+  linhas pode ter um emoji em cada linha, nunca dois na mesma.
+
 ## Onboarding turbinado (2026-10, motivo documentado)
 
 Decisão do usuário: implementar 7 das 10 sugestões de uma revisão de onboarding (sugestões 3, 4,

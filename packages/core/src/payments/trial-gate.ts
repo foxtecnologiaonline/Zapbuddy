@@ -2,6 +2,7 @@ import type { User } from '@zapbuddy/db';
 import { registerPlanIntent } from '@zapbuddy/db';
 import { generateUpgradeCheckout, normalizeCpfCnpj, isPlausibleCpfCnpj } from './upgrade-flow.js';
 import { MESSAGES } from '../messages.js';
+import { isBillingEnabled } from '../features.js';
 
 /**
  * Teste grátis de 3 dias com bloqueio REAL de uso (2026-10, pedido explícito
@@ -12,6 +13,8 @@ import { MESSAGES } from '../messages.js';
  * sentido alguém que já cancelou continuar com acesso de graça.
  */
 export function isAccessBlocked(user: User): boolean {
+  // Cobrança inibida até próxima ordem (features.ts): ninguém é bloqueado, nem quem cancelou.
+  if (!isBillingEnabled()) return false;
   if (user.plan_status === 'active') return false;
   if (user.plan_status === 'canceled') return true;
   return new Date(user.trial_ends_at).getTime() <= Date.now();

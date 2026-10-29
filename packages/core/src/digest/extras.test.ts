@@ -135,7 +135,7 @@ describe('hábitos e metas', () => {
     );
     expect(text).toContain('🎯 *Hábitos e metas*');
     expect(text).toContain('• Caminhada: 5 dias seguidos 🔥 — hoje ainda falta marcar');
-    expect(text).toContain('• Leitura: 2 dias seguidos 🔥 (hoje já marcado ✅)');
+    expect(text).toContain('• Leitura: 2 dias seguidos 🔥 (hoje já marcado)');
     expect(text).toContain('• Meta Viagem: 60% (R$ 3.000,00 de R$ 5.000,00) — prazo em 12 dias');
     expect(text).toContain('Fez algum hoje?');
   });
@@ -167,12 +167,12 @@ describe('prévia de amanhã', () => {
       },
       TZ,
     );
-    expect(text).toBe('🔜 *Amanhã*: 2 compromissos (o primeiro às 9h: Dentista) e 1 tarefa · 🌧️ 17°C a 29°C, chuva leve (70% de chuva)');
+    expect(text).toBe('🔜 *Amanhã*: 2 compromissos (o primeiro às 9h: Dentista) e 1 tarefa\n🌧️ 17°C a 29°C, chuva leve (70% de chuva)');
   });
 
   it('só a previsão, quando não há agenda — sem afirmar "nada marcado"', () => {
     const text = formatTomorrowPreview({ events: [], tasks: [], weather: { ...weather, rainChancePercent: 10 } }, TZ);
-    expect(text).toBe('🔜 *Amanhã*: 🌧️ 17°C a 29°C, chuva leve');
+    expect(text).toBe('🔜 *Amanhã*\n🌧️ 17°C a 29°C, chuva leve');
     expect(text).not.toContain('nada');
   });
 
@@ -192,5 +192,23 @@ describe('formatMorningExtras', () => {
     )!;
     expect(text.split('\n\n')).toHaveLength(2);
     expect(text.startsWith('🗓️ Hoje: aniversário da Ana')).toBe(true);
+  });
+});
+
+describe('regra de emoji: no máximo um por linha', () => {
+  const emojiCount = (line: string) => line.match(/\p{Extended_Pictographic}/gu)?.length ?? 0;
+
+  it('todas as seções de extras, no cenário mais cheio possível', () => {
+    const text = formatMorningExtras(
+      {
+        importantDates: [{ id: 'a', label: 'aniversário da Ana', offsetDays: 0, weekdayLabel: 'Quinta' }],
+        finance: { yesterdayExpenseCents: 8500, monthExpenseCents: 180000, previousMonthExpenseCents: 200000, budgets: [{ category: 'mercado', limitCents: 100000, spentCents: 120000 }] },
+        habits: [{ name: 'Caminhada', currentStreak: 5, doneToday: true }, { name: 'Leitura', currentStreak: 2, doneToday: false }],
+        goals: [{ title: 'Viagem', savedCents: 300000, targetCents: 500000, daysLeft: 3 }],
+        tomorrow: { events: [{ startIso: '2026-10-23T12:00:00.000Z', title: 'Consulta' }], tasks: [{ title: 'x' }], weather: { minTempC: 17, maxTempC: 27, description: 'céu limpo', conditionId: 800, rainChancePercent: 60 } },
+      },
+      TZ,
+    )!;
+    for (const line of text.split('\n')) expect(emojiCount(line), line).toBeLessThanOrEqual(1);
   });
 });

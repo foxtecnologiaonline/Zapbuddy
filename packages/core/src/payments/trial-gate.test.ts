@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 const db = vi.hoisted(() => ({ registerPlanIntent: vi.fn().mockResolvedValue(undefined) }));
 const upgradeFlow = vi.hoisted(() => ({ generateUpgradeCheckout: vi.fn() }));
@@ -26,7 +26,10 @@ function baseUser(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('isAccessBlocked', () => {
+describe('isAccessBlocked — cobrança ligada', () => {
+  beforeEach(() => vi.stubEnv('BILLING_ENABLED', 'true'));
+  afterEach(() => vi.unstubAllEnvs());
+
   it('nunca bloqueia assinante ativo, mesmo com trial_ends_at no passado', () => {
     expect(isAccessBlocked(baseUser({ plan_status: 'active', trial_ends_at: new Date(Date.now() - 1000).toISOString() }))).toBe(false);
   });
@@ -41,6 +44,24 @@ describe('isAccessBlocked', () => {
 
   it('bloqueia trial com trial_ends_at no passado', () => {
     expect(isAccessBlocked(baseUser({ trial_ends_at: new Date(Date.now() - 1000).toISOString() }))).toBe(true);
+  });
+});
+
+describe('isAccessBlocked — cobrança inibida (padrão, até próxima ordem)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('ninguém é bloqueado: nem trial vencido, nem quem cancelou', () => {
+    const expired = new Date(Date.now() - 1000).toISOString();
+    expect(isAccessBlocked(baseUser({ trial_ends_at: expired }))).toBe(false);
+    expect(isAccessBlocked(baseUser({ plan_status: 'canceled' }))).toBe(false);
+  });
+
+  it('só a variável exatamente "true" liga a cobrança (qualquer outra coisa segue desligada)', () => {
+    const expired = new Date(Date.now() - 1000).toISOString();
+    vi.stubEnv('BILLING_ENABLED', '1');
+    expect(isAccessBlocked(baseUser({ trial_ends_at: expired }))).toBe(false);
+    vi.stubEnv('BILLING_ENABLED', 'true');
+    expect(isAccessBlocked(baseUser({ trial_ends_at: expired }))).toBe(true);
   });
 });
 

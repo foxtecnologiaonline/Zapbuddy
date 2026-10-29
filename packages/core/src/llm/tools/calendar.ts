@@ -14,9 +14,9 @@ import { assertPlausibleTimestamp } from '../date-sanity.js';
 export const createCalendarEventTool = defineTool({
   name: 'create_calendar_event',
   description:
-    'Cria um evento na agenda conectada da conta (Google ou Outlook). Exige que a conta já tenha conectado ' +
-    'uma agenda pelo dashboard (send_dashboard_login_link) — se connected:false vier no retorno, diga à ' +
-    'pessoa que ela precisa conectar a agenda no painel antes.',
+    'Cria um evento na agenda conectada da conta (Google ou Outlook). Exige que a conta já tenha uma agenda ' +
+    'conectada — se connected:false vier no retorno, a agenda não está conectada: siga as instruções do ' +
+    'sistema sobre isso (não tente de novo na mesma resposta).',
   schema: z.object({
     summary: z.string().min(1),
     start_at: z.string().datetime(),
