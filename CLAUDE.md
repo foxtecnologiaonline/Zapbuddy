@@ -123,6 +123,40 @@ Entram no código, por pedido explícito, mesmo fora da ordem de fases:
 
 Migration `0019_personal_assistant.sql` precisa ser aplicada no Supabase antes do deploy (a `0018` é de `personal_assistant_expansion`, da `main`).
 
+## Estado vigente e precedência (2026-11, consolidação — leia antes das emendas abaixo)
+
+Este arquivo cresceu por emendas empilhadas, e algumas se contradizem no texto histórico. Regra de
+leitura: **a emenda mais nova prevalece; na dúvida, vale o código e os ADRs (`docs/adr/`).** O que está
+vigente hoje:
+
+- **Fase**: MVP + Fase 2 (sem Open Finance) + Fase 3 (sem cobrança a terceiros/nota fiscal) + expansão B2C
+  estão implementados. O trabalho agora é endurecimento, validação com usuário real e decisões de plano
+  (Redis) e de cobrança — não features novas de roadmap.
+- **Painel e cobrança**: desligados por padrão (`DASHBOARD_ENABLED`/`BILLING_ENABLED`, ADR 0008). Onde as
+  seções de vendas/trial/onboarding abaixo falam de painel, preço, teste de 7 ou 3 dias, bloqueio e checkout,
+  isso descreve o código **quando as flags estão ligadas**. Trial vigente (se religado): **3 dias**, nunca 7.
+- **Onboarding**: abertura = apresentação + só o NOME (ADR 0008). O roteiro de "3 frases com nome e e-mail" e o
+  teste A/B de abertura citados abaixo estão superados.
+- **Emoji**: no máximo 1 por LINHA (não por mensagem).
+- **Entrada pública**: `/` é a landing (`docs/adr/0010-landing-page.md`), com texto em função das flags.
+- **Branch/fluxo**: o fluxo "commit direto em `main`" abaixo vale para sessões sem branch designada; uma sessão
+  com branch própria designada pelo ambiente (`claude/*`) trabalha nela e só integra em `main` por pedido.
+- **Migrations**: ordem completa no README. Duas têm prefixo `0022` (independentes). A `0029`
+  (`morning_digest_indicators`) é a mais recente. Aplicar no Supabase **antes** do deploy do código que a usa
+  (o worker faz deploy automático em push na `main`).
+
+**Segurança (2026-11, integrado da branch `ccr-3430b98a-uhjeh9`)**: webhooks de saída com guarda anti-SSRF
+(`packages/core/src/security/ssrf-guard.ts`: valida a URL no cadastro, resolve o DNS na entrega, recusa IP
+privado/metadata, não segue redirect); open redirect do admin corrigido; headers HTTP de segurança e `no-store`
+em dashboard/admin; JSON inválido nos webhooks vira 400; nome de arquivo do remetente sanitizado na chave do
+Storage. Dependências: `next` 15.5.29 (zera o crítico de execução remota via imagem SVG) e override global do
+`postcss` (>= 8.5.23).
+**Risco aceito, com motivo:** `npm audit` ainda lista `zod` (alto, memória em coleção enorme; correção exige a major
+4) e um `next` moderado (correção só no Next 16, major). `zod` só valida argumentos de tool gerados pelo LLM — nada
+do `apps/web` nem payload externo — e a migração toca ~20 tools e o gerador de JSON Schema (`zod-to-json-schema`,
+só v3), com o orçamento de tokens das tools sob teste. Reavaliar ao subir o Next para 16. O CI bloqueia só em nível
+crítico (`npm audit --omit=dev --audit-level=critical`).
+
 ## Stack (decidida — não revisitar sem motivo forte)
 
 - **Backend:** Node.js + TypeScript

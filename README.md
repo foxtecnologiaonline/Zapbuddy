@@ -1,7 +1,9 @@
 # ZapBuddy
 
-Assistente financeiro e de produtividade via WhatsApp para autônomos e
-pequenos negócios (MEI/PJ). O nome do assistente que o usuário vê é
+Parceiro pessoal 24 horas via WhatsApp (B2C, pessoa física) para gestão do
+tempo (agenda e compromissos), tarefas e notas pessoais e gestão
+financeira pessoal. Não é produto de gestão empresarial (MEI/PJ, DAS e
+nota fiscal ficaram de fora de propósito — ver `CLAUDE.md`). O nome do assistente que o usuário vê é
 **Tom** — "ZapBuddy" é o produto/plataforma, "Tom" é a persona de IA
 dentro dele.
 
@@ -90,7 +92,7 @@ deploy/
   e aprendizado contínuo" no `CLAUDE.md`
 
 ### `apps/worker/src`
-- `worker.ts` — os 10 workers BullMQ (mensagem recebida, transcrição de
+- `worker.ts` — os 10 workers BullMQ (um por fila de `QUEUE_NAMES`) (mensagem recebida, transcrição de
   áudio, disparo de lembrete, upload de documento, sweep + geração de
   insight proativo, disparo de webhook, resumo semanal/matinal, lembrete
   de data importante) — registra também o job repetível de sweep de
@@ -153,8 +155,8 @@ separada de `personal_goals`, que é qualitativa) →
 assinatura via Asaas, R$ 27,90/mês, ver amendamento 2026-10 em
 `docs/adr/0004-*.md`) →
 `0021_cadastro_progressivo.sql` (`users.email`/`quiet_hours_confirmed_at`/
-`preferred_payment_method` — cadastro progressivo ao longo do teste de 7
-dias via `update_occupation`/`set_email`/`set_quiet_hours`; método de
+`preferred_payment_method` — cadastro progressivo ao longo do teste (7 dias na época; hoje 3, ver
+`0023`) via `update_occupation`/`set_email`/`set_quiet_hours`; método de
 pagamento salvo sozinho pelo webhook da Asaas, nunca perguntado em
 conversa — ver `CLAUDE.md`) →
 `0022_calendar_multi_provider.sql` (`calendar_connections.provider` +
@@ -163,9 +165,23 @@ renomeia `google_refresh_token_encrypted`/`google_calendar_id` pra
 Google, uma agenda conectada por conta, ver `CLAUDE.md`) →
 `0023_trial_3_dias.sql` (`users.trial_ends_at` — trial vira 3 dias com
 bloqueio real de uso fora do LLM, era 7 dias sem bloqueio nenhum; ver
-`packages/core/src/payments/trial-gate.ts` e `CLAUDE.md`).
+`packages/core/src/payments/trial-gate.ts` e `CLAUDE.md`) →
+`0022_task_follow_up.sql` (`tasks.follow_up_asked_at` — pergunta de
+conclusão de tarefa atrasada; tem o mesmo prefixo `0022` da migration de
+agenda, mas é independente e idempotente, a ordem entre as duas não
+importa) → `0024_morning_digest_prefs.sql` (cidade real e preferências do
+resumo matinal) → `0025_habits.sql` (`habits`/`habit_checkins`) →
+`0026_semantic_search_and_document_reading.sql` (busca semântica em notas
+e documentos, leitura de foto/PDF) → `0027_contacts_and_message_drafts.sql`
+(`contacts`/`message_drafts` — recados que o Tom redige e a pessoa envia,
+ver `docs/adr/0007-*.md`) → `0028_tom_capabilities.sql` (listas, parcelas,
+resumo rolante da conversa, `proactive_message_logs`, `routine_*` de
+`users`, ver `docs/adr/0009-*.md`) → `0029_morning_digest_indicators.sql`
+(`users.morning_digest_indicators` — indicadores econômicos no bom dia).
 Rodar em ordem, manualmente, no
-SQL Editor do Supabase. Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
+SQL Editor do Supabase. **O worker em produção seleciona colunas das
+migrations mais recentes: aplicar a migration ANTES de dar deploy do código
+que a usa** (deploy do worker é automático em push na `main`). Ver `docs/adr/0002-*.md`, `docs/adr/0003-*.md`,
 `docs/adr/0004-*.md` e `docs/adr/0005-*.md` pras decisões por trás das
 Fases 2, 3, do momento de venda/indicação e do onboarding turbinado.
 
@@ -266,6 +282,17 @@ npm test                # vitest — lógica pura (categorias, timezone, sessão
 npm run build           # build de produção de todos os workspaces
 ```
 
+### Interruptores de produto (painel e cobrança)
+
+`DASHBOARD_ENABLED` e `BILLING_ENABLED` (`packages/core/src/features.ts`) estão
+**desligados por padrão** — ordem do dono do produto, ver
+`docs/adr/0008-onboarding-sem-painel-e-sem-cobranca.md`. Desligados: o site mostra a
+landing em `/` (`docs/adr/0010-landing-page.md`) e "painel indisponível" nas telas do
+painel; ninguém é bloqueado por trial; o Tom não fala de preço, teste, painel nem link
+de acesso. Para religar: variável `true` no worker (`deploy/worker/.env`) **e** na
+Vercel, mais redeploy. As seções de painel, dashboard e cobrança deste README descrevem
+o que existe no código, não necessariamente o que está ligado.
+
 ### Variáveis de ambiente
 
 Ver `.env.example` pra lista completa e comentada. Resumo do que é
@@ -283,6 +310,7 @@ obrigatório:
 | `ADMIN_PASSWORD` | Login do painel admin (`/admin`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Fase 2 — OAuth do Google Agenda. Sem isso, o botão "Conectar Google Agenda" do dashboard falha |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_REDIRECT_URI` | 2026-10 — OAuth do Outlook. Sem isso, o botão "Conectar Outlook" falha de forma controlada, sem afetar o Google |
+| `TOM_WHATSAPP_NUMBER` | Número real do WhatsApp do Tom (só dígitos). Monta o link `wa.me` da landing e da indicação; sem ele a landing não gera link quebrado |
 | `TOKEN_ENCRYPTION_KEY` | Criptografa o refresh token da agenda conectada (Google ou Microsoft) em repouso — obrigatório se qualquer uma for usada. Sem nenhuma conectada, `create_calendar_event`/`list_calendar_events` sempre retornam `connected: false` |
 
 ## Deploy
@@ -308,10 +336,11 @@ obrigatório:
 
 ## Testes
 
-`npm test` roda a suíte vitest — cobre lógica pura sem dependências
-externas (normalização de categoria, matemática de timezone, sessão de
-auth, heurística de detecção de alucinação do Whisper, templates de
-insight proativo). Não cobre integração real com Claude/Supabase/WhatsApp
+`npm test` roda a suíte vitest (80+ arquivos, 700+ testes) — cobre lógica pura sem
+dependências externas (categorias, timezone, sessão, Whisper, insights, resumo matinal,
+comandos, regras de copy da landing, SSRF, orçamento de tokens das tools).
+O CI (`.github/workflows/ci.yml`) roda typecheck, testes, build do web e
+`npm audit` de produção (bloqueia só em nível crítico). Não cobre integração real com Claude/Supabase/WhatsApp
 nem a detecção de sinal em si (depende de `summarizeTransactions` no
 banco) — isso é validado manualmente, ponta a ponta, mandando mensagem
 pro número conectado.
