@@ -16,3 +16,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck --workspaces --if-present
       - run: npm test
+      - run: npm run build --workspace=apps/web
+      # Bloqueia só vulnerabilidade crítica em dependência de produção. `zod` (alto,
+      # exige major 4) está como risco aceito — ver CLAUDE.md, seção de segurança.
+      - run: npm audit --omit=dev --audit-level=critical
