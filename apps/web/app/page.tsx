@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { isBillingEnabled, isDashboardEnabled } from '@zapbuddy/core';
 import { getCurrentUserId } from '@/lib/auth';
 import { Landing } from './landing/Landing';
 
@@ -16,9 +17,18 @@ export const metadata: Metadata = {
   },
 };
 
-/** Quem já tem sessão vai pro painel; visitante vê a LP de apresentação. */
+/** Flags e número do WhatsApp são variáveis de runtime: a página nunca pode ser prerenderizada no build. */
+export const dynamic = 'force-dynamic';
+
+/**
+ * Quem já tem sessão vai pro painel (se estiver ligado); visitante vê a LP de apresentação.
+ * Flags lidas a cada request: ligar/desligar painel ou cobrança é só variável + redeploy.
+ */
 export default async function Home() {
-  const userId = await getCurrentUserId();
-  if (userId) redirect('/dashboard');
-  return <Landing />;
+  const dashboard = isDashboardEnabled();
+  if (dashboard) {
+    const userId = await getCurrentUserId();
+    if (userId) redirect('/dashboard');
+  }
+  return <Landing billing={isBillingEnabled()} dashboard={dashboard} />;
 }

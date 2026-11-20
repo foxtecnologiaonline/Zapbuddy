@@ -3,12 +3,22 @@ import { formatMonthlyPriceBRL } from '@zapbuddy/core';
 /**
  * Copy da LP do Tom. Dado puro, sem JSX — as regras de produto (sem prova social inventada, sem
  * promessa de rendimento, só o que existe no código) são checadas em content.test.ts.
- * Ver docs/adr/0006-landing-page.md.
+ * Ver docs/adr/0010-landing-page.md.
  */
 
 export const PRICE_LABEL = formatMonthlyPriceBRL();
 
-export const TRIAL_DAYS = 7;
+/** Duração do teste (default de `users.trial_ends_at`, migration 0023). Só aparece com cobrança ligada. */
+export const TRIAL_DAYS = 3;
+
+/**
+ * Interruptores de produto (ADR 0008): com painel e cobrança desligados — o padrão — a LP não
+ * pode prometer preço, teste, painel, exportação nem CPF. Lidos em runtime pela página.
+ */
+export interface LandingFlags {
+  billing: boolean;
+  dashboard: boolean;
+}
 
 export const PREFILLED_MESSAGE = 'Oi, Tom!';
 
@@ -18,7 +28,6 @@ export const HERO = {
   subtitle:
     'O Tom te ouve, te responde e cuida da sua agenda, das suas tarefas, das suas notas e do seu dinheiro. Você fala do jeito que falaria com um amigo, em texto ou áudio. Ele anota, lembra e sugere o próximo passo.',
   ctaLabel: 'Começar pelo WhatsApp',
-  microcopy: `${TRIAL_DAYS} dias de teste · depois ${PRICE_LABEL}/mês`,
   chat: [
     { from: 'user', text: 'gastei 80 no mercado' },
     { from: 'tom', text: 'Fechou, 80 conto de mercado anotado 🛒' },
@@ -26,6 +35,12 @@ export const HERO = {
     { from: 'tom', text: 'Anotado! ✅\nLigar pro contador, sexta.' },
   ] as const,
 };
+
+export function heroMicrocopy({ billing }: LandingFlags): string {
+  return billing
+    ? `${TRIAL_DAYS} dias de teste · depois ${PRICE_LABEL}/mês`
+    : 'Liberado por enquanto, sem cobrança';
+}
 
 export const PILLARS = {
   title: 'Do jeito que você já fala',
@@ -95,8 +110,8 @@ export const PROACTIVE = {
     'Muita ferramenta só responde quando você lembra de abrir. O Tom antecipa o que importa no seu dia.',
   items: [
     {
-      title: 'Resumo matinal, às 8h',
-      text: 'Agenda do dia, tarefas de hoje e atrasadas, contas que vencem em até 3 dias. Só manda se houver algo pra mostrar.',
+      title: 'Resumo matinal',
+      text: 'Um bom dia com a previsão do tempo, a agenda e as tarefas de hoje e as contas que vencem hoje. Você escolhe o horário, e agenda e contas só vêm se houver algo pra mostrar.',
     },
     {
       title: 'Horário de silêncio',
@@ -109,7 +124,8 @@ export const PROACTIVE = {
   ],
 } as const;
 
-export const HOW_IT_WORKS = {
+export function howItWorks({ dashboard }: LandingFlags) {
+  return {
   title: 'Como funciona',
   steps: [
     {
@@ -122,43 +138,55 @@ export const HOW_IT_WORKS = {
     },
     {
       title: 'Você acompanha',
-      text: 'No painel web você vê gastos, tarefas, notas e uma linha do tempo da semana.',
+      text: dashboard
+        ? 'No painel web você vê gastos, tarefas, notas e uma linha do tempo da semana.'
+        : 'É só perguntar: "o que tenho hoje?", "quanto gastei no mês?". Ele responde na hora.',
     },
   ],
-} as const;
+  } as const;
+}
 
-export const CONTROL = {
-  title: 'Seus dados, sob seu controle',
-  items: [
-    'Veja o que o Tom lembra de você e apague o que não quiser que ele guarde.',
-    'Desfaz a última coisa que ele anotou, nos 10 minutos seguintes.',
-    'Exporte tudo o que você registrou, em JSON, quando quiser.',
-    'O Tom não conecta na sua conta bancária. Ele só sabe o que você contar.',
-  ],
-} as const;
+export function control({ dashboard }: LandingFlags) {
+  return {
+    title: 'Seus dados, sob seu controle',
+    items: [
+      dashboard
+        ? 'Veja o que o Tom lembra de você e apague o que não quiser que ele guarde.'
+        : 'Peça pro Tom esquecer o que você não quer que ele guarde, e ele apaga.',
+      'Desfaz a última coisa que ele anotou, nos 10 minutos seguintes.',
+      ...(dashboard ? ['Exporte tudo o que você registrou, em JSON, quando quiser.'] : []),
+      'O Tom não conecta na sua conta bancária. Ele só sabe o que você contar.',
+    ],
+  };
+}
 
-export const PRICING = {
-  title: 'Um preço só, sem plano escondido',
-  price: PRICE_LABEL,
-  period: '/mês',
-  trialLine: `${TRIAL_DAYS} dias de teste para sentir o ritmo antes de pagar.`,
-  includes: [
-    'Agenda, tarefas, lembretes, notas e metas pessoais',
-    'Financeiro pessoal com resumo semanal',
-    'Resumo matinal e avisos proativos, com horário de silêncio',
-    'Painel web e exportação dos seus dados',
-  ],
-  payment:
-    'Pagamento por PIX, boleto ou cartão. Ao fechar, pedimos CPF (ou CNPJ), que é exigência do meio de pagamento.',
-};
+export function pricing({ dashboard }: LandingFlags) {
+  return {
+    title: 'Um preço só, sem plano escondido',
+    price: PRICE_LABEL,
+    period: '/mês',
+    trialLine: `${TRIAL_DAYS} dias de teste para sentir o ritmo antes de pagar.`,
+    includes: [
+      'Agenda, tarefas, lembretes, notas e metas pessoais',
+      'Financeiro pessoal com resumo semanal',
+      'Resumo matinal e avisos proativos, com horário de silêncio',
+      ...(dashboard ? ['Painel web e exportação dos seus dados'] : []),
+    ],
+    payment:
+      'Pagamento por PIX, boleto ou cartão. Ao fechar, pedimos CPF (ou CNPJ), que é exigência do meio de pagamento.',
+  };
+}
 
-export const FAQ = {
+export function faq({ billing, dashboard }: LandingFlags) {
+  return {
   title: 'Perguntas comuns',
   items: [
     {
       question: 'Preciso instalar algum aplicativo?',
       answer:
-        'Não. Tudo começa no WhatsApp. O painel no navegador é opcional, e o link de acesso chega pelo próprio WhatsApp.',
+        dashboard
+          ? 'Não. Tudo começa no WhatsApp. O painel no navegador é opcional, e o link de acesso chega pelo próprio WhatsApp.'
+          : 'Não. Tudo acontece na conversa do WhatsApp.',
     },
     {
       question: 'Serve pra MEI ou autônomo?',
@@ -180,13 +208,17 @@ export const FAQ = {
       answer:
         'Sim, 24 horas. Os avisos por iniciativa dele respeitam o horário de silêncio que você escolher.',
     },
-    {
-      question: 'Como cancelo?',
-      answer:
-        'Avise pelo WhatsApp e uma pessoa do time cuida do cancelamento.',
-    },
+    ...(billing
+      ? [
+          {
+            question: 'Como cancelo?',
+            answer: 'Avise pelo WhatsApp e uma pessoa do time cuida do cancelamento.',
+          },
+        ]
+      : []),
   ],
-} as const;
+  };
+}
 
 export const FINAL_CTA = {
   title: 'Manda um oi pro Tom e veja em um minuto.',

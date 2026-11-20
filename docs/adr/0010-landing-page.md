@@ -1,7 +1,27 @@
-# ADR 0006 — Landing page pública do Tom
+# ADR 0010 — Landing page pública do Tom
 
 **Status:** aceito e implementado (2026-10). Escopo: a página pública em `/` que apresenta o Tom a
 quem ainda não tem conta e leva pro WhatsApp. Não cobre SEO avançado, analytics nem A/B de copy.
+
+## Amendamento 2026-11 (integração na `main`)
+
+A LP nasceu em 2026-10-19, antes do ADR 0008 (painel e cobrança inibidos) e da regra de 3 dias de
+teste. Ao integrar na `main` (renumerada de 0006 para 0010, que colidia com o ADR do alcance do Tom)
+foi alinhada ao estado real do produto:
+
+- **Texto em função das flags** (`LandingFlags` em `content.ts`, lidas em runtime por `page.tsx`):
+  com `BILLING_ENABLED` desligado (padrão) não há preço, teste, CPF, seção de preço nem pergunta de
+  cancelamento — só "Liberado por enquanto, sem cobrança", sem prazo nem promessa de futuro. Com
+  `DASHBOARD_ENABLED` desligado (padrão) não há "Entrar", painel nem exportação no texto. Ligadas, o
+  texto volta (teste de **3** dias, não 7).
+- **Middleware**: `/` saiu do matcher — antes, com o painel desligado, a LP seria substituída por
+  "painel indisponível". `page.tsx` só redireciona logado → `/dashboard` se o painel estiver ligado.
+- **Número do WhatsApp**: usa `TOM_WHATSAPP_NUMBER` (o mesmo do resto do produto, lido no servidor em
+  runtime) em vez de uma `NEXT_PUBLIC_TOM_WHATSAPP_NUMBER` própria. Sem número, o CTA cai em
+  `#como-funciona` (ou `#precos` com cobrança) em vez de um link quebrado.
+- **Resumo matinal** descrito como hoje (previsão, agenda e tarefas de hoje, contas de hoje, horário
+  escolhido), sem "atrasadas" nem "3 dias".
+- Testes cobrem as duas combinações de flags e as regras de copy em cada uma.
 
 ## Contexto
 

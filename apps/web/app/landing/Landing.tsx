@@ -2,27 +2,22 @@ import type { ReactNode } from 'react';
 import styles from './landing.module.css';
 import { buildWhatsAppLink } from './whatsapp';
 import {
-  CONTROL,
-  FAQ,
   FINAL_CTA,
   HERO,
-  HOW_IT_WORKS,
   PILLARS,
   PREFILLED_MESSAGE,
-  PRICING,
   PROACTIVE,
+  control,
+  faq,
+  heroMicrocopy,
+  howItWorks,
+  pricing,
+  type LandingFlags,
 } from './content';
 
-/**
- * Sem número configurado o CTA cai na seção de preço, em vez de gerar um link quebrado.
- * NEXT_PUBLIC_* precisa ser lido literalmente aqui pra o Next inlinar no build.
- */
-const whatsappLink = buildWhatsAppLink(process.env.NEXT_PUBLIC_TOM_WHATSAPP_NUMBER, PREFILLED_MESSAGE);
-const ctaHref = whatsappLink ?? '#precos';
-
-function CtaButton({ label }: { label: string }) {
+function CtaButton({ label, href }: { label: string; href: string }) {
   return (
-    <a className={styles.cta} href={ctaHref}>
+    <a className={styles.cta} href={href}>
       {label}
     </a>
   );
@@ -39,16 +34,31 @@ function Section({ id, title, children }: { id: string; title: string; children:
   );
 }
 
-export function Landing() {
+export function Landing({ billing, dashboard }: LandingFlags) {
+  const flags = { billing, dashboard };
   const year = new Date().getFullYear();
+  const HOW_IT_WORKS = howItWorks(flags);
+  const CONTROL = control(flags);
+  const FAQ = faq(flags);
+  const PRICING = pricing(flags);
+
+  /**
+   * Mesmo número que o resto do produto usa (TOM_WHATSAPP_NUMBER, lido em runtime pelo servidor).
+   * Sem número válido o CTA cai numa seção da própria página, em vez de gerar um link quebrado.
+   */
+  const ctaHref =
+    buildWhatsAppLink(process.env.TOM_WHATSAPP_NUMBER, PREFILLED_MESSAGE) ??
+    (billing ? '#precos' : '#como-funciona');
 
   return (
     <div className={styles.root}>
       <header className={styles.header}>
         <span className={styles.brand}>Tom</span>
-        <a className={styles.login} href="/login">
-          Entrar
-        </a>
+        {dashboard ? (
+          <a className={styles.login} href="/login">
+            Entrar
+          </a>
+        ) : null}
       </header>
 
       <main className={styles.main}>
@@ -60,8 +70,8 @@ export function Landing() {
             </h1>
             <p className={styles.lead}>{HERO.subtitle}</p>
             <div className={styles.ctaGroup}>
-              <CtaButton label={HERO.ctaLabel} />
-              <p className={styles.micro}>{HERO.microcopy}</p>
+              <CtaButton label={HERO.ctaLabel} href={ctaHref} />
+              <p className={styles.micro}>{heroMicrocopy(flags)}</p>
             </div>
           </div>
 
@@ -127,6 +137,7 @@ export function Landing() {
           </ul>
         </Section>
 
+        {billing ? (
         <Section id="precos" title={PRICING.title}>
           <article className={styles.priceCard}>
             <p className={styles.price}>
@@ -139,10 +150,11 @@ export function Landing() {
                 <li key={item}>{item}</li>
               ))}
             </ul>
-            <CtaButton label={HERO.ctaLabel} />
+            <CtaButton label={HERO.ctaLabel} href={ctaHref} />
             <p className={styles.micro}>{PRICING.payment}</p>
           </article>
         </Section>
+        ) : null}
 
         <Section id="faq" title={FAQ.title}>
           <div className={styles.faq}>
@@ -159,15 +171,17 @@ export function Landing() {
           <h2 id="final-cta" className={styles.h2}>
             {FINAL_CTA.title}
           </h2>
-          <CtaButton label={FINAL_CTA.ctaLabel} />
+          <CtaButton label={FINAL_CTA.ctaLabel} href={ctaHref} />
         </section>
       </main>
 
       <footer className={styles.footer}>
         <span>© {year} ZapBuddy · Tom</span>
-        <a className={styles.login} href="/login">
-          Entrar
-        </a>
+        {dashboard ? (
+          <a className={styles.login} href="/login">
+            Entrar
+          </a>
+        ) : null}
       </footer>
     </div>
   );

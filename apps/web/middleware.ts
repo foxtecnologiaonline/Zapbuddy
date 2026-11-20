@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * sem `DASHBOARD_ENABLED=true`, as telas do painel mostram "indisponível" e as
  * rotas de API dele respondem 503. Não toca em nada que não seja do painel —
  * webhook do WhatsApp, health, webhook de pagamento, API pública (/api/v1) e
- * admin ficam de fora do matcher. A checagem é inline (não importa
+ * admin ficam de fora do matcher, assim como a LP pública em `/`. A checagem é inline (não importa
  * @zapbuddy/core) pra o middleware ficar leve no runtime de edge.
  */
 export function middleware(request: NextRequest): NextResponse {
@@ -18,5 +18,5 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ['/', '/login', '/dashboard/:path*', '/api/auth/:path*', '/api/dashboard/:path*', '/api/calendar/:path*'],
+  matcher: ['/login', '/dashboard/:path*', '/api/auth/:path*', '/api/dashboard/:path*', '/api/calendar/:path*'],
 };
