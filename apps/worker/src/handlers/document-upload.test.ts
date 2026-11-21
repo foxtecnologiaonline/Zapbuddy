@@ -79,7 +79,7 @@ describe('handleDocumentUpload', () => {
       extractedData: { kind: 'receipt' },
       embedding: [0.1],
     });
-    expect(core.orchestrateTurn).toHaveBeenCalledWith({ user: onboardedUser, messageText: '[Arquivo recebido e já salvo: ...]', messageSource: 'text' });
+    expect(core.orchestrateTurn).toHaveBeenCalledWith({ user: onboardedUser, messageText: '[Arquivo recebido e já salvo: ...]', messageSource: 'text', turnKey: 'wa-1' });
     expect(core.sendWhatsappTextMessage).toHaveBeenCalledWith('5511999999999', 'Vi um comprovante de R$ 54,90, quer que eu lance?');
     expect(core.setCachedReply).toHaveBeenCalledWith('wa-1', 'Vi um comprovante de R$ 54,90, quer que eu lance?');
   });

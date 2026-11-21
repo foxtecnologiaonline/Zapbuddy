@@ -22,11 +22,17 @@ import { executeCommand } from '../commands/execute.js';
 import { GRATITUDE_REACTION, isGratitudeOnly, lastAssistantAskedQuestion } from '../conversation/ack.js';
 import { analyzeStyle, formatStyleBlock } from '../conversation/style.js';
 import { formatSummaryBlock, updateConversationSummaryIfNeeded } from '../conversation/summary.js';
+import { acquireTurnLedger, TurnLedger } from './turn-ledger.js';
 
 export interface OrchestrateInput {
   user: User;
   messageText: string;
   messageSource: 'text' | 'audio';
+  /**
+   * Id da mensagem do WhatsApp. Liga as tentativas do mesmo turno (retry do job, fallback de provider) ao que já foi executado,
+   * pra uma ação não ser repetida. Sem ele o registro vale só dentro desta chamada (ainda cobre o fallback de provider).
+   */
+  turnKey?: string;
 }
 
 export interface OrchestrateResult {
@@ -101,7 +107,7 @@ async function resolveAccount(
  * use e devolver o texto final.
  */
 export async function orchestrateTurn(input: OrchestrateInput): Promise<OrchestrateResult> {
-  const { user, messageText, messageSource } = input;
+  const { user, messageText, messageSource, turnKey } = input;
 
   // Bloqueio real de trial encerrado/cancelamento (2026-10, CLAUDE.md) —
   // roda ANTES de resolver conta ou montar prompt: ninguém bloqueado chega
@@ -122,6 +128,7 @@ export async function orchestrateTurn(input: OrchestrateInput): Promise<Orchestr
     timezone: user.timezone,
     accountId: account.accountId,
     role: account.role,
+    turnLedger: turnKey ? acquireTurnLedger(turnKey) : new TurnLedger(),
   };
 
   const onboarded = Boolean(user.onboarding_completed_at);

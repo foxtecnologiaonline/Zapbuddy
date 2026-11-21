@@ -55,7 +55,7 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
       const transcript = await getAudioTranscriber().transcribe(buffer, mimeType);
 
       void sendWhatsappTyping(user.whatsapp_number, waMessageId);
-      const result = await orchestrateTurn({ user, messageText: transcript, messageSource: 'audio' });
+      const result = await orchestrateTurn({ user, messageText: transcript, messageSource: 'audio', turnKey: waMessageId });
       reply = { text: result.replyText, reaction: result.reaction };
       afterSend = result.afterSend;
       await setCachedReply(waMessageId, encodeReply(reply));

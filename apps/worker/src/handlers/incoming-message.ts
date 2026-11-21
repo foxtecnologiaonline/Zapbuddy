@@ -32,7 +32,7 @@ export async function handleIncomingMessage(job: Job<IncomingMessageJob>): Promi
   } else {
     // "Digitando…" enquanto a IA pensa (melhor esforço, nunca lança).
     void sendWhatsappTyping(user.whatsapp_number, waMessageId);
-    const result = await orchestrateTurn({ user, messageText: text, messageSource: 'text' });
+    const result = await orchestrateTurn({ user, messageText: text, messageSource: 'text', turnKey: waMessageId });
     reply = { text: result.replyText, reaction: result.reaction };
     afterSend = result.afterSend;
     await setCachedReply(waMessageId, encodeReply(reply));

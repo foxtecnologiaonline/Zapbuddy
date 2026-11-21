@@ -20,6 +20,7 @@ vi.mock('../../whatsapp/channel.js', () => ({
 import { sendWhatsappTextMessage } from '../../whatsapp/channel.js';
 import { MESSAGES } from '../../messages.js';
 import { LLM_PROVIDERS_BY_PRIORITY } from './config.js';
+import { TurnLedger } from '../turn-ledger.js';
 import { INTERIM_NOTICE_MS, runLlmWithFallback } from './orchestration.js';
 
 function fakeProvider(name: string, run: LlmProvider['run']): LlmProvider {
@@ -126,5 +127,39 @@ describe('runLlmWithFallback', () => {
     );
 
     await expect(runLlmWithFallback(baseInput)).rejects.toThrow('falhou 2');
+  });
+});
+
+describe('runLlmWithFallback — registro de tool calls do turno', () => {
+  it('cada provider começa uma nova tentativa: o que o 1º já executou não é repetido pelo fallback', async () => {
+    const ledger = new TurnLedger();
+    const input = { ...baseInput, toolContext: { ...baseInput.toolContext, turnLedger: ledger } };
+
+    let executions = 0;
+    // Simula o que runToolCall faz: replay se já foi feito, senão executa e grava.
+    const callTool = (): string => {
+      const replayed = ledger.replay('record_transaction', { amount_cents: 4500 });
+      if (replayed !== null) return replayed;
+      executions += 1;
+      ledger.record('record_transaction', { amount_cents: 4500 }, '{"id":"tx-1"}');
+      return '{"id":"tx-1"}';
+    };
+
+    LLM_PROVIDERS_BY_PRIORITY.length = 0;
+    LLM_PROVIDERS_BY_PRIORITY.push(
+      fakeProvider('claude', async () => {
+        callTool(); // a tool agiu...
+        throw new Error('529 overloaded'); // ...e a chamada seguinte à API falhou
+      }),
+      fakeProvider('openai', async () => {
+        callTool(); // o fallback recomeça e pede a mesma tool
+        return { replyText: 'Anotei!' };
+      }),
+    );
+
+    const result = await runLlmWithFallback(input);
+
+    expect(result.replyText).toBe('Anotei!');
+    expect(executions).toBe(1); // um gasto só
   });
 });

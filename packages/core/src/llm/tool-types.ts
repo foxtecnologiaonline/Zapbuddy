@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { AccountRole } from '@zapbuddy/db';
+import type { TurnLedger } from './turn-ledger.js';
 
 export interface ToolContext {
   userId: string;
@@ -12,6 +13,8 @@ export interface ToolContext {
   accountId: string;
   /** Só 'owner' pode convidar novos membros (tools/account.ts) — checado em código, nunca decidido pelo modelo. */
   role: AccountRole;
+  /** Registro das chamadas já executadas neste turno — evita repetir o efeito quando o turno roda de novo (ver turn-ledger.ts). */
+  turnLedger?: TurnLedger;
 }
 
 export interface ToolDefinition<Schema extends z.ZodTypeAny> {

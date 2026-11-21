@@ -8,12 +8,13 @@ import type { ToolContext } from '../tool-types.js';
  * em orchestrator.ts antes da refatoração multi-provider; os cenários
  * abaixo são os mesmos, só apontando pro novo lugar.
  */
-const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+const { mockCreate, ctorOptions } = vi.hoisted(() => ({ mockCreate: vi.fn(), ctorOptions: [] as unknown[] }));
 
 vi.mock('@anthropic-ai/sdk', () => ({
   // `function` (não arrow): o provider chama `new Anthropic(...)`, e só uma
   // function declaration pode ser invocada com `new`.
-  default: vi.fn().mockImplementation(function AnthropicMock() {
+  default: vi.fn().mockImplementation(function AnthropicMock(options: unknown) {
+    ctorOptions.push(options); // o clearMocks do projeto apaga mock.calls entre testes; o cliente é criado uma vez só
     return { messages: { create: mockCreate } };
   }),
 }));
@@ -82,5 +83,51 @@ describe('anthropicProvider.run', () => {
     expect(result.replyText).toBe(MESSAGES.noReplyGenerated);
     // 6 iterações (sempre tool_use) + 1 chamada de wrap-up sem tools.
     expect(mockCreate).toHaveBeenCalledTimes(7);
+  });
+
+  it('modelo termina SEM texto depois de uma tool bem-sucedida: confirmação neutra, não "não consegui processar" (a ação aconteceu)', async () => {
+    mockCreate
+      .mockResolvedValueOnce({
+        content: [{ type: 'tool_use', id: 'tool-1', name: 'calculate', input: { operation: 'expression', expression: '2+2' } }],
+        stop_reason: 'tool_use',
+      })
+      .mockResolvedValueOnce({ content: [], stop_reason: 'end_turn' });
+
+    const result = await anthropicProvider.run({
+      system: { stable: 'system prompt', semiStable: '', volatile: '' },
+      history: [],
+      userMessage: 'quanto é 2+2',
+      toolContext,
+    });
+
+    expect(result.replyText).toBe(MESSAGES.actionDoneNoText);
+    expect(result.replyText).not.toBe(MESSAGES.noReplyGenerated);
+  });
+
+  it('modelo sem texto E a tool falhou: continua o aviso de que não conseguiu processar', async () => {
+    mockCreate
+      .mockResolvedValueOnce({
+        content: [{ type: 'tool_use', id: 'tool-1', name: 'tool_que_nao_existe', input: {} }],
+        stop_reason: 'tool_use',
+      })
+      .mockResolvedValueOnce({ content: [], stop_reason: 'end_turn' });
+
+    const result = await anthropicProvider.run({
+      system: { stable: 'system prompt', semiStable: '', volatile: '' },
+      history: [],
+      userMessage: 'oi',
+      toolContext,
+    });
+
+    expect(result.replyText).toBe(MESSAGES.noReplyGenerated);
+  });
+
+  it('o cliente tem timeout e 1 retry: sem isso o SDK espera até 10 min por uma chamada travada antes de cair no fallback', async () => {
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'oi' }], stop_reason: 'end_turn' });
+    await anthropicProvider.run({ system: { stable: 's', semiStable: '', volatile: '' }, history: [], userMessage: 'oi', toolContext });
+
+    const options = ctorOptions[0] as { timeout?: number; maxRetries?: number };
+    expect(options.timeout).toBeLessThanOrEqual(60_000);
+    expect(options.maxRetries).toBe(1);
   });
 });

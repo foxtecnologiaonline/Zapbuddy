@@ -42,6 +42,8 @@ export async function runLlmWithFallback(input: LlmProviderRunInput): Promise<Ll
     let lastError: unknown;
     for (const [index, provider] of configured.entries()) {
       const startedAt = Date.now();
+      // Cada provider (e cada retry do job) é uma nova tentativa do MESMO turno: o que já teve efeito não é repetido.
+      input.toolContext.turnLedger?.startAttempt();
       try {
         const result = await provider.run(input);
         const latencyMs = Date.now() - startedAt;

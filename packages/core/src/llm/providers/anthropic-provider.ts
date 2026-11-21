@@ -27,7 +27,9 @@ function requireEnv(name: string): string {
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
-  client ??= new Anthropic({ apiKey: requireEnv('ANTHROPIC_API_KEY') });
+  // Sem timeout o SDK espera até 10 min por uma chamada travada, segurando o worker e a pessoa sem resposta; com 1 retry a falha
+    // chega rápido ao fallback (OpenAI). Uma resposta curta de WhatsApp leva segundos, então 45s já é folga.
+    client ??= new Anthropic({ apiKey: requireEnv('ANTHROPIC_API_KEY'), timeout: 45_000, maxRetries: 1 });
   return client;
 }
 
@@ -90,6 +92,8 @@ export const anthropicProvider: LlmProvider = {
     // texto (inclusive quando as iterações acabam no meio de um tool use)
     // — nesse caso ainda devemos uma chamada final.
     let pendingToolResult = false;
+    // Alguma tool já teve efeito neste turno (usado se o modelo terminar sem texto).
+    let anyToolSucceeded = false;
     // Última resposta com uso real (não a de wrap-up, que não chama tools) —
     // é o que importa pra medir custo/cache de verdade (ver sugestão #2 da
     // revisão de performance 2026-10 — orchestration.ts loga isso).
@@ -136,6 +140,7 @@ export const anthropicProvider: LlmProvider = {
       }));
       messages.push({ role: 'user', content: toolResults });
       pendingToolResult = true;
+      if (outcomes.some((outcome) => !outcome.isError)) anyToolSucceeded = true;
 
       if (response.stop_reason !== 'tool_use') {
         break;
@@ -162,7 +167,7 @@ export const anthropicProvider: LlmProvider = {
     }
 
     return {
-      replyText: finalText || MESSAGES.noReplyGenerated,
+      replyText: finalText || (anyToolSucceeded ? MESSAGES.actionDoneNoText : MESSAGES.noReplyGenerated),
       usage: lastUsage && {
         inputTokens: lastUsage.input_tokens,
         outputTokens: lastUsage.output_tokens,

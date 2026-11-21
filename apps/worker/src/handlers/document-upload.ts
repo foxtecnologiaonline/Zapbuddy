@@ -90,7 +90,7 @@ export async function handleDocumentUpload(job: Job<DocumentUploadJob>): Promise
     buffer,
   });
 
-  const readReply = await readAndRespond({ user, document, buffer, mimeType, fileName, caption });
+  const readReply = await readAndRespond({ user, document, buffer, mimeType, fileName, caption, waMessageId });
   // Quem ainda não fez o onboarding (primeira mensagem foi um arquivo) recebe a apresentação e a pergunta do nome junto.
   const reply = user.onboarding_completed_at ? readReply : `${readReply}\n\n${MESSAGES.firstContactIntro}`;
   await setCachedReply(waMessageId, reply);
@@ -104,9 +104,10 @@ interface ReadAndRespondInput {
   mimeType: string;
   fileName: string;
   caption?: string;
+  waMessageId: string;
 }
 
-async function readAndRespond({ user, document, buffer, mimeType, fileName, caption }: ReadAndRespondInput): Promise<string> {
+async function readAndRespond({ user, document, buffer, mimeType, fileName, caption, waMessageId }: ReadAndRespondInput): Promise<string> {
   const savedReply = MESSAGES.documentReceived(fileName);
 
   const kind = getAnalyzableKind(mimeType, buffer.length);
@@ -134,7 +135,7 @@ async function readAndRespond({ user, document, buffer, mimeType, fileName, capt
   if (!user.onboarding_completed_at) return savedReply;
 
   try {
-    const { replyText } = await orchestrateTurn({ user, messageText: conversationText, messageSource: 'text' });
+    const { replyText } = await orchestrateTurn({ user, messageText: conversationText, messageSource: 'text', turnKey: waMessageId });
     return breakLinesAfterSentences(replyText);
   } catch (error) {
     logger.error('document_reply_failed', { documentId: document.id, error: error instanceof Error ? error.message : String(error) });

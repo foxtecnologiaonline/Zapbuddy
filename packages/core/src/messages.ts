@@ -28,6 +28,9 @@ export const MESSAGES = {
   genericProcessingError:
     'Desculpa, tive um problema técnico pra processar sua última mensagem. Pode mandar de novo?',
   noReplyGenerated: 'Desculpe, não consegui processar sua mensagem agora.',
+  // O modelo terminou sem texto DEPOIS de uma tool bem-sucedida: a ação aconteceu, então dizer "não consegui processar" seria falso
+  // e a pessoa repetiria o pedido (duplicando). Neutra de propósito: não repete valor nem detalhe que o modelo não confirmou.
+  actionDoneNoText: 'Pronto, já cuidei disso por aqui. Se algo não ficou como você queria, é só me dizer.',
   stillProcessing: 'Só um instante, ainda tô vendo isso pra você...',
   audioTooLong: 'Esse áudio é muito longo pra eu processar. Pode mandar um mais curto ou escrever em texto?',
   reminder: (text: string) => pickTemplate(REMINDER_TEMPLATES)(text),

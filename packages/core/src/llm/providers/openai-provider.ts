@@ -11,7 +11,8 @@ const MAX_TOOL_ITERATIONS = 6;
 
 let client: OpenAI | null = null;
 function getClient(): OpenAI {
-  client ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // Mesmo raciocínio do provider Anthropic: falhar rápido em vez de esperar o timeout padrão (10 min) do SDK.
+  client ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 45_000, maxRetries: 1 });
   return client;
 }
 
@@ -49,6 +50,7 @@ export const openaiProvider: LlmProvider = {
 
     let finalText = '';
     let pendingToolResult = false;
+    let anyToolSucceeded = false;
     let lastUsage: CompletionUsage | undefined;
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
@@ -81,6 +83,7 @@ export const openaiProvider: LlmProvider = {
       }));
       messages.push(...toolResults);
       pendingToolResult = true;
+      if (outcomes.some((outcome) => !outcome.isError)) anyToolSucceeded = true;
 
       if (choice.finish_reason !== 'tool_calls') {
         break;
@@ -97,7 +100,7 @@ export const openaiProvider: LlmProvider = {
     }
 
     return {
-      replyText: finalText || MESSAGES.noReplyGenerated,
+      replyText: finalText || (anyToolSucceeded ? MESSAGES.actionDoneNoText : MESSAGES.noReplyGenerated),
       // Chat Completions não devolve cache_read/cache_creation separado
       // (caching da OpenAI é automático e opaco) — só input/output mesmo.
       usage: lastUsage && { inputTokens: lastUsage.prompt_tokens, outputTokens: lastUsage.completion_tokens },
