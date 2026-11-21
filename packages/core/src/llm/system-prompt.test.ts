@@ -386,6 +386,19 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('O que você já sabe sobre essa pessoa');
     expect(prompt).toContain('trabalha de terça a sábado');
   });
+
+  it('entrega o id de cada fato pro Tom conseguir esquecer (forget_fact exige fact_id e não há tool que liste)', () => {
+    const facts = [
+      { id: '3f1c2b9e-0000-4000-8000-000000000001', fact: 'mora em Curitiba' },
+      { id: '3f1c2b9e-0000-4000-8000-000000000002', fact: 'a sócia é a Ana' },
+    ].map((f) => ({ ...f, account_id: 'account-1', created_by_user_id: 'user-1', created_at: '2026-01-01T00:00:00.000Z' }));
+    const prompt = buildSystemPrompt(baseUser(), [], null, facts);
+
+    expect(prompt).toContain('- [3f1c2b9e-0000-4000-8000-000000000001] mora em Curitiba');
+    expect(prompt).toContain('- [3f1c2b9e-0000-4000-8000-000000000002] a sócia é a Ana');
+    expect(prompt).toMatch(/nunca mostre esse código pra ela/i);
+    expect(prompt).toMatch(/forget_fact com o id do fato/i);
+  });
 });
 
 describe('buildSystemPromptBlocks (cache em camadas — sugestão #1 da revisão de performance 2026-10)', () => {

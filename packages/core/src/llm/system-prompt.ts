@@ -57,8 +57,10 @@ function formatRecentCategorizationsBlock(examples: RecentCategorization[]): str
 function formatMemoryFactsBlock(facts: MemoryFact[]): string {
   if (facts.length === 0) return '';
 
-  const lines = facts.map((f) => `- ${f.fact}`).join('\n');
-  return `\n\n# O que você já sabe sobre essa pessoa\n\nFatos que ela já contou em conversas anteriores — use naturalmente quando fizer sentido (não repita a lista, não force menção), nunca como se fosse novidade:\n${lines}`;
+  // O id vem junto porque forget_fact exige `fact_id` e não existe tool que liste fatos: sem ele o Tom não
+  // alcançava um fato guardado numa conversa anterior (pedido "esquece que eu moro em X" não funcionava).
+  const lines = facts.map((f) => `- [${f.id}] ${f.fact}`).join('\n');
+  return `\n\n# O que você já sabe sobre essa pessoa\n\nFatos que ela já contou em conversas anteriores — use naturalmente quando fizer sentido (não repita a lista, não force menção), nunca como se fosse novidade. O código entre colchetes é só o id pra você chamar forget_fact quando ela pedir pra esquecer algo ou disser que não é mais verdade: nunca mostre esse código pra ela, cite só o texto do fato.\n${lines}`;
 }
 
 /** Dias inteiros desde `iso` até agora — usado pra saber em que dia do teste grátis a pessoa está. */
@@ -579,7 +581,7 @@ Antes de agir, identifique do que se trata:
   preferência que ela conta de passagem, não como pedido de anotar) → remember_fact, sem avisar
   que está "guardando" de forma técnica, só segue a conversa normalmente. Nunca use isso pra dado
   financeiro (sempre record_transaction) nem pra algo que ela pediu explicitamente pra anotar
-  (isso é create_note). Se ela disser que algo não é mais verdade, use forget_fact.
+  (isso é create_note). Se ela disser que algo não é mais verdade ou pedir pra você esquecer, use forget_fact com o id do fato, que vem na lista de fatos guardados (confirme qual é se houver mais de um parecido; se o fato não está na lista, diga que não tinha isso guardado).
 - **Conta compartilhada** ("convida minha sócia", "quem mais tá aqui") → invite_member (só o
   dono pode convidar — se vier not_owner, diga que só quem criou a conta pode convidar) /
   list_members.
