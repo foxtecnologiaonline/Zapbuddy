@@ -177,7 +177,7 @@ e documentos, leitura de foto/PDF) → `0027_contacts_and_message_drafts.sql`
 ver `docs/adr/0007-*.md`) → `0028_tom_capabilities.sql` (listas, parcelas,
 resumo rolante da conversa, `proactive_message_logs`, `routine_*` de
 `users`, ver `docs/adr/0009-*.md`) → `0029_morning_digest_indicators.sql`
-(`users.morning_digest_indicators` — indicadores econômicos no bom dia).
+(`users.morning_digest_indicators` — indicadores econômicos no bom dia) → `0030_curation_reviews.sql` (`curation_reviews` — vereditos da curadoria das interações em `/admin/curadoria`, ver `docs/adr/0011-*.md`).
 Rodar em ordem, manualmente, no
 SQL Editor do Supabase. **O worker em produção seleciona colunas das
 migrations mais recentes: aplicar a migration ANTES de dar deploy do código

@@ -786,6 +786,15 @@ WhatsApp pessoal via Evolution/ZapScript) em `docs/adr/0007-recados-a-terceiros.
   respondeu ..."). O Tom nunca afirma que foi enviado, entregue, lido ou respondido por conta própria.
 - Migration `0027_contacts_and_message_drafts.sql` precisa ser aplicada no Supabase antes do deploy (idempotente).
 
+## Curadoria das interações (2026-11, pedido do dono do produto)
+
+`/admin/curadoria` + `docs/adr/0011-curadoria-das-interacoes.md` (proposta completa de como criar e exercer). **Camada 1 implementada:**
+fila de revisão sobre sinais implícitos já gravados em `tool_call_logs` (pessoa desfez, falha de tool, correção até 10 min depois de
+criar, categoria em fallback), com veredito (`acertou`/`ruido`/`errou` + destino prompt/categoria/bug/exemplo) em `curation_reviews`
+(migration `0030`, sem FK porque os logs somem em 90 dias; trecho guardado já mascarado) e métrica "sinais por 100 chamadas". Não
+guarda nenhum texto novo de conversa. **Camada 2 (feedback por reação, captura de texto com consentimento, golden set) é proposta
+aguardando decisão** — texto de conversa continua só no Redis (24h); não implementar captura sem decisão explícita e parecer jurídico.
+
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída

@@ -84,7 +84,7 @@ export async function listToolCallLogs(page: number, filters: ListToolCallLogsFi
 // volume muito alto vire uma consulta sem fim — as estatísticas ficariam
 // parciais nesse caso, aceitável pra um relatório de apoio, não pra dado
 // financeiro.
-const MAX_TOOL_CALL_LOGS_PER_RANGE = 5000;
+export const MAX_TOOL_CALL_LOGS_PER_RANGE = 5000;
 
 /** Todas as tool calls (sucesso e falha) num período — usado pelo job de agregação de erros de interpretação. */
 export async function listToolCallLogsInRange(fromIso: string, toIso: string): Promise<ToolCallLog[]> {
