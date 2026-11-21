@@ -203,6 +203,21 @@ describe('composeMorningDigest', () => {
     expect(agenda).toContain('Quer que eu te lembre');
   });
 
+  it('evento de DIA INTEIRO (só a data) não vira horário falso: sem "21:00" do dia anterior e nunca é o "próximo"', () => {
+    const messages = composeMorningDigest({
+      ...baseData,
+      agendaEvents: [
+        { startIso: '2026-10-22', title: 'Viagem do João' }, // dia inteiro: new Date('2026-10-22') seria 21:00 do dia 21 em Brasília
+        { startIso: '2026-10-22T12:00:00.000Z', title: 'Dentista' }, // 09:00, o próximo de verdade
+      ],
+    });
+    const agenda = messages[1]!;
+    expect(agenda).toContain('• Viagem do João (dia todo)');
+    expect(agenda).not.toContain('21:00');
+    expect(agenda).toContain('👉 *09:00* Dentista');
+    expect(agenda).not.toMatch(/👉[^\n]*Viagem/);
+  });
+
   it('financeiro em mensagem própria quando há mais itens', () => {
     const messages = composeMorningDigest({
       ...baseData,

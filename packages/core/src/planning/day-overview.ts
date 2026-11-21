@@ -64,7 +64,7 @@ export async function loadDayOverview(input: DayOverviewInput): Promise<DayOverv
       const events = await listCalendarEvents(access, range.startIso, range.endIso);
       return {
         connected: true,
-        events: events.map((event) => ({ title: event.summary, startIso: event.startIso, endIso: event.endIso })).sort((a, b) => a.startIso.localeCompare(b.startIso)),
+        events: events.map((event) => ({ title: event.summary, startIso: event.startIso, endIso: event.endIso, busy: event.busy })).sort((a, b) => a.startIso.localeCompare(b.startIso)),
       };
     }),
     safely<OverviewTask[]>('tarefas', failed, [], async () =>
@@ -107,6 +107,7 @@ export async function loadDayOverview(input: DayOverviewInput): Promise<DayOverv
     const busy: BusyBlock[] = [];
     for (const event of calendar.events) {
       if (!isTimedIso(event.startIso)) continue; // dia inteiro não bloqueia horário
+      if (event.busy === false) continue; // livre ou recusado também não
       const startMs = new Date(event.startIso).getTime();
       const endMs = isTimedIso(event.endIso) ? new Date(event.endIso).getTime() : startMs + 60 * 60_000;
       busy.push({ startMs, endMs });

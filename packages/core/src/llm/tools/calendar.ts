@@ -7,9 +7,10 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
 } from '../../calendar/calendar-access.js';
+import { blocksTime, isAllDayStart } from '../../calendar/events.js';
 import type { CalendarEventSummary } from '../../calendar/types.js';
 import { getTodayRange, getLast7DaysRange, getTomorrowRange, getNext7DaysRange, getDateKeyRange } from '../../time/zoned-ranges.js';
-import { assertPlausibleTimestamp } from '../date-sanity.js';
+import { assertCalendarEventDate } from '../date-sanity.js';
 
 export const createCalendarEventTool = defineTool({
   name: 'create_calendar_event',
@@ -22,13 +23,20 @@ export const createCalendarEventTool = defineTool({
     description: z.string().optional(),
   }),
   execute: async (params, ctx) => {
+    // Mesmas validações do update: sem elas o modelo errava o ano (2025 em vez de 2026) e o evento nascia no passado, ou
+    // end <= start chegava ao provedor e voltava como erro cru.
+    assertCalendarEventDate(params.start_at, 'start_at');
+    assertCalendarEventDate(params.end_at, 'end_at');
+    if (new Date(params.end_at).getTime() <= new Date(params.start_at).getTime()) {
+      throw new Error('end_at precisa ser depois de start_at.');
+    }
+
     const access = await getFreshCalendarAccess(ctx.accountId);
     if (!access) return { connected: false };
 
-    // O provider devolve só eventos que se sobrepõem à janela pedida, então
-    // qualquer item aqui é um conflito. Não bloqueia: a pessoa pode querer
-    // marcar mesmo assim.
-    const overlapping = await listCalendarEvents(access, params.start_at, params.end_at);
+    // O provider devolve eventos que se sobrepõem à janela pedida, mas só os que OCUPAM horário colidem: dia inteiro
+    // (aniversário, feriado, "viagem"), livre e recusado não. Não bloqueia: a pessoa pode querer marcar mesmo assim.
+    const overlapping = (await listCalendarEvents(access, params.start_at, params.end_at)).filter(blocksTime);
 
     const event = await createCalendarEvent(access, {
       summary: params.summary,
@@ -78,7 +86,7 @@ export const listCalendarEventsTool = defineTool({
     const events = await listCalendarEvents(access, range.startIso, range.endIso);
     return {
       connected: true,
-      events: events.map((event) => ({ event_id: event.id, summary: event.summary, start_at: event.startIso, end_at: event.endIso })),
+      events: events.map((event) => ({ event_id: event.id, summary: event.summary, start_at: event.startIso, end_at: event.endIso, ...(isAllDayStart(event.startIso) ? { all_day: true } : {}) })),
     };
   },
 });
@@ -103,8 +111,8 @@ export const updateCalendarEventTool = defineTool({
     }),
   execute: async (params, ctx) => {
     if (params.start_at && params.end_at) {
-      assertPlausibleTimestamp(params.start_at, 'start_at');
-      assertPlausibleTimestamp(params.end_at, 'end_at');
+      assertCalendarEventDate(params.start_at, 'start_at');
+      assertCalendarEventDate(params.end_at, 'end_at');
       if (new Date(params.end_at).getTime() <= new Date(params.start_at).getTime()) {
         throw new Error('end_at precisa ser depois de start_at.');
       }
@@ -117,7 +125,7 @@ export const updateCalendarEventTool = defineTool({
     if (params.start_at && params.end_at) {
       const overlapping = await listCalendarEvents(access, params.start_at, params.end_at);
       conflicts = overlapping
-        .filter((item: CalendarEventSummary) => item.id !== params.event_id)
+        .filter((item: CalendarEventSummary) => item.id !== params.event_id && blocksTime(item))
         .map((item) => ({ summary: item.summary, start_at: item.startIso }));
     }
 
@@ -141,7 +149,9 @@ export const deleteCalendarEventTool = defineTool({
   execute: async (params, ctx) => {
     const access = await getFreshCalendarAccess(ctx.accountId);
     if (!access) return { connected: false };
-    await deleteCalendarEvent(access, params.event_id);
+    // Se o provedor disse que o evento não existe (404), NÃO afirmar que apagou: o id pode estar errado ou o evento já ter ido.
+    const existed = await deleteCalendarEvent(access, params.event_id);
+    if (!existed) return { connected: true, deleted: false, not_found: true, event_id: params.event_id };
     return { connected: true, deleted: true, event_id: params.event_id };
   },
 });

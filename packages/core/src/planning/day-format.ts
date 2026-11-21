@@ -7,6 +7,8 @@ export interface OverviewEvent {
   title: string;
   startIso: string;
   endIso: string;
+  /** false = não ocupa o horário (livre ou recusado): aparece na lista, mas não tira janela livre. */
+  busy?: boolean;
 }
 export interface OverviewTask {
   id: string;

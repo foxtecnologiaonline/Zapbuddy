@@ -1,4 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import { fetchWithRetry } from '../../whatsapp/http-retry.js';
+import { failApiResponse, failTokenResponse } from '../errors.js';
 import type { CalendarEventInput, CalendarEventPatch, CreatedCalendarEvent, CalendarEventSummary, CalendarTokens } from '../types.js';
 
 // Compartilhado com WhatsApp apesar do caminho (packages/core/src/whatsapp/http-retry.ts)
@@ -34,9 +36,7 @@ async function postToken(body: URLSearchParams): Promise<CalendarTokens> {
     { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body },
     10_000,
   );
-  if (!response.ok) {
-    throw new Error(`Google token endpoint failed (${response.status}): ${await response.text()}`);
-  }
+  if (!response.ok) await failTokenResponse('Google', response);
   const json = (await response.json()) as { access_token: string; refresh_token?: string; expires_in: number };
   return { accessToken: json.access_token, refreshToken: json.refresh_token, expiresInSeconds: json.expires_in };
 }
@@ -65,17 +65,45 @@ export async function refreshGoogleAccessToken(refreshToken: string): Promise<Ca
   );
 }
 
+const BASE32HEX = '0123456789abcdefghijklmnopqrstuv';
+
+/**
+ * Id de evento gerado por nós (a API do Google aceita `id` próprio: base32hex, 5–1024 caracteres). Faz o POST ser
+ * IDEMPOTENTE: se a 1ª tentativa criou o evento mas a resposta estourou o timeout, o retry do `fetchWithRetry` leva o
+ * MESMO id e recebe 409 em vez de criar um segundo evento (auditoria 2026-11).
+ */
+export function newGoogleEventId(): string {
+  const bytes = randomBytes(16);
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32HEX[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+    value &= (1 << bits) - 1;
+  }
+  if (bits > 0) out += BASE32HEX[(value << (5 - bits)) & 31];
+  return out;
+}
+
 export async function createGoogleCalendarEvent(
   accessToken: string,
   calendarId: string,
   input: CalendarEventInput,
 ): Promise<CreatedCalendarEvent> {
+  const base = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+  const id = newGoogleEventId();
   const response = await fetchWithRetry(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    base,
     {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id,
         summary: input.summary,
         description: input.description,
         start: { dateTime: input.startIso },
@@ -85,12 +113,31 @@ export async function createGoogleCalendarEvent(
     10_000,
   );
 
-  if (!response.ok) {
-    throw new Error(`Google Calendar event creation failed (${response.status}): ${await response.text()}`);
+  // 409 = esse id já existe: uma tentativa anterior (que o retry não viu terminar) criou o evento. É sucesso, só buscar o link.
+  if (response.status === 409) {
+    const existing = await fetchWithRetry(`${base}/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${accessToken}` } }, 10_000);
+    if (!existing.ok) await failApiResponse('Google Agenda: criação do evento', existing);
+    const json = (await existing.json()) as { id: string; htmlLink: string };
+    return { id: json.id, htmlLink: json.htmlLink };
   }
+  if (!response.ok) await failApiResponse('Google Agenda: criação do evento', response);
   const json = (await response.json()) as { id: string; htmlLink: string };
   return { id: json.id, htmlLink: json.htmlLink };
 }
+
+interface GoogleEventItem {
+  id: string;
+  status?: string;
+  summary?: string;
+  transparency?: string;
+  start: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  attendees?: Array<{ self?: boolean; responseStatus?: string }>;
+}
+
+const GOOGLE_PAGE_SIZE = 250;
+/** Teto de páginas (2.500 eventos): uma janela de semana nunca chega perto; evita laço infinito se o provedor repetir o token. */
+const GOOGLE_MAX_PAGES = 10;
 
 export async function listGoogleCalendarEvents(
   accessToken: string,
@@ -98,41 +145,60 @@ export async function listGoogleCalendarEvents(
   timeMinIso: string,
   timeMaxIso: string,
 ): Promise<CalendarEventSummary[]> {
-  const params = new URLSearchParams({
-    timeMin: timeMinIso,
-    timeMax: timeMaxIso,
-    singleEvents: 'true',
-    orderBy: 'startTime',
-  });
-  const response = await fetchWithRetry(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-    10_000,
-  );
+  const events: CalendarEventSummary[] = [];
+  let pageToken: string | undefined;
 
-  if (!response.ok) {
-    throw new Error(`Google Calendar list failed (${response.status}): ${await response.text()}`);
+  for (let page = 0; page < GOOGLE_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams({
+      timeMin: timeMinIso,
+      timeMax: timeMaxIso,
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: String(GOOGLE_PAGE_SIZE),
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const response = await fetchWithRetry(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      10_000,
+    );
+    if (!response.ok) await failApiResponse('Google Agenda: listagem', response);
+
+    const json = (await response.json()) as { items?: GoogleEventItem[]; nextPageToken?: string };
+    for (const item of json.items ?? []) {
+      if (item.status === 'cancelled') continue; // cancelado não é compromisso
+      const declined = item.attendees?.some((attendee) => attendee.self === true && attendee.responseStatus === 'declined') ?? false;
+      events.push({
+        id: item.id,
+        summary: item.summary ?? '(sem título)',
+        // Dia inteiro chega como `date` (sem hora): é a convenção do projeto (ver calendar/events.ts).
+        startIso: item.start.dateTime ?? item.start.date ?? '',
+        endIso: item.end?.dateTime ?? item.end?.date ?? '',
+        busy: item.transparency !== 'transparent' && !declined,
+      });
+    }
+
+    pageToken = json.nextPageToken;
+    if (!pageToken) break;
   }
-  const json = (await response.json()) as { items?: Array<{ id: string; summary?: string; start: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }> };
-  return (json.items ?? []).map((item) => ({
-    id: item.id,
-    summary: item.summary ?? '(sem título)',
-    startIso: item.start.dateTime ?? item.start.date ?? '',
-    endIso: item.end?.dateTime ?? item.end?.date ?? '',
-  }));
+  return events;
 }
 
-/** Apaga um evento criado pelo próprio assistente (usado pelo "desfazer"). 404/410 = já não existe, tratado como sucesso. */
-export async function deleteGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
+/**
+ * Apaga um evento. Devolve `false` quando ele já não existia (404/410): quem chama decide se isso é sucesso (o
+ * "desfazer" aceita) ou erro (a tool `delete_calendar_event` não pode dizer "apaguei" de um id que nunca existiu).
+ */
+export async function deleteGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string): Promise<boolean> {
   const response = await fetchWithRetry(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
     { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
     10_000,
   );
 
-  if (!response.ok && response.status !== 404 && response.status !== 410) {
-    throw new Error(`Google Calendar event deletion failed (${response.status}): ${await response.text()}`);
-  }
+  if (response.status === 404 || response.status === 410) return false;
+  if (!response.ok) await failApiResponse('Google Agenda: exclusão do evento', response);
+  return true;
 }
 
 /** Edita um evento existente (PATCH — só os campos informados mudam). Lança em 404: o evento não existe mais nessa agenda. */
@@ -160,9 +226,7 @@ export async function updateGoogleCalendarEvent(
     10_000,
   );
 
-  if (!response.ok) {
-    throw new Error(`Google Calendar event update failed (${response.status}): ${await response.text()}`);
-  }
+  if (!response.ok) await failApiResponse('Google Agenda: edição do evento', response);
   const json = (await response.json()) as { id: string; htmlLink: string };
   return { id: json.id, htmlLink: json.htmlLink };
 }

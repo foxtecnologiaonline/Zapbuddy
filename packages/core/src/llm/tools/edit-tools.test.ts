@@ -32,7 +32,7 @@ vi.mock('../../webhooks/dispatch.js', () => ({ enqueueWebhookEvent: vi.fn() }));
 import { updateTaskTool } from './tasks.js';
 import { updateNoteTool } from './notes.js';
 import { updateReminderTool, listRemindersTool } from './reminders.js';
-import { updateCalendarEventTool, deleteCalendarEventTool, listCalendarEventsTool } from './calendar.js';
+import { createCalendarEventTool, updateCalendarEventTool, deleteCalendarEventTool, listCalendarEventsTool } from './calendar.js';
 
 const ctx = { userId: 'user-1', accountId: 'account-1', timezone: 'America/Sao_Paulo' } as never;
 const inOneHour = () => new Date(Date.now() + 3_600_000).toISOString();
@@ -123,8 +123,8 @@ describe('edição de agenda', () => {
   it('conflito ignora o próprio evento que está sendo remarcado', async () => {
     calendar.getFreshCalendarAccess.mockResolvedValue({ provider: 'google' });
     calendar.listCalendarEvents.mockResolvedValue([
-      { id: 'e', summary: 'o próprio', startIso: 'a', endIso: 'b' },
-      { id: 'outro', summary: 'dentista', startIso: 'c', endIso: 'd' },
+      { id: 'e', summary: 'o próprio', startIso: '2026-11-22T13:00:00.000Z', endIso: '2026-11-22T14:00:00.000Z' },
+      { id: 'outro', summary: 'dentista', startIso: '2026-11-22T13:30:00.000Z', endIso: '2026-11-22T14:30:00.000Z' },
     ]);
     calendar.updateCalendarEvent.mockResolvedValue({ id: 'e', htmlLink: 'link' });
     const start = inOneHour();
@@ -132,7 +132,7 @@ describe('edição de agenda', () => {
 
     const result = (await updateCalendarEventTool.execute({ event_id: 'e', start_at: start, end_at: end }, ctx)) as { conflicts: unknown[] };
 
-    expect(result.conflicts).toEqual([{ summary: 'dentista', start_at: 'c' }]);
+    expect(result.conflicts).toEqual([{ summary: 'dentista', start_at: '2026-11-22T13:30:00.000Z' }]);
     expect(calendar.updateCalendarEvent).toHaveBeenCalledWith({ provider: 'google' }, 'e', {
       summary: undefined,
       description: undefined,
@@ -152,13 +152,67 @@ describe('edição de agenda', () => {
     expect(listCalendarEventsTool.schema.safeParse({ from_date: '2026-10-30' }).success).toBe(false);
 
     calendar.getFreshCalendarAccess.mockResolvedValue({ provider: 'google' });
-    calendar.listCalendarEvents.mockResolvedValue([{ id: 'e', summary: 'x', startIso: 's', endIso: 'f' }]);
+    calendar.listCalendarEvents.mockResolvedValue([{ id: 'e', summary: 'x', startIso: '2026-10-30T13:00:00.000Z', endIso: '2026-10-30T14:00:00.000Z' }]);
     const result = await listCalendarEventsTool.execute({ from_date: '2026-10-30', to_date: '2026-10-30' }, ctx);
     expect(calendar.listCalendarEvents).toHaveBeenCalledWith(
       { provider: 'google' },
       '2026-10-30T03:00:00.000Z',
       '2026-10-31T02:59:59.000Z',
     );
-    expect(result).toEqual({ connected: true, events: [{ event_id: 'e', summary: 'x', start_at: 's', end_at: 'f' }] });
+    expect(result).toEqual({ connected: true, events: [{ event_id: 'e', summary: 'x', start_at: '2026-10-30T13:00:00.000Z', end_at: '2026-10-30T14:00:00.000Z' }] });
+  });
+});
+
+describe('agenda: criar, conflitos e apagar (auditoria 2026-11)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const start = () => new Date(Date.now() + 3_600_000).toISOString();
+  const end = () => new Date(Date.now() + 7_200_000).toISOString();
+
+  it('create valida as datas ANTES de falar com o provedor: fim antes do início', async () => {
+    await expect(createCalendarEventTool.execute({ summary: 'x', start_at: end(), end_at: start() }, ctx)).rejects.toThrow(/depois de start_at/);
+    expect(calendar.getFreshCalendarAccess).not.toHaveBeenCalled();
+  });
+
+  it('create recusa data absurda (o modelo errou o ano) antes de criar', async () => {
+    await expect(
+      createCalendarEventTool.execute({ summary: 'x', start_at: '2019-01-01T10:00:00.000Z', end_at: '2019-01-01T11:00:00.000Z' }, ctx),
+    ).rejects.toThrow();
+    expect(calendar.createCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it('conflito só conta o que OCUPA horário: dia inteiro, livre e recusado não colidem', async () => {
+    calendar.getFreshCalendarAccess.mockResolvedValue({ provider: 'google' });
+    calendar.listCalendarEvents.mockResolvedValue([
+      { id: 'aniv', summary: 'Aniversário do João', startIso: '2026-11-22', endIso: '2026-11-23' }, // dia inteiro
+      { id: 'livre', summary: 'Lembrete solto', startIso: '2026-11-22T13:00:00.000Z', endIso: '2026-11-22T14:00:00.000Z', busy: false },
+      { id: 'dentista', summary: 'Dentista', startIso: '2026-11-22T13:30:00.000Z', endIso: '2026-11-22T14:30:00.000Z', busy: true },
+      { id: 'semcampo', summary: 'Reunião', startIso: '2026-11-22T13:45:00.000Z', endIso: '2026-11-22T14:45:00.000Z' }, // busy ausente = ocupa
+    ]);
+    calendar.createCalendarEvent.mockResolvedValue({ id: 'novo', htmlLink: 'link' });
+
+    const result = (await createCalendarEventTool.execute({ summary: 'Almoço', start_at: start(), end_at: end() }, ctx)) as { conflicts: Array<{ summary: string }> };
+
+    expect(result.conflicts.map((c) => c.summary)).toEqual(['Dentista', 'Reunião']);
+  });
+
+  it('listar marca evento de dia inteiro com all_day (o Tom não inventa hora)', async () => {
+    calendar.getFreshCalendarAccess.mockResolvedValue({ provider: 'microsoft' });
+    calendar.listCalendarEvents.mockResolvedValue([
+      { id: 'a', summary: 'Viagem', startIso: '2026-11-22', endIso: '2026-11-25' },
+      { id: 'b', summary: 'Reunião', startIso: '2026-11-22T13:00:00.000Z', endIso: '2026-11-22T14:00:00.000Z' },
+    ]);
+    const result = (await listCalendarEventsTool.execute({ period: 'next_7_days' }, ctx)) as { events: Array<Record<string, unknown>> };
+    expect(result.events[0]).toMatchObject({ event_id: 'a', all_day: true });
+    expect(result.events[1]).not.toHaveProperty('all_day');
+  });
+
+  it('apagar evento que não existe NÃO diz que apagou (id errado, ou já tinha ido)', async () => {
+    calendar.getFreshCalendarAccess.mockResolvedValue({ provider: 'google' });
+    calendar.deleteCalendarEvent.mockResolvedValue(false);
+    expect(await deleteCalendarEventTool.execute({ event_id: 'inventado' }, ctx)).toEqual({ connected: true, deleted: false, not_found: true, event_id: 'inventado' });
+
+    calendar.deleteCalendarEvent.mockResolvedValue(true);
+    expect(await deleteCalendarEventTool.execute({ event_id: 'real' }, ctx)).toEqual({ connected: true, deleted: true, event_id: 'real' });
   });
 });

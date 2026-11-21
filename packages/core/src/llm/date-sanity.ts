@@ -74,3 +74,16 @@ export function assertPlausibleTimestamp(iso: string, fieldName: string): void {
     maxMs: now + 10 * 365 * ONE_DAY_MS,
   });
 }
+
+/**
+ * Pra início/fim de EVENTO de agenda: pode começar agora ou ter sido hoje de manhã (tolera 1 dia no passado), mas não
+ * anos atrás nem daqui a mais de 2 anos. `assertPlausibleTimestamp` (10 anos pra trás) não pega o erro mais comum do
+ * modelo, o ano trocado (2025 em vez de 2026): o evento nascia no passado e a pessoa só descobria no dia.
+ */
+export function assertCalendarEventDate(iso: string, fieldName: string): void {
+  const now = Date.now();
+  assertDateWithinRange(iso, fieldName, {
+    minMs: now - ONE_DAY_MS,
+    maxMs: now + 2 * 365 * ONE_DAY_MS,
+  });
+}

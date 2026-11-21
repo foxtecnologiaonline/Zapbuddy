@@ -215,8 +215,12 @@ function formatAgendaBlock(events: MorningAgendaEvent[], tasks: MorningTask[], t
   const sections: string[] = [];
 
   if (events.length > 0) {
-    const nextIndex = events.findIndex((event) => new Date(event.startIso).getTime() >= nowMs);
+    // Dia inteiro chega só com a data (sem "T"): `new Date('2026-11-21')` é meia-noite UTC e, em Brasília, virava "21:00" do
+    // dia anterior. Esses eventos não têm hora: sem rótulo de hora e nunca são "o próximo".
+    const isTimed = (event: MorningAgendaEvent): boolean => event.startIso.includes('T');
+    const nextIndex = events.findIndex((event) => isTimed(event) && new Date(event.startIso).getTime() >= nowMs);
     const lines = events.map((event, index) => {
+      if (!isTimed(event)) return `• ${event.title} (dia todo)`;
       const hour = hourLabelInZone(event.startIso, timeZone);
       return index === nextIndex ? `👉 *${hour}* ${event.title}` : `• ${hour} ${event.title}`;
     });

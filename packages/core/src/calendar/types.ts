@@ -20,6 +20,11 @@ export interface CalendarEventSummary {
   startIso: string;
   /** Vazio quando o provider não devolveu fim (não deveria acontecer em evento normal). */
   endIso: string;
+  /**
+   * false = não ocupa o horário (marcado como "livre"/transparente ou recusado pela pessoa). Ausente = ocupa.
+   * Evento cancelado nem chega aqui: os provedores o descartam. Dia inteiro: ver `isAllDayStart` (events.ts).
+   */
+  busy?: boolean;
 }
 
 /** Só os campos presentes mudam (PATCH). Horário só vale em par: início e fim juntos. */
