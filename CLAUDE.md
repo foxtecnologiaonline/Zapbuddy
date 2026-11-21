@@ -693,6 +693,21 @@ script fixo. Resumo:
 Não validado contra eval real (não existe um neste projeto): monitorar nas conversas reais se a resposta
 ficou longa e quais piadas o pessoal mais pede — o banco cresce/troca conforme o retorno.
 
+## Conversa natural (2026-11, pedido do dono do produto: conhecimento e conteúdo pra conversar com naturalidade)
+
+Guia pra acrescentar conteúdo: `docs/conteudo-conversacional.md`. **A regra não mudou: o Tom é uma IA e diz isso** — natural não é
+fingir ser gente (não inventa rotina, família, gosto, fome nem sono; testes barram afirmação de vida humana). Entrou:
+- `llm/conversation-knowledge.ts` (dados editáveis, bloco `stable`, ~1.500 tokens com teto de 8.000 caracteres no teste): princípios
+  (espelhar tamanho e energia, variar a abertura, falar como WhatsApp, nada de linguagem de atendimento), 14 situações (conversa fiada,
+  retribuir "e você?", cansaço, clima da data, boa e má notícia, risada/emoji soltos, desistência, mensagem longa, perguntas sobre o
+  Tom), vocabulário brasileiro que ele entende e assuntos delicados (política, religião, futebol, saúde, relacionamento, ofensivo).
+- `digest/calendar-dates.ts`: datas dos próximos 21 dias **calculadas por regra** (feriados nacionais pelo módulo existente, Páscoa,
+  Dia das Mães/Pais, Namorados, Crianças, Black Friday = sexta depois da 4ª quinta de novembro, Réveillon) na camada **volátil**
+  (some quando não há nada perto). O Tom menciona no máximo uma, em pergunta leve, nunca cria nada sem o "sim".
+- O eval ganhou checagem de **texto** (`expect.text`): não soar como atendimento, não afirmar vida humana, citar o 188 no sofrimento
+  sério, luto sem tarefa. Não validado contra o modelo real: rodar `npm run eval:golden` e observar nas conversas se ficou
+  tagarela (conversa não pode atrasar nem inflar a confirmação de um pedido).
+
 ## Alcance do Tom — edição, hábitos, pesquisa ampliada, busca semântica e leitura de arquivos (2026-10, motivo documentado)
 
 Decisão do dono do produto: implementar as 6 lacunas levantadas num mapeamento de alcance. Detalhe e
@@ -792,7 +807,7 @@ WhatsApp pessoal via Evolution/ZapScript) em `docs/adr/0007-recados-a-terceiros.
 fila de revisão sobre sinais implícitos já gravados em `tool_call_logs` (pessoa desfez, falha de tool, correção até 10 min depois de
 criar, categoria em fallback), com veredito (`acertou`/`ruido`/`errou` + destino prompt/categoria/bug/exemplo) em `curation_reviews`
 (migration `0030`, sem FK porque os logs somem em 90 dias; trecho guardado já mascarado) e métrica "sinais por 100 chamadas". Não
-guarda nenhum texto novo de conversa. **Golden set implementado** (`packages/core/src/eval/`, 57 casos sintéticos; `npm run eval:golden`
+guarda nenhum texto novo de conversa. **Golden set implementado** (`packages/core/src/eval/`, 66 casos sintéticos; `npm run eval:golden`
 ou workflow manual "Eval do golden set" com o secret `ANTHROPIC_API_KEY`; validação estática roda na CI): mede qual tool o Tom escolhe e com
 quais argumentos, com a mesma requisição da produção (`buildAnthropicRequestParts`, extraída do provider). Rodar antes de mudar prompt, modelo
 ou `effort`. **Feedback por reação (2A) e captura de texto (2B) estão adiados**, com motivo no ADR 0011 — texto de conversa continua só no

@@ -214,6 +214,37 @@ describe('evaluateCase', () => {
   });
 });
 
+describe('evaluateCase — texto da resposta', () => {
+  const chat = (text: string) => ({ toolCalls: [], text });
+  const conversation = kase({ expect: { tool: null, text: { includesAny: ['sinto muito'], excludesAny: ['lembrete', 'Tarefa'] } } });
+
+  it('passa quando contém um dos trechos esperados e nenhum proibido', () => {
+    expect(evaluateCase(conversation, chat('Poxa, SINTO MUITO. Tô por aqui.'), ctx).pass).toBe(true);
+  });
+
+  it('ignora maiúsculas e acentos nos dois sentidos', () => {
+    const c = kase({ expect: { tool: null, text: { includesAny: ['parabéns'], excludesAny: ['LEMBRETE'] } } });
+    expect(evaluateCase(c, chat('Parabens, que conquista!'), ctx).pass).toBe(true);
+    expect(evaluateCase(c, chat('Parabéns! Criei um lembrete.'), ctx).pass).toBe(false);
+  });
+
+  it('falha quando falta o trecho esperado, e diz o que veio', () => {
+    const result = evaluateCase(conversation, chat('Entendi, bora resolver.'), ctx);
+    expect(result.pass).toBe(false);
+    expect(result.failures[0]).toMatch(/deveria conter algum de/);
+  });
+
+  it('falha quando aparece um trecho proibido (ex.: ofereceu lembrete no luto)', () => {
+    const result = evaluateCase(conversation, chat('Sinto muito. Quer que eu crie um lembrete?'), ctx);
+    expect(result.pass).toBe(false);
+    expect(result.failures[0]).toMatch(/contém "lembrete"/);
+  });
+
+  it('regra de texto não interfere nos casos sem ela', () => {
+    expect(evaluateCase(kase({ expect: { tool: null } }), chat('qualquer coisa'), ctx).pass).toBe(true);
+  });
+});
+
 describe('aggregateRuns / buildReport / formatReport', () => {
   const result = (id: string, pass: boolean, area: GoldenCase['area'] = 'financeiro'): CaseResult => ({ id, area, pass, failures: pass ? [] : [`${id} falhou`], firstTool: null });
 

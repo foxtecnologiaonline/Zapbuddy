@@ -78,7 +78,7 @@ chamadas), com:
   precisa estar definida. Sem B, curar "perguntas e respostas" não é possível.
 
 **C. Biblioteca curada (a saída da curadoria).** É para onde os vereditos `exemplo` e `prompt` escoam.
-**Golden set implementado** (`packages/core/src/eval/`, 57 casos sintéticos em 13 áreas):
+**Golden set implementado** (`packages/core/src/eval/`, 66 casos sintéticos em 13 áreas):
 - *O que mede:* a **escolha** do Tom — qual tool ele chama primeiro e com quais argumentos (valor em centavos, categoria da
   taxonomia, dia e hora **no fuso da pessoa**, "daqui a 20 minutos", listar antes de apagar/concluir, nenhuma tool em conversa,
   recusa a injeção de prompt). Não avalia o texto da resposta (isso é o `persona-eval`, qualitativo).

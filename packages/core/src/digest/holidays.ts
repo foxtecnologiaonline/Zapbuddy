@@ -14,7 +14,7 @@ interface MonthDay {
  * Domingo de Páscoa (algoritmo gregoriano anônimo/Meeus — padrão, determinístico).
  * Base pros feriados móveis: Carnaval, Sexta-feira Santa e Corpus Christi.
  */
-function easterSunday(year: number): MonthDay {
+export function easterSunday(year: number): MonthDay {
   const a = year % 19;
   const b = Math.floor(year / 100);
   const c = year % 100;

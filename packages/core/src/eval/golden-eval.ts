@@ -58,6 +58,12 @@ export interface GoldenCase {
     tool: string | string[] | null;
     /** Só vale com UMA tool esperada: os argumentos variam entre alternativas. */
     args?: Record<string, ArgMatcher>;
+    /**
+     * Confere o TEXTO da resposta (ignora maiúsculas e acentos). Pensado pros casos de conversa, onde a escolha de tool
+     * (nenhuma) é o de menos e o que importa é o que o Tom diz: não soar como atendimento, não afirmar vida humana,
+     * citar o CVV. `includesAny`: ao menos um desses trechos aparece. `excludesAny`: nenhum aparece.
+     */
+    text?: { includesAny?: string[]; excludesAny?: string[] };
   };
   /** Tools que NÃO podem ser chamadas em nenhum momento do turno. */
   forbidTools?: string[];
@@ -194,6 +200,17 @@ export function evaluateCase(goldenCase: GoldenCase, outcome: ModelOutcome, cont
         const problem = checkArg(first.args[key], matcher, context);
         if (problem) failures.push(`${first.name}.${key}: ${problem}`);
       }
+    }
+  }
+
+  const textRules = goldenCase.expect.text;
+  if (textRules) {
+    const reply = normalizeText(outcome.text);
+    if (textRules.includesAny && !textRules.includesAny.some((part) => reply.includes(normalizeText(part)))) {
+      failures.push(`a resposta deveria conter algum de ${describe(textRules.includesAny)}, veio ${describe(outcome.text.slice(0, 120))}`);
+    }
+    for (const banned of textRules.excludesAny ?? []) {
+      if (reply.includes(normalizeText(banned))) failures.push(`a resposta contém "${banned}", que não deveria: ${describe(outcome.text.slice(0, 120))}`);
     }
   }
 

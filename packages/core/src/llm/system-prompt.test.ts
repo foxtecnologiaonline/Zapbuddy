@@ -627,3 +627,37 @@ describe('buildSystemPrompt — agenda futura, resumo mensal, remarcar (2026-10)
     expect(prompt).toContain('list_reminders');
   });
 });
+
+describe('conversa natural e datas por vir no prompt', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a seção de conversa natural entra na camada estável (cacheada) de quem já fez o onboarding', () => {
+    const { stable, semiStable, volatile } = buildSystemPromptBlocks(baseUser());
+    expect(stable).toContain('# Conversa natural');
+    expect(stable).toMatch(/Você é uma IA e responde isso sem drama/);
+    expect(semiStable).not.toContain('# Conversa natural');
+    expect(volatile).not.toContain('# Conversa natural');
+  });
+
+  it('não entra no onboarding: lá o roteiro é fixo e curto de propósito', () => {
+    const { stable } = buildSystemPromptBlocks(baseUser({ onboarding_completed_at: null }));
+    expect(stable).not.toContain('# Conversa natural');
+  });
+
+  it('perto de uma data (Black Friday em 6 dias), a camada volátil ganha o bloco calculado e a estável não muda', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-21T15:00:00.000Z'));
+    const near = buildSystemPromptBlocks(baseUser());
+    expect(near.volatile).toContain('Datas por vir no calendário');
+    expect(near.volatile).toContain('Black Friday');
+
+    vi.setSystemTime(new Date('2026-08-12T15:00:00.000Z'));
+    const far = buildSystemPromptBlocks(baseUser());
+    expect(far.volatile).not.toContain('Datas por vir no calendário');
+
+    // O que muda por dia fica só na camada que nunca é cacheada: a estável continua idêntica byte a byte.
+    expect(near.stable).toBe(far.stable);
+  });
+});
