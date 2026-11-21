@@ -25,6 +25,7 @@ import { handleLogsRetention } from './logs-retention.js';
 import { handleOnboardingNudge } from './onboarding-nudge.js';
 import { handleEmbeddingsBackfill } from './embeddings-backfill.js';
 import { runProactiveRoutines } from './proactive-routines.js';
+import { reconcileOverdueReminders } from './reminders-reconcile.js';
 
 // 19h local — fim de tarde/começo de noite, momento plausível de "ver como
 // foi o dia" sem acordar ninguém (ADR 0003, decisão 2). Granularidade de
@@ -118,6 +119,9 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
   const accounts = await listAccountsForInsightsSweep();
 
   await runWeeklyMaintenance();
+
+  // Lembretes que ficaram pending depois de perder o job no Redis (nunca lança) — ver reminders-reconcile.ts.
+  await reconcileOverdueReminders();
 
   // Reengajamento de onboarding (2026-10: sem fila própria — ver nota em
   // queues/definitions.ts) — checado em toda passada do sweep horário,

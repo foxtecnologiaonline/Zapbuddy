@@ -825,6 +825,14 @@ Cada achado foi confirmado lendo o código antes de corrigir; testes 891 → 1.0
   mensagem) devolvem o resultado gravado. Em memória do worker, não no Redis (cota). `logToolCall` falhando nunca vira "erro" de uma ação
   que aconteceu. Modelo sem texto depois de uma ação bem-sucedida → confirmação neutra, não "não consegui processar". Clientes LLM com
   timeout de 45s e 1 retry (o padrão do SDK espera 10 min).
+- **Lembretes**: o lembrete vira job atrasado no Redis, que já perdeu jobs duas vezes (cota estourada, banco recriado) — ficava `pending`
+  pra sempre e nunca chegava. O sweep horário agora reconcilia (`reminders-reconcile.ts`): vencido há 10 min–24h e ainda `pending` é
+  reenfileirado com o próprio id como `jobId` (job existente = o BullMQ ignora, nada em dobro); vencido há mais de 24h vira `failed` com
+  o motivo (some do pendente, aparece no card de falhas); pessoa em horário de silêncio é adiada (atrasado de madrugada só acorda).
+  Recorrente: a próxima ocorrência é garantida ANTES de marcar a atual como enviada, de forma idempotente (antes, falha transitória
+  ali matava a série em silêncio). Desvio do mensal em dia 31 segue como decisão deliberada (`recurrence.ts`).
+- **Deploy do worker**: `stop_grace_period: 120s` no compose. O padrão do Docker (SIGKILL em 10s) matava turno de LLM em andamento a
+  cada push em `main` e, com o `stalledInterval` de 1h, a pessoa ficava até 1h sem resposta.
 - **Segurança/robustez**: CSV do export neutraliza fórmulas; rate-limit com `INCR`+`EXPIRE` atômico (Lua); corridas na criação de usuário/conta.
 - **Clima**: a chave é aparada (espaço/quebra de linha no `.env` virava 401) e o aviso de "chave ausente" vale também pro geocoding; erros
   HTTP logam a mensagem da API. `get_weather` ganhou **como está agora** (`now`, endpoint de observação atual) pra "tá frio/chovendo

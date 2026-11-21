@@ -16,6 +16,7 @@ const queues = vi.hoisted(() => ({
 }));
 const clock = vi.hoisted(() => ({ hour: 12, weekday: 3 }));
 const handlers = vi.hoisted(() => ({
+  reconcile: vi.fn(),
   nudge: vi.fn(),
   backfill: vi.fn(),
   routines: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock('@zapbuddy/core', async (importOriginal) => ({
 vi.mock('./proactive-research.js', () => ({ handleProactiveResearch: vi.fn() }));
 vi.mock('./interpretation-feedback.js', () => ({ handleInterpretationFeedback: vi.fn() }));
 vi.mock('./logs-retention.js', () => ({ handleLogsRetention: vi.fn() }));
+vi.mock('./reminders-reconcile.js', () => ({ reconcileOverdueReminders: handlers.reconcile }));
 vi.mock('./onboarding-nudge.js', () => ({ handleOnboardingNudge: handlers.nudge }));
 vi.mock('./embeddings-backfill.js', () => ({ handleEmbeddingsBackfill: handlers.backfill }));
 vi.mock('./proactive-routines.js', () => ({ runProactiveRoutines: handlers.routines }));
@@ -140,6 +142,11 @@ describe('insights-sweep — robustez', () => {
 
     expect(queues.insights.add).toHaveBeenCalledTimes(2);
     expect(db.logger.error).toHaveBeenCalledWith('insights_sweep_account_failed', expect.objectContaining({ accountId: 'ruim' }));
+  });
+
+  it('reconcilia os lembretes vencidos (job perdido no Redis) em toda passada', async () => {
+    await handleInsightsSweep({} as never);
+    expect(handlers.reconcile).toHaveBeenCalledTimes(1);
   });
 
   it('listar as contas falhou: lança ANTES de qualquer efeito (o retry do BullMQ não repete nudge nem backfill)', async () => {

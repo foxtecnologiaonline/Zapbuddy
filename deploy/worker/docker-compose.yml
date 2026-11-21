@@ -19,5 +19,10 @@ services:
       dockerfile: deploy/worker/Dockerfile
     container_name: zapbuddy-worker
     restart: always
+    # Cada push em `main` recria o container. O padrão do Docker é matar com SIGKILL depois de 10s, e uma resposta do LLM leva
+    # mais que isso (timeout de 45s por chamada, com fallback). O worker já fecha com graça no SIGTERM (`worker.close()` espera
+    # os jobs ativos); sem tempo pra isso o turno morria no meio e, com o `stalledInterval` de 1h (cota do Redis), só era
+    # retomado até 1h depois — a pessoa ficava sem resposta. 120s cobre um turno normal sem travar o deploy.
+    stop_grace_period: 120s
     env_file:
       - .env
