@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const NAV_LINKS = [
   { href: '/admin', label: 'Visão geral' },
   { href: '/admin/status', label: 'Status' },
+  { href: '/admin/mvp', label: 'MVP' },
   { href: '/admin/whatsapp', label: 'WhatsApp' },
   { href: '/admin/contacts', label: 'Contatos' },
   { href: '/admin/calls', label: 'Chamadas' },

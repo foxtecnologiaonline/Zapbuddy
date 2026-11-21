@@ -789,6 +789,11 @@ WhatsApp pessoal via Evolution/ZapScript) em `docs/adr/0007-recados-a-terceiros.
 ## Métricas por fase
 
 - MVP: % usuários com ≥1 mensagem/dia na semana 1; tempo até 1ª ação concluída
+  - **Medido em `/admin/mvp`** (2026-11, sem migration; `packages/db/src/mvp-metrics.ts` = definições e cálculo puro, testado;
+    `repositories/mvp-metrics.ts` = leitura de `users` + `webhook_events` + `tool_call_logs`). Coorte = cadastros dos últimos 30
+    dias; retenção só conta quem já completou os 7 dias; "dia N" = N-ésima janela de 24h desde o cadastro; "mensagem" = texto,
+    áudio ou documento aceito; "ação" = registro criado de fato (tarefa, lembrete, nota, gasto, evento, data, meta, conta, hábito).
+    Com poucos cadastros o percentual oscila muito — ler junto com o tamanho da coorte.
 - Fase 2: retenção D30; % contas bancárias conectadas; NPS
 - Fase 3: ARPU; conversão trial→pago; CAC via indicação vs. pago
 
