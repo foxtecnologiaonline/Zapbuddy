@@ -1,6 +1,7 @@
 import { logger } from '@zapbuddy/db';
 import { datePartsInZone, getLocalHour } from '../time/zoned-ranges.js';
 import { fetchWithRetry } from '../whatsapp/http-retry.js';
+import { describeHttpFailure, getOpenWeatherMapKey } from './api-key.js';
 import { geocodeBrazilianCity } from './geocoding.js';
 
 export interface WeatherPeriod {
@@ -41,6 +42,17 @@ export interface OpenWeatherMapForecastEntry {
 
 interface OpenWeatherMapForecastResponse {
   list?: OpenWeatherMapForecastEntry[];
+  /** `timezone` = deslocamento do LUGAR em segundos em relação ao UTC (ex.: -10800 em São Paulo) — o fuso de quem pergunta pode ser outro. */
+  city?: { timezone?: number };
+}
+
+/** Como está AGORA (observação atual), diferente da previsão de blocos de 3h — pra "tá frio/chovendo agora?". */
+export interface CurrentWeather {
+  tempC: number;
+  feelsLikeC: number;
+  description: string;
+  conditionId: number;
+  humidityPercent: number;
 }
 
 /**
@@ -155,7 +167,7 @@ async function fetchTodayWeather(input: { latitude: number; longitude: number; t
     const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${input.latitude}&lon=${input.longitude}&appid=${apiKey}&units=metric&lang=pt_br&cnt=16`;
     const response = await fetchWithRetry(url, { method: 'GET' }, 8_000);
     if (!response.ok) {
-      logger.error('weather_forecast_http_error', { status: response.status, latitude: input.latitude, longitude: input.longitude });
+      logger.error('weather_forecast_http_error', { ...(await describeHttpFailure(response)), latitude: input.latitude, longitude: input.longitude });
       return null;
     }
     const body = (await response.json()) as OpenWeatherMapForecastResponse;
@@ -181,24 +193,13 @@ async function fetchTodayWeather(input: { latitude: number; longitude: number; t
  * (ou da mesma cidade) divide uma chamada só. Pedidos simultâneos pro mesmo
  * lugar (concurrency 5 do worker) compartilham a mesma requisição em voo.
  */
-let warnedMissingKey = false;
-/** Sem a chave o resumo sai sem clima em silêncio — um aviso (uma vez por processo) deixa o motivo nos logs do worker. */
-function warnMissingWeatherKeyOnce(): void {
-  if (warnedMissingKey) return;
-  warnedMissingKey = true;
-  logger.warn('weather_api_key_missing', { hint: 'OPENWEATHERMAP_API_KEY precisa estar no .env do WORKER (VPS), não só na Vercel' });
-}
-
 export async function getTodayWeatherSummary(input: {
   latitude: number;
   longitude: number;
   timezone: string;
 }): Promise<TodayWeatherSummary | null> {
-  const apiKey = process.env.OPENWEATHERMAP_API_KEY;
-  if (!apiKey) {
-    warnMissingWeatherKeyOnce();
-    return null;
-  }
+  const apiKey = getOpenWeatherMapKey();
+  if (!apiKey) return null;
 
   const today = datePartsInZone(input.timezone, new Date());
   const key = `${input.latitude.toFixed(2)},${input.longitude.toFixed(2)}|${input.timezone}|${today.year}-${today.month}-${today.day}`;
@@ -230,20 +231,38 @@ export interface DailyForecast {
   rainChancePercent: number;
 }
 
-/** Entradas da previsão de 3h agrupadas por data local — pura, testável sem rede. */
-export function groupForecastByLocalDay(entries: OpenWeatherMapForecastEntry[], timezone: string): DailyForecast[] {
-  const byDay = new Map<string, OpenWeatherMapForecastEntry[]>();
+/** Data (YYYY-MM-DD) e hora locais de um instante: no fuso IANA da pessoa, ou no deslocamento do LUGAR quando a API o informa. */
+function localDayAndHour(dt: number, timezone: string, utcOffsetSeconds?: number): { date: string; hour: number } {
+  if (utcOffsetSeconds !== undefined) {
+    const shifted = new Date((dt + utcOffsetSeconds) * 1000);
+    const date = `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`;
+    return { date, hour: shifted.getUTCHours() };
+  }
+  const at = new Date(dt * 1000);
+  const parts = datePartsInZone(timezone, at);
+  return { date: `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`, hour: getLocalHour(timezone, at) };
+}
+
+/**
+ * Entradas da previsão de 3h agrupadas por data local — pura, testável sem rede.
+ *
+ * `utcOffsetSeconds` (o `city.timezone` da própria resposta) agrupa no fuso do LUGAR: quem mora em São Paulo e pergunta de
+ * Manaus (UTC-4) tinha os blocos de Manaus recortados pelo dia de São Paulo — o de 23h de lá (00h aqui) caía no dia seguinte,
+ * distorcendo mínima, máxima e chuva de cada dia. Sem ele, usa o fuso da pessoa (previsão da própria região).
+ */
+export function groupForecastByLocalDay(entries: OpenWeatherMapForecastEntry[], timezone: string, utcOffsetSeconds?: number): DailyForecast[] {
+  const byDay = new Map<string, Array<{ entry: OpenWeatherMapForecastEntry; hour: number }>>();
   for (const entry of entries) {
-    const parts = datePartsInZone(timezone, new Date(entry.dt * 1000));
-    const key = `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
-    byDay.set(key, [...(byDay.get(key) ?? []), entry]);
+    const { date, hour } = localDayAndHour(entry.dt, timezone, utcOffsetSeconds);
+    byDay.set(date, [...(byDay.get(date) ?? []), { entry, hour }]);
   }
 
-  return [...byDay.entries()].map(([date, dayEntries]) => {
-    let middayEntry = dayEntries[0]!;
+  return [...byDay.entries()].map(([date, dayItems]) => {
+    const dayEntries = dayItems.map((item) => item.entry);
+    let middayEntry = dayItems[0]!.entry;
     let smallestHourDiff = Infinity;
-    for (const entry of dayEntries) {
-      const hourDiff = Math.abs(getLocalHour(timezone, new Date(entry.dt * 1000)) - 12);
+    for (const { entry, hour } of dayItems) {
+      const hourDiff = Math.abs(hour - 12);
       if (hourDiff < smallestHourDiff) {
         smallestHourDiff = hourDiff;
         middayEntry = entry;
@@ -260,8 +279,42 @@ export function groupForecastByLocalDay(entries: OpenWeatherMapForecastEntry[], 
   });
 }
 
+interface OpenWeatherMapCurrentResponse {
+  weather?: Array<{ id?: number; description?: string }>;
+  main?: { temp?: number; feels_like?: number; humidity?: number };
+}
+
+/**
+ * Condição de AGORA do lugar. Melhor esforço: qualquer falha devolve null e a previsão segue sozinha — nunca derruba a consulta
+ * nem inventa o que a fonte não trouxe (campo ausente ou fora do esperado = sem "agora").
+ */
+async function fetchCurrentWeather(latitude: number, longitude: number, apiKey: string): Promise<CurrentWeather | null> {
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=pt_br`;
+    const response = await fetchWithRetry(url, { method: 'GET' }, 8_000);
+    if (!response.ok) {
+      logger.warn('weather_current_http_error', { ...(await describeHttpFailure(response)), latitude, longitude });
+      return null;
+    }
+    const body = (await response.json()) as OpenWeatherMapCurrentResponse;
+    const { temp, feels_like: feelsLike, humidity } = body.main ?? {};
+    const condition = body.weather?.[0];
+    if (typeof temp !== 'number' || typeof feelsLike !== 'number' || typeof humidity !== 'number' || !condition || typeof condition.id !== 'number') return null;
+    return {
+      tempC: Math.round(temp),
+      feelsLikeC: Math.round(feelsLike),
+      description: condition.description ?? 'tempo variável',
+      conditionId: condition.id,
+      humidityPercent: Math.round(humidity),
+    };
+  } catch (error) {
+    logger.warn('weather_current_failed', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
 export type WeatherLookup =
-  | { status: 'ok'; place: string; days: DailyForecast[] }
+  | { status: 'ok'; place: string; days: DailyForecast[]; /** Como está agora; null quando a fonte não trouxe. */ now: CurrentWeather | null }
   | { status: 'not_configured' }
   | { status: 'place_not_found' }
   | { status: 'unavailable' };
@@ -271,7 +324,8 @@ export type WeatherLookup =
  * conversa (geocodificada em BR, mesmo geocoding do set_city) ou `fallback`
  * (cidade que a pessoa cadastrou, ou o ponto do DDD). Nunca lança nem
  * inventa: sem chave, cidade desconhecida ou falha de rede devolve um status
- * explícito, e o Tom diz que não conseguiu checar.
+ * explícito, e o Tom diz que não conseguiu checar. A condição de agora (`now`)
+ * vem junto, em paralelo, e é opcional.
  */
 export async function getWeatherForecast(input: {
   city?: string;
@@ -279,7 +333,7 @@ export async function getWeatherForecast(input: {
   timezone: string;
   days: number;
 }): Promise<WeatherLookup> {
-  const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+  const apiKey = getOpenWeatherMapKey();
   if (!apiKey) return { status: 'not_configured' };
 
   try {
@@ -295,14 +349,15 @@ export async function getWeatherForecast(input: {
     }
 
     const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=pt_br`;
-    const response = await fetchWithRetry(url, { method: 'GET' }, 8_000);
+    const [response, now] = await Promise.all([fetchWithRetry(url, { method: 'GET' }, 8_000), fetchCurrentWeather(latitude, longitude, apiKey)]);
     if (!response.ok) {
-      logger.error('weather_forecast_http_error', { status: response.status, latitude, longitude });
+      logger.error('weather_forecast_http_error', { ...(await describeHttpFailure(response)), latitude, longitude });
       return { status: 'unavailable' };
     }
     const body = (await response.json()) as OpenWeatherMapForecastResponse;
-    const days = groupForecastByLocalDay(body.list ?? [], input.timezone).slice(0, input.days);
-    return days.length === 0 ? { status: 'unavailable' } : { status: 'ok', place, days };
+    const offset = body.city?.timezone;
+    const days = groupForecastByLocalDay(body.list ?? [], input.timezone, typeof offset === 'number' && Number.isFinite(offset) ? offset : undefined).slice(0, input.days);
+    return days.length === 0 ? { status: 'unavailable' } : { status: 'ok', place, days, now };
   } catch (error) {
     logger.error('weather_lookup_failed', { error: error instanceof Error ? error.message : String(error) });
     return { status: 'unavailable' };

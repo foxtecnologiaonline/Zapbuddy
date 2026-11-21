@@ -801,6 +801,39 @@ WhatsApp pessoal via Evolution/ZapScript) em `docs/adr/0007-recados-a-terceiros.
   respondeu ..."). O Tom nunca afirma que foi enviado, entregue, lido ou respondido por conta própria.
 - Migration `0027_contacts_and_message_drafts.sql` precisa ser aplicada no Supabase antes do deploy (idempotente).
 
+## Auditoria de ponta a ponta (2026-11, pedido do dono do produto: agenda, onboarding, interações e clima)
+
+Cada achado foi confirmado lendo o código antes de corrigir; testes 891 → 1.069. O que mudou e por quê:
+
+- **Agenda (Google/Outlook)**: o refresh token do Outlook ROTACIONA a cada renovação (o novo era descartado e a conexão morria em ~90
+  dias) — agora é regravado cifrado, com update condicional ao token anterior. Token revogado vira `CalendarAuthError`: a conexão morta sai
+  e a agenda conta como não conectada (erro transitório NÃO apaga a conexão). Outlook agora pagina (`$top`/`@odata.nextLink`, só links do
+  Graph), dia inteiro é só data (convenção do projeto), conflito só conta o que ocupa horário, criação é idempotente (Google `id`, Graph
+  `transactionId`), `delete_calendar_event` não diz "apaguei" de id inexistente. **Limitação conhecida:** depois da revogação a pessoa só
+  reconecta pelo painel, que está desligado por padrão (ADR 0008) — o Tom a trata como "sem agenda" e sugere salvar como tarefa.
+- **Sweep horário**: o `jobId` do insight tinha `:` a mais (o BullMQ exige exatamente 3 partes) e lançava — nenhum insight proativo era
+  enfileirado. Corrigido com teste que trava a regra. Conta que falha não derruba as outras; dono sem onboarding é pulado.
+- **Onboarding**: o 2º reengajamento caía em 24h–25h, fora da janela de texto livre da Meta (nunca chegava) — agora 2h e 20h, respeitando
+  o horário de silêncio no fuso da pessoa. O prompt de onboarding não tinha data/hora (e manda atender o pedido da 1ª mensagem): o
+  relógio, com o deslocamento do fuso, vale nos dois estados. 1ª mensagem como foto/PDF recebe apresentação e pergunta do nome. Nome e
+  ocupação passam por allowlist (o nome entra no prompt de toda mensagem). `set_city` passa a definir o fuso pela UF.
+- **Datas das tools** aceitam deslocamento (`-03:00`): o `datetime()` padrão do zod só aceitava `Z`, e o modelo recebe a hora local.
+- **Webhooks**: falha de infra (fila/banco fora do ar) responde 5xx pra Meta reentregar; antes era 200 e a mensagem se perdia. Não duplica
+  (`jobId` = id da mensagem, retido 24h). Número inválido e rate-limit seguem 200.
+- **Turno reexecutado não repete efeito** (`llm/turn-ledger.ts`): se o Claude executa uma tool e a chamada seguinte falha, o fallback
+  (OpenAI) ou o retry do job recomeçava e duplicava o gasto/tarefa. Agora chamadas idênticas a uma já executada no mesmo turno (chave = id da
+  mensagem) devolvem o resultado gravado. Em memória do worker, não no Redis (cota). `logToolCall` falhando nunca vira "erro" de uma ação
+  que aconteceu. Modelo sem texto depois de uma ação bem-sucedida → confirmação neutra, não "não consegui processar". Clientes LLM com
+  timeout de 45s e 1 retry (o padrão do SDK espera 10 min).
+- **Segurança/robustez**: CSV do export neutraliza fórmulas; rate-limit com `INCR`+`EXPIRE` atômico (Lua); corridas na criação de usuário/conta.
+- **Clima**: a chave é aparada (espaço/quebra de linha no `.env` virava 401) e o aviso de "chave ausente" vale também pro geocoding; erros
+  HTTP logam a mensagem da API. `get_weather` ganhou **como está agora** (`now`, endpoint de observação atual) pra "tá frio/chovendo
+  agora?" — antes respondia com a previsão do próximo bloco de 3h; ausente = a fonte não trouxe, nunca inventado. Dias de outra cidade são
+  agrupados no fuso DELA (`city.timezone` da resposta), não no de quem pergunta. O worker informa no heartbeat quais chaves opcionais tem
+  (`/admin/status`, só presença) — é o jeito de saber, sem acessar a VPS, se o clima do bom dia está ativo. **Limitação conhecida:** a mínima
+  da narrativa é a do que RESTA do dia (o endpoint de 3h não traz os blocos já passados), então de manhã ela pode ficar acima da madrugada
+  real; só o caso mínima = máxima foi ajustado no texto ("20°C", não "20°C a 20°C").
+
 ## Curadoria das interações (2026-11, pedido do dono do produto)
 
 `/admin/curadoria` + `docs/adr/0011-curadoria-das-interacoes.md` (proposta completa de como criar e exercer). **Camada 1 implementada:**

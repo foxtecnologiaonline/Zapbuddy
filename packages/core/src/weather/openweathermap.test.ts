@@ -4,6 +4,7 @@ vi.mock('@zapbuddy/db', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+import { logger } from '@zapbuddy/db';
 import {
   clearWeatherCache,
   getTodayWeatherSummary,
@@ -182,6 +183,21 @@ describe('groupForecastByLocalDay', () => {
     expect(days[0]).toMatchObject({ date: '2026-10-22', minTempC: 14, maxTempC: 24, description: 'céu limpo', rainExpected: false });
     expect(days[1]).toMatchObject({ date: '2026-10-23', description: 'chuva leve', rainExpected: true, rainChancePercent: 80 });
   });
+
+  it('com o deslocamento do LUGAR agrupa no dia de lá, não no de quem pergunta (Manaus, UTC-4, visto de São Paulo)', () => {
+    const at = (utcDay: number, utcHour: number): OpenWeatherMapForecastEntry => ({
+      dt: Date.UTC(2026, 9, utcDay, utcHour, 0, 0) / 1000,
+      main: { temp: 28, temp_min: 27, temp_max: 29 },
+      weather: [{ id: 800, description: 'céu limpo' }],
+      pop: 0,
+    });
+    const noonInManaus = at(22, 16); // 12h em Manaus, 13h em SP, dia 22
+    const lateInManaus = at(23, 3); // 23h em Manaus (ainda dia 22), mas 00h em SP (dia 23)
+
+    expect(groupForecastByLocalDay([noonInManaus, lateInManaus], TZ, -4 * 3600).map((day) => day.date)).toEqual(['2026-10-22']);
+    // Sem o deslocamento (comportamento anterior): o bloco das 23h de Manaus ia pro dia 23 e virava um "dia" a mais, distorcendo mín/máx e chuva.
+    expect(groupForecastByLocalDay([noonInManaus, lateInManaus], TZ).map((day) => day.date)).toEqual(['2026-10-22', '2026-10-23']);
+  });
 });
 
 describe('getWeatherForecast', () => {
@@ -216,5 +232,92 @@ describe('getWeatherForecast', () => {
   it('em falha de rede devolve unavailable sem lançar', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('rede')) as unknown as typeof fetch;
     expect(await getWeatherForecast({ fallback, timezone: TZ, days: 2 })).toEqual({ status: 'unavailable' });
+  });
+
+  describe('condição de agora', () => {
+    const currentOk = { weather: [{ id: 500, description: 'chuva leve' }], main: { temp: 18.4, feels_like: 17.6, humidity: 88 } };
+
+    function stubForecastAndCurrent(current: () => unknown, forecast: unknown = { list: [entry(15)] }) {
+      const fetchSpy = vi.fn(async (url: string) => (url.includes('/data/2.5/weather?') ? current() : { ok: true, json: async () => forecast }));
+      global.fetch = fetchSpy as unknown as typeof fetch;
+      return fetchSpy;
+    }
+
+    it('traz como está AGORA (/weather) junto da previsão', async () => {
+      const fetchSpy = stubForecastAndCurrent(() => ({ ok: true, json: async () => currentOk }));
+
+      const lookup = await getWeatherForecast({ fallback, timezone: TZ, days: 2 });
+
+      expect(lookup).toMatchObject({
+        status: 'ok',
+        now: { tempC: 18, feelsLikeC: 18, description: 'chuva leve', conditionId: 500, humidityPercent: 88 },
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('a observação de agora fora do ar não derruba a previsão (now: null)', async () => {
+      stubForecastAndCurrent(() => ({ ok: false, status: 429, json: async () => ({ message: 'limite' }) }));
+      expect(await getWeatherForecast({ fallback, timezone: TZ, days: 2 })).toMatchObject({ status: 'ok', now: null });
+    });
+
+    it('resposta de agora incompleta não vira número inventado (now: null)', async () => {
+      stubForecastAndCurrent(() => ({ ok: true, json: async () => ({ weather: [{ id: 800, description: 'céu limpo' }], main: { temp: 20 } }) }));
+      expect(await getWeatherForecast({ fallback, timezone: TZ, days: 2 })).toMatchObject({ status: 'ok', now: null });
+    });
+
+    it('rede caindo só na observação de agora também não derruba a previsão', async () => {
+      stubForecastAndCurrent(() => {
+        throw new Error('rede');
+      });
+      expect(await getWeatherForecast({ fallback, timezone: TZ, days: 2 })).toMatchObject({ status: 'ok', now: null });
+    });
+  });
+
+  it('agrupa os dias no fuso do LUGAR informado pela API (city.timezone), não no de quem pergunta', async () => {
+    const at = (utcDay: number, utcHour: number): OpenWeatherMapForecastEntry => ({
+      dt: Date.UTC(2026, 9, utcDay, utcHour, 0, 0) / 1000,
+      main: { temp: 28, temp_min: 27, temp_max: 29 },
+      weather: [{ id: 800, description: 'céu limpo' }],
+      pop: 0,
+    });
+    global.fetch = vi.fn(async (url: string) =>
+      url.includes('/data/2.5/weather?')
+        ? { ok: false, status: 429 }
+        : { ok: true, json: async () => ({ city: { timezone: -4 * 3600 }, list: [at(22, 16), at(23, 3)] }) },
+    ) as unknown as typeof fetch;
+
+    const lookup = await getWeatherForecast({ fallback, timezone: TZ, days: 5 });
+
+    expect(lookup).toMatchObject({ status: 'ok' });
+    if (lookup.status === 'ok') expect(lookup.days.map((day) => day.date)).toEqual(['2026-10-22']);
+  });
+
+  it('chave com espaço ou quebra de linha no fim (erro clássico de .env) é aparada: sem isso a API devolve 401', async () => {
+    process.env.OPENWEATHERMAP_API_KEY = ' test-key\n';
+    const fetchSpy = vi.fn(async () => ({ ok: true, json: async () => ({ list: [entry(15)] }) }));
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    await getWeatherForecast({ fallback, timezone: TZ, days: 1 });
+
+    for (const call of fetchSpy.mock.calls as unknown as Array<[string]>) {
+      expect(call[0]).toContain('appid=test-key&');
+    }
+  });
+});
+
+describe('log de erro da API', () => {
+  it('registra a mensagem da própria API (401 "Invalid API key" × 429 de cota), não só o status', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ cod: 401, message: 'Invalid API key. Please see https://openweathermap.org/faq#error401 for more info.' }),
+    }) as unknown as typeof fetch;
+
+    await getTodayWeatherSummary(INPUT);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'weather_forecast_http_error',
+      expect.objectContaining({ status: 401, apiMessage: expect.stringContaining('Invalid API key') }),
+    );
   });
 });

@@ -623,8 +623,9 @@ ${subscriptionTriage}
   você não tem certeza de saber de cor ou que pode ter mudado) → use web_search (reason:
   general_question) antes de responder, e responda com base no que achou — nunca invente um fato
   que deveria vir de busca. Se a busca falhar, diga que não conseguiu checar agora, sem chutar.
-- **Clima** ("vai chover amanhã?", "preciso de guarda-chuva?", "como tá o tempo em Curitiba") →
-  get_weather (sem city usa a região do DDD dela: se não foi ela que citou a cidade, diga qual usou).
+- **Clima** ("vai chover amanhã?", "preciso de guarda-chuva?", "como tá o tempo em Curitiba", "tá frio agora?") →
+  get_weather (sem city usa a região do DDD dela: se não foi ela que citou a cidade, diga qual usou). Pra "agora" use
+  o campo now, não a previsão do dia; sem now, diga que não conseguiu ver como está agora.
 - **Dólar, euro, libra, Selic, CDI, inflação** → get_market_rate (dado oficial do Banco Central; diga
   a data de referência e que câmbio não é cotação ao vivo nem a de casa de câmbio/cartão). Cripto,
   ação e outras moedas não têm tool própria: web_search (reason: current_info).

@@ -162,7 +162,9 @@ export function formatMorningNarrative(input: MorningNarrativeInput): string {
 
   if (input.weather) {
     const { minTempC, maxTempC, description, rainChancePercent, periods } = input.weather;
-    const forecast = `${weatherEmoji(input.weather.conditionId)} A previsão é de ${minTempC}°C a ${maxTempC}°C, com ${description}.`;
+    // Mínima = máxima (fim do dia, poucos blocos restantes): "20°C a 20°C" soa quebrado.
+    const range = minTempC === maxTempC ? `${maxTempC}°C` : `${minTempC}°C a ${maxTempC}°C`;
+    const forecast = `${weatherEmoji(input.weather.conditionId)} A previsão é de ${range}, com ${description}.`;
 
     const periodParts = [
       periods.morning ? `Manhã ${periods.morning.avgTempC}°C` : null,

@@ -133,6 +133,12 @@ describe('formatMorningNarrative', () => {
     expect(text).toContain('Calorão');
   });
 
+  it('mínima igual à máxima (fim do dia, poucos blocos restantes) não vira "20°C a 20°C"', () => {
+    const text = formatMorningNarrative({ ...baseNarrative, weather: { ...sunnyWeather, minTempC: 20, maxTempC: 20 } });
+    expect(text).toContain('A previsão é de 20°C, com');
+    expect(text).not.toContain('20°C a 20°C');
+  });
+
   it('feriados: nacional, estadual e ponto facultativo', () => {
     expect(formatMorningNarrative({ ...baseNarrative, holiday: { name: 'Tiradentes', official: true, scope: 'nacional' } })).toContain(
       'feriado nacional: *Tiradentes*',

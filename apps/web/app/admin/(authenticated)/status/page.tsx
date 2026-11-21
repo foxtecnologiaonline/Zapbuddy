@@ -1,5 +1,5 @@
 import { checkDatabaseConnection } from '@zapbuddy/db';
-import { checkWhatsappConnection, getWorkerHeartbeatAgeMs, isHeartbeatFresh, pingRedis } from '@zapbuddy/core';
+import { checkWhatsappConnection, getWorkerConfigFlags, getWorkerHeartbeatAgeMs, isHeartbeatFresh, pingRedis } from '@zapbuddy/core';
 import { CardRow, Section, StatusCard } from '../components';
 
 export const dynamic = 'force-dynamic';
@@ -20,11 +20,12 @@ function formatBrazilianNumber(digits: string): string {
 }
 
 export default async function StatusPage() {
-  const [databaseOk, redisOk, whatsapp, workerHeartbeatAgeMs] = await Promise.all([
+  const [databaseOk, redisOk, whatsapp, workerHeartbeatAgeMs, workerConfig] = await Promise.all([
     checkDatabaseConnection(),
     pingRedis(),
     checkWhatsappConnection(),
     getWorkerHeartbeatAgeMs(),
+    getWorkerConfigFlags(),
   ]);
   const workerOk = isHeartbeatFresh(workerHeartbeatAgeMs);
 
@@ -52,6 +53,17 @@ export default async function StatusPage() {
           }
         />
         <StatusCard name="Worker (filas/lembretes)" ok={workerOk} detail={workerDetail} />
+        <StatusCard
+          name="Clima do bom dia (OpenWeatherMap)"
+          ok={workerConfig?.openWeatherMapKey === true}
+          detail={
+            workerConfig === null
+              ? 'o worker ainda não informou (aparece no próximo sinal dele, em até 2h)'
+              : workerConfig.openWeatherMapKey
+                ? 'chave presente no worker (confere a presença, não se a chave é válida)'
+                : 'sem OPENWEATHERMAP_API_KEY no .env do worker (VPS) — o bom dia sai sem previsão'
+          }
+        />
       </CardRow>
     </Section>
   );

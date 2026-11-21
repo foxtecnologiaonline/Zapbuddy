@@ -1,5 +1,6 @@
 import { logger } from '@zapbuddy/db';
 import { fetchWithRetry } from '../whatsapp/http-retry.js';
+import { describeHttpFailure, getOpenWeatherMapKey } from './api-key.js';
 
 export interface GeocodedCity {
   city: string;
@@ -65,14 +66,14 @@ interface GeoDirectResult {
  * configurada ou a API falha — quem chama decide o que dizer à pessoa.
  */
 export async function geocodeBrazilianCity(city: string, uf?: string): Promise<GeocodedCity | null> {
-  const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+  const apiKey = getOpenWeatherMapKey();
   if (!apiKey) return null;
 
   try {
     const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)},BR&limit=5&appid=${apiKey}`;
     const response = await fetchWithRetry(url, { method: 'GET' }, 8_000);
     if (!response.ok) {
-      logger.error('geocoding_http_error', { status: response.status });
+      logger.error('geocoding_http_error', await describeHttpFailure(response));
       return null;
     }
 

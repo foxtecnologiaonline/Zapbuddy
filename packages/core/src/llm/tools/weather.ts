@@ -6,7 +6,7 @@ import { getWeatherForecast } from '../../weather/openweathermap.js';
 export const getWeatherTool = defineTool({
   name: 'get_weather',
   description:
-    'Previsão de até 5 dias pra uma cidade do Brasil. Sem city usa a cidade cadastrada (ou a região do DDD) — diga qual usou (place) se ela não pediu. status diferente de ok → diga que não conseguiu checar, nunca chute.',
+    'Previsão de até 5 dias pra uma cidade do Brasil, mais como está AGORA (now: temperatura, sensação, umidade; ausente = a fonte não trouxe). Sem city usa a cidade cadastrada (ou a região do DDD) — diga qual usou (place) se ela não pediu. status diferente de ok → diga que não conseguiu checar, nunca chute.',
   schema: z.object({
     city: z.string().min(1).max(80).optional().describe('Cidade (ex.: "Curitiba"). Omita pra usar a região da pessoa.'),
     days: z.number().int().min(1).max(5).default(2).describe('Quantos dias de previsão, começando por hoje.'),
@@ -30,6 +30,16 @@ export const getWeatherTool = defineTool({
       status: 'ok',
       place: lookup.place,
       used_person_region: !params.city,
+      ...(lookup.now
+        ? {
+            now: {
+              temp_c: lookup.now.tempC,
+              feels_like_c: lookup.now.feelsLikeC,
+              description: lookup.now.description,
+              humidity_percent: lookup.now.humidityPercent,
+            },
+          }
+        : {}),
       days: lookup.days.map((day) => ({
         date: day.date,
         min_c: day.minTempC,

@@ -36,9 +36,55 @@ const WORKER_HEARTBEAT_KEY = 'zapbuddy:worker:heartbeat';
 // ciclo atrasado não aparecer como "offline" no admin por um falso alarme.
 const WORKER_HEARTBEAT_STALE_MS = 6 * 60 * 60_000; // 6h
 
-/** Chamado só pelo processo do worker, periodicamente — ver apps/worker/src/worker.ts. */
+const WORKER_CONFIG_KEY = 'zapbuddy:worker:config';
+
+/**
+ * Quais integrações opcionais o WORKER tem configuradas. O worker roda na VPS com `.env` próprio (não é o da Vercel), então do
+ * painel não dá pra saber se a chave do clima está lá — e sem ela o bom dia sai sem previsão, em silêncio (diagnóstico de 2026-10-29).
+ * Só presença (booleano), nunca o valor da chave.
+ */
+export interface WorkerConfigFlags {
+  openWeatherMapKey: boolean;
+  webSearchKey: boolean;
+  openaiKey: boolean;
+}
+
+export function readWorkerConfigFlags(env: NodeJS.ProcessEnv = process.env): WorkerConfigFlags {
+  const present = (name: string) => Boolean(env[name]?.trim());
+  return {
+    openWeatherMapKey: present('OPENWEATHERMAP_API_KEY'),
+    webSearchKey: present('WEB_SEARCH_API_KEY'),
+    openaiKey: present('OPENAI_API_KEY'),
+  };
+}
+
+/**
+ * Chamado só pelo processo do worker, periodicamente — ver apps/worker/src/worker.ts. Um `MSET` só (heartbeat + flags): o mesmo
+ * 1 comando de antes, sem aumentar o consumo do Redis.
+ */
 export async function writeWorkerHeartbeat(): Promise<void> {
-  await getRedisConnection().set(WORKER_HEARTBEAT_KEY, Date.now().toString());
+  await getRedisConnection().mset(
+    WORKER_HEARTBEAT_KEY,
+    Date.now().toString(),
+    WORKER_CONFIG_KEY,
+    JSON.stringify(readWorkerConfigFlags()),
+  );
+}
+
+/** Flags escritas pelo worker no último heartbeat; null = ainda não informou (worker antigo/parado) ou Redis inacessível. */
+export async function getWorkerConfigFlags(): Promise<WorkerConfigFlags | null> {
+  try {
+    const raw = await getRedisConnection().get(WORKER_CONFIG_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Record<keyof WorkerConfigFlags, unknown>>;
+    return {
+      openWeatherMapKey: parsed.openWeatherMapKey === true,
+      webSearchKey: parsed.webSearchKey === true,
+      openaiKey: parsed.openaiKey === true,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Usado pelo card de status do admin: null = nunca rodou (ou Redis inacessível), senão idade em ms do último heartbeat. */

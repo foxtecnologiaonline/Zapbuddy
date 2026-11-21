@@ -82,6 +82,14 @@ ZapScript já usa.
    `evolution`, os valores de `EVOLUTION_*` são os mesmos já usados pela
    instância `zapbuddy` em `evo.zapscript.me`.
 
+   **`OPENWEATHERMAP_API_KEY` também precisa estar neste `.env`** (não só na
+   Vercel): é o worker que monta o resumo matinal e responde "vai chover?".
+   Sem ela o bom dia sai sem previsão, em silêncio. Depois de preencher,
+   `docker compose up -d` relê o `.env`; o card "Clima do bom dia" em
+   `/admin/status` confirma a presença da chave no worker (não a validade — a
+   chave nova do OpenWeatherMap leva de minutos a ~2h para ativar e dá 401 até lá;
+   o motivo aparece no log como `weather_forecast_http_error` com `apiMessage`).
+
 4. **Rodar o script de novo** — agora ele builda a imagem e sobe o
    container:
    ```
