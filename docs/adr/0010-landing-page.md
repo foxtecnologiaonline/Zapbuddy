@@ -21,6 +21,13 @@ foi alinhada ao estado real do produto:
   `#como-funciona` (ou `#precos` com cobrança) em vez de um link quebrado.
 - **Resumo matinal** descrito como hoje (previsão, agenda e tarefas de hoje, contas de hoje, horário
   escolhido), sem "atrasadas" nem "3 dias".
+- **Só promete o que o estado entrega** (revisão do PR #5): conectar agenda depende do painel (ADR 0008), então
+  com o painel desligado — o padrão — a LP não fala de agenda conectada, Google Agenda nem aviso de conflito de
+  horário (o Tom salva o compromisso como tarefa com data e hora), o resumo matinal cita "tarefas e compromissos"
+  em vez de "agenda", e o preço lista "Compromissos" em vez de "Agenda". Também sem painel a LP não promete ver nem
+  apagar a memória: o prompt não entrega o `id` dos fatos guardados, então `forget_fact` não alcança um fato de uma
+  conversa anterior. O Outlook nunca é citado enquanto não houver credencial do Azure. `content.test.ts` trava cada
+  uma dessas regras nas quatro combinações de flags.
 - Testes cobrem as duas combinações de flags e as regras de copy em cada uma.
 
 ## Contexto

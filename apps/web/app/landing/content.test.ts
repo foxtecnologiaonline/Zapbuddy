@@ -3,20 +3,22 @@ import { MONTHLY_PRICE_CENTS, formatMonthlyPriceBRL } from '@zapbuddy/core';
 import {
   FINAL_CTA,
   HERO,
-  PILLARS,
   PRICE_LABEL,
-  PROACTIVE,
   TRIAL_DAYS,
   control,
   faq,
   heroMicrocopy,
   howItWorks,
+  pillars,
   pricing,
+  proactive,
   type LandingFlags,
 } from './content';
 
 const OFF: LandingFlags = { billing: false, dashboard: false };
 const ON: LandingFlags = { billing: true, dashboard: true };
+const BILLING_ONLY: LandingFlags = { billing: true, dashboard: false };
+const DASHBOARD_ONLY: LandingFlags = { billing: false, dashboard: true };
 
 /** Todo texto visível da LP, achatado pra checagem de regra de produto. */
 function allCopy(flags: LandingFlags): string {
@@ -24,21 +26,23 @@ function allCopy(flags: LandingFlags): string {
   const ctl = control(flags);
   const price = pricing(flags);
   const questions = faq(flags);
+  const pil = pillars(flags);
+  const pro = proactive(flags);
   const parts: string[] = [
     HERO.eyebrow,
     HERO.title,
     HERO.subtitle,
     HERO.ctaLabel,
     heroMicrocopy(flags),
-    PILLARS.title,
-    PILLARS.intro,
-    PROACTIVE.title,
-    PROACTIVE.intro,
+    pil.title,
+    pil.intro,
+    pro.title,
+    pro.intro,
     how.title,
     ctl.title,
     ...ctl.items,
-    ...PILLARS.groups.flatMap((g) => [g.tag, g.title, ...g.items.flatMap((i) => [i.title, i.text])]),
-    ...PROACTIVE.items.flatMap((i) => [i.title, i.text]),
+    ...pil.groups.flatMap((g) => [g.tag, g.title, ...g.items.flatMap((i) => [i.title, i.text])]),
+    ...pro.items.flatMap((i) => [i.title, i.text]),
     ...how.steps.flatMap((s) => [s.title, s.text]),
     ...questions.items.flatMap((i) => [i.question, i.answer]),
     FINAL_CTA.title,
@@ -52,6 +56,8 @@ function allCopy(flags: LandingFlags): string {
 describe.each([
   ['painel e cobrança desligados', OFF],
   ['painel e cobrança ligados', ON],
+  ['só cobrança ligada', BILLING_ONLY],
+  ['só painel ligado', DASHBOARD_ONLY],
 ])('copy da LP — regras de produto (CLAUDE.md), %s', (_label, flags) => {
   const copy = allCopy(flags);
 
@@ -152,5 +158,51 @@ describe('copy da LP — estrutura', () => {
       expect(item.question.trim().length).toBeGreaterThan(0);
       expect(item.answer.trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+/** Texto de um cartão/seção da LP, achatado, pra checar o que ele promete. */
+const textOf = (value: unknown): string => JSON.stringify(value);
+
+describe('copy da LP — só promete o que o estado do produto entrega (ADR 0008)', () => {
+  it('sem painel não há como conectar agenda: nada de aviso de conflito, Google Agenda nem agenda conectada', () => {
+    for (const flags of [OFF, BILLING_ONLY]) {
+      const copy = allCopy(flags);
+      expect(copy).not.toMatch(/baterem|mesmo horário|conflito|google agenda|outlook|agenda conectada/i);
+      const compromissos = pillars(flags).groups[0].items.find((item) => item.title === 'Compromissos');
+      expect(compromissos?.text).toMatch(/data e hora/i);
+    }
+  });
+
+  it('com painel, o aviso de conflito aparece e depende de conectar o Google Agenda', () => {
+    for (const flags of [ON, DASHBOARD_ONLY]) {
+      const compromissos = pillars(flags).groups[0].items.find((item) => item.title === 'Compromissos');
+      expect(compromissos?.text).toMatch(/google agenda/i);
+      expect(compromissos?.text).toMatch(/baterem no mesmo horário/i);
+    }
+  });
+
+  it('nunca cita o Outlook: a credencial do Azure ainda não existe em produção', () => {
+    for (const flags of [OFF, ON, BILLING_ONLY, DASHBOARD_ONLY]) expect(allCopy(flags)).not.toMatch(/outlook|microsoft/i);
+  });
+
+  it('o resumo matinal sem painel não promete "agenda" (só tarefas e compromissos salvos como tarefa)', () => {
+    const resumo = (flags: LandingFlags) => proactive(flags).items.find((item) => item.title === 'Resumo matinal')!.text;
+    expect(resumo(OFF)).not.toMatch(/\bagenda\b/i);
+    expect(resumo(OFF)).toMatch(/tarefas e compromissos de hoje/i);
+    expect(resumo(ON)).toMatch(/a agenda e as tarefas de hoje/i);
+  });
+
+  it('sem painel não promete ver nem apagar a memória (o Tom não lista nem recebe o id dos fatos guardados)', () => {
+    for (const flags of [OFF, BILLING_ONLY]) {
+      expect(allCopy(flags)).not.toMatch(/vê tudo|veja o que o tom lembra|peça pro tom esquecer|apague o que/i);
+      expect(textOf(control(flags))).not.toMatch(/lembra de você/i);
+    }
+    expect(textOf(control(ON))).toMatch(/Veja o que o Tom lembra de você/);
+  });
+
+  it('o preço lista "Agenda" só com painel; sem painel é "Compromissos"', () => {
+    expect(pricing(BILLING_ONLY).includes[0]).toMatch(/^Compromissos,/);
+    expect(pricing(ON).includes[0]).toMatch(/^Agenda,/);
   });
 });

@@ -42,7 +42,14 @@ export function heroMicrocopy({ billing }: LandingFlags): string {
     : 'Liberado por enquanto, sem cobrança';
 }
 
-export const PILLARS = {
+/**
+ * Compromissos dependem de agenda conectada (OAuth), e conectar agenda passa pelo painel (ADR 0008):
+ * com o painel desligado — o padrão — nenhum visitante novo consegue conectar, e o Tom salva o
+ * compromisso como tarefa com data e hora. Por isso o aviso de conflito de horário só entra com painel.
+ * Só o Google Agenda é citado: o Outlook ainda não tem credencial do Azure configurada.
+ */
+export function pillars({ dashboard }: LandingFlags) {
+  return {
   title: 'Do jeito que você já fala',
   intro:
     'Sem aplicativo, sem formulário, sem palavra-chave. Manda "gastei 80 no mercado" ou um áudio de 20 segundos e o Tom entende.',
@@ -53,7 +60,9 @@ export const PILLARS = {
       items: [
         {
           title: 'Compromissos',
-          text: 'Marca reunião, consulta ou aniversário de família. Se dois compromissos baterem no mesmo horário, ele avisa.',
+          text: dashboard
+            ? 'Conecte o Google Agenda e ele marca reunião ou consulta direto na sua agenda. Se dois compromissos baterem no mesmo horário, ele avisa.'
+            : 'Guarda reunião, consulta e outros compromissos com data e hora, e te lembra na hora que você pedir.',
         },
         {
           title: 'Tarefas e lembretes',
@@ -97,21 +106,27 @@ export const PILLARS = {
         },
         {
           title: 'Memória',
-          text: 'Lembra o que você contou sobre sua rotina e suas preferências. Você vê tudo e apaga quando quiser.',
+          text: dashboard
+            ? 'Lembra o que você contou sobre sua rotina e suas preferências. Você vê tudo e apaga quando quiser.'
+            : 'Lembra o que você contou sobre sua rotina e suas preferências, pra não repetir tudo toda vez.',
         },
       ],
     },
   ],
-} as const;
+  } as const;
+}
 
-export const PROACTIVE = {
+export function proactive({ dashboard }: LandingFlags) {
+  return {
   title: 'Ele não espera você perguntar',
   intro:
     'Muita ferramenta só responde quando você lembra de abrir. O Tom antecipa o que importa no seu dia.',
   items: [
     {
       title: 'Resumo matinal',
-      text: 'Um bom dia com a previsão do tempo, a agenda e as tarefas de hoje e as contas que vencem hoje. Você escolhe o horário, e agenda e contas só vêm se houver algo pra mostrar.',
+      text: dashboard
+        ? 'Um bom dia com a previsão do tempo, a agenda e as tarefas de hoje e as contas que vencem hoje. Você escolhe o horário, e agenda e contas só vêm se houver algo pra mostrar.'
+        : 'Um bom dia com a previsão do tempo, as tarefas e compromissos de hoje e as contas que vencem hoje. Você escolhe o horário, e tarefas e contas só vêm se houver algo pra mostrar.',
     },
     {
       title: 'Horário de silêncio',
@@ -122,7 +137,8 @@ export const PROACTIVE = {
       text: 'Quando um padrão nos seus gastos pede atenção, ele te avisa. Sem você precisar perguntar.',
     },
   ],
-} as const;
+  } as const;
+}
 
 export function howItWorks({ dashboard }: LandingFlags) {
   return {
@@ -150,9 +166,7 @@ export function control({ dashboard }: LandingFlags) {
   return {
     title: 'Seus dados, sob seu controle',
     items: [
-      dashboard
-        ? 'Veja o que o Tom lembra de você e apague o que não quiser que ele guarde.'
-        : 'Peça pro Tom esquecer o que você não quer que ele guarde, e ele apaga.',
+      ...(dashboard ? ['Veja o que o Tom lembra de você e apague o que não quiser que ele guarde.'] : []),
       'Desfaz a última coisa que ele anotou, nos 10 minutos seguintes.',
       ...(dashboard ? ['Exporte tudo o que você registrou, em JSON, quando quiser.'] : []),
       'O Tom não conecta na sua conta bancária. Ele só sabe o que você contar.',
@@ -167,7 +181,7 @@ export function pricing({ dashboard }: LandingFlags) {
     period: '/mês',
     trialLine: `${TRIAL_DAYS} dias de teste para sentir o ritmo antes de pagar.`,
     includes: [
-      'Agenda, tarefas, lembretes, notas e metas pessoais',
+      dashboard ? 'Agenda, tarefas, lembretes, notas e metas pessoais' : 'Compromissos, tarefas, lembretes, notas e metas pessoais',
       'Financeiro pessoal com resumo semanal',
       'Resumo matinal e avisos proativos, com horário de silêncio',
       ...(dashboard ? ['Painel web e exportação dos seus dados'] : []),

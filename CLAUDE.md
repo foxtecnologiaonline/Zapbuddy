@@ -146,8 +146,11 @@ vigente hoje:
   (o worker faz deploy automático em push na `main`).
 
 **Segurança (2026-11, integrado da branch `ccr-3430b98a-uhjeh9`)**: webhooks de saída com guarda anti-SSRF
-(`packages/core/src/security/ssrf-guard.ts`: valida a URL no cadastro, resolve o DNS na entrega, recusa IP
-privado/metadata, não segue redirect); open redirect do admin corrigido; headers HTTP de segurança e `no-store`
+(`packages/core/src/security/ssrf-guard.ts`: valida a URL no cadastro; na entrega o IP é validado **e fixado no
+instante da conexão** — `publicOnlyLookup` passado como `lookup` do `https.request` em `webhooks/safe-post.ts`, sem 2ª
+resolução de DNS, então não há janela de DNS rebinding —; faixas bloqueadas por CIDR com `net.BlockList`, incluindo
+IPv6 que embute IPv4 (NAT64, 6to4, Teredo, IPv4-compatível, SIIT), site-local, CGNAT e metadata de cloud; não segue
+redirect e não retenta bloqueio); open redirect do admin corrigido; headers HTTP de segurança e `no-store`
 em dashboard/admin; JSON inválido nos webhooks vira 400; nome de arquivo do remetente sanitizado na chave do
 Storage. Dependências: `next` 15.5.29 (zera o crítico de execução remota via imagem SVG) e override global do
 `postcss` (>= 8.5.23).
@@ -751,6 +754,10 @@ mês e IPCA em 12 meses (`markets/digest.ts`; dados do Banco Central via `market
   seguinte). Ignorou = não pergunta de novo.
 - **Escolha** via `set_morning_digest_preferences(indicators: [...])` (sem tool nova; "todos" = os 7 códigos; `[]` remove). Vale a partir
   do dia seguinte, no mesmo sweep/handler do resumo (`morning-digest-generate.ts`), sem fila nova.
+- **Cache** (`markets/bcb.ts`): o valor é o mesmo pra todos, então `fetchMarketRate` guarda por indicador + dia em memória do
+  worker (30 min; falha 5 min) e divide a requisição entre pedidos simultâneos — antes, cada pessoa com indicadores escolhidos
+  disparava até 7 chamadas ao Banco Central na hora do pico. TTL curto porque o BC publica o câmbio à tarde. Vale também pra tool
+  `get_market_rate`.
 - Honestidade: indicador que a fonte não trouxe sai da mensagem; nenhum valor = a mensagem não sai. Câmbio é a taxa de venda do último
   fechamento, e a mensagem diz isso.
 - Migration `0029_morning_digest_indicators.sql` precisa ser aplicada no Supabase ANTES do deploy (o sweep horário seleciona as colunas novas).

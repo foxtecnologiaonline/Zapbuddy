@@ -57,8 +57,25 @@ export function pickLatestRate(rows: BcbRow[], todayKey: string): { value: numbe
   return parsed.at(-1) ?? null;
 }
 
-/** Null (nunca lança) em qualquer falha — quem chama diz "não consegui checar agora" em vez de chutar. */
-export async function fetchMarketRate(indicator: MarketIndicator, todayKey: string): Promise<MarketRate | null> {
+// O valor é o mesmo pra todo mundo, então uma busca por indicador+dia atende todos os usuários do
+// worker (no resumo da manhã, cada pessoa com indicadores escolhidos disparava até 7 chamadas ao BC,
+// cada uma com timeout de 8s e retry, na mesma hora do pico). Mesmo desenho do cache do clima.
+// TTL curto porque o BC publica o câmbio no meio da tarde: de manhã vale o fechamento de ontem,
+// mas quem pergunta depois da publicação não pode ficar preso ao valor velho o dia inteiro.
+const CACHE_TTL_MS = 30 * 60_000;
+// Falha também é guardada por pouco tempo: sem isso, uma queda do BC faria cada usuário insistir.
+const NEGATIVE_CACHE_TTL_MS = 5 * 60_000;
+
+const cache = new Map<string, { expiresAt: number; value: MarketRate | null }>();
+const inflight = new Map<string, Promise<MarketRate | null>>();
+
+/** Só pros testes. */
+export function clearMarketRateCache(): void {
+  cache.clear();
+  inflight.clear();
+}
+
+async function requestMarketRate(indicator: MarketIndicator, todayKey: string): Promise<MarketRate | null> {
   const config = MARKET_INDICATORS[indicator];
   try {
     const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${config.series}/dados/ultimos/5?formato=json`;
@@ -81,4 +98,28 @@ export async function fetchMarketRate(indicator: MarketIndicator, todayKey: stri
     logger.error('bcb_series_failed', { indicator, error: error instanceof Error ? error.message : String(error) });
     return null;
   }
+}
+
+/**
+ * Null (nunca lança) em qualquer falha — quem chama diz "não consegui checar agora" em vez de chutar.
+ * Resultado em cache por indicador + dia local (a série é a mesma pra todos); pedidos simultâneos
+ * pro mesmo indicador compartilham a mesma requisição em voo.
+ */
+export async function fetchMarketRate(indicator: MarketIndicator, todayKey: string): Promise<MarketRate | null> {
+  const key = `${indicator}|${todayKey}`;
+
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const request = requestMarketRate(indicator, todayKey)
+    .then((value) => {
+      cache.set(key, { value, expiresAt: Date.now() + (value ? CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS) });
+      return value;
+    })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, request);
+  return request;
 }

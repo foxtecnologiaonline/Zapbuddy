@@ -1,8 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { listActiveSubscriptionsForEvent, logWebhookDelivery, logger, type WebhookEventTypePublic } from '@zapbuddy/db';
-import { fetchWithRetry } from '../whatsapp/http-retry.js';
 import { getWebhookDispatchQueue } from '../queues/definitions.js';
-import { assertPublicHttpsUrl } from '../security/ssrf-guard.js';
+import { postJsonToPublicHttps } from './safe-post.js';
 
 /**
  * Enfileira o evento pra entrega assíncrona (ADR 0003, decisão 5) — chamado
@@ -50,19 +49,14 @@ export async function dispatchWebhookEvent(
   const results = await Promise.all(
     subscriptions.map(async (subscription) => {
       try {
-        await assertPublicHttpsUrl(subscription.url);
-        const response = await fetchWithRetry(
+        // Nunca segue redirect e valida o IP no instante da conexão (SSRF / DNS rebinding) — ver safe-post.ts.
+        const response = await postJsonToPublicHttps(
           subscription.url,
+          rawBody,
           {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-ZapBuddy-Signature': `sha256=${signPayload(subscription.secret, rawBody)}`,
-              'X-ZapBuddy-Event': eventType,
-            },
-            body: rawBody,
-            // Nunca segue redirect: um 302 pra rede interna contornaria a checagem acima.
-            redirect: 'manual',
+            'Content-Type': 'application/json',
+            'X-ZapBuddy-Signature': `sha256=${signPayload(subscription.secret, rawBody)}`,
+            'X-ZapBuddy-Event': eventType,
           },
           10_000,
         );

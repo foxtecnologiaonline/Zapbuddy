@@ -4,14 +4,14 @@ import { buildWhatsAppLink } from './whatsapp';
 import {
   FINAL_CTA,
   HERO,
-  PILLARS,
   PREFILLED_MESSAGE,
-  PROACTIVE,
   control,
   faq,
   heroMicrocopy,
   howItWorks,
+  pillars,
   pricing,
+  proactive,
   type LandingFlags,
 } from './content';
 
@@ -37,6 +37,8 @@ function Section({ id, title, children }: { id: string; title: string; children:
 export function Landing({ billing, dashboard }: LandingFlags) {
   const flags = { billing, dashboard };
   const year = new Date().getFullYear();
+  const PILLARS = pillars(flags);
+  const PROACTIVE = proactive(flags);
   const HOW_IT_WORKS = howItWorks(flags);
   const CONTROL = control(flags);
   const FAQ = faq(flags);
