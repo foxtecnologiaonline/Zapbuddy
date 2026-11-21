@@ -23,6 +23,7 @@ import { runProactiveRoutines } from './proactive-routines.js';
 const account = {
   accountId: 'acc-1',
   ownerUserId: 'user-1',
+  ownerOnboarded: true,
   ownerWhatsappNumber: '5511999999999',
   ownerTimezone: 'America/Sao_Paulo',
   quietHoursStart: 22,

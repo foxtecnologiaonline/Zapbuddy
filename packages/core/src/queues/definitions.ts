@@ -124,7 +124,7 @@ export interface MorningDigestGenerateJob {
   indicatorsOffered?: boolean;
 }
 
-export type OnboardingNudgeStage = '2h' | '24h';
+export type OnboardingNudgeStage = '2h' | '20h';
 
 /**
  * Enfileirado pelo sweep horário (insights-sweep.ts) quando detecta que o

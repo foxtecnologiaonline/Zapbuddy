@@ -11,19 +11,29 @@ function key(whatsappNumber: string): string {
 }
 
 /**
- * Janela fixa simples (INCR + EXPIRE na primeira ocorrência) por número, a
- * ser checada pelos webhooks do WhatsApp antes de enfileirar qualquer
- * mensagem. Redis já é dependência obrigatória do projeto (filas/contexto),
- * então isto não introduz infraestrutura nova.
+ * INCR + EXPIRE num script só (atômico, e 1 round-trip em vez de 2 na primeira mensagem). Antes eram dois comandos: se o
+ * EXPIRE falhasse logo depois do INCR (a cota do Upstash já estourou duas vezes), a chave ficava SEM validade e, passadas 20
+ * mensagens no total, a pessoa era bloqueada para sempre e em silêncio. O `TTL < 0` também cura uma chave que já tenha ficado assim.
+ */
+const INCR_WITH_TTL = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 or redis.call('TTL', KEYS[1]) < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`;
+
+async function incrementWithWindow(key: string, windowSeconds: number): Promise<number> {
+  const count = await getRedisConnection().eval(INCR_WITH_TTL, 1, key, windowSeconds);
+  return Number(count);
+}
+
+/**
+ * Janela fixa simples por número, a ser checada pelos webhooks do WhatsApp antes de enfileirar qualquer mensagem. Redis já é
+ * dependência obrigatória do projeto (filas/contexto), então isto não introduz infraestrutura nova.
  */
 export async function isRateLimited(whatsappNumber: string): Promise<boolean> {
-  const redis = getRedisConnection();
-  const k = key(whatsappNumber);
-  const count = await redis.incr(k);
-  if (count === 1) {
-    await redis.expire(k, WINDOW_SECONDS);
-  }
-  return count > MAX_MESSAGES_PER_WINDOW;
+  return (await incrementWithWindow(key(whatsappNumber), WINDOW_SECONDS)) > MAX_MESSAGES_PER_WINDOW;
 }
 
 const LOGIN_WINDOW_SECONDS = 15 * 60;
@@ -39,11 +49,5 @@ function loginKey(identifier: string): string {
 
 /** Janela fixa por IP (ou outro identificador do cliente) pras tentativas de login do admin. */
 export async function isAdminLoginRateLimited(identifier: string): Promise<boolean> {
-  const redis = getRedisConnection();
-  const k = loginKey(identifier);
-  const count = await redis.incr(k);
-  if (count === 1) {
-    await redis.expire(k, LOGIN_WINDOW_SECONDS);
-  }
-  return count > MAX_LOGIN_ATTEMPTS_PER_WINDOW;
+  return (await incrementWithWindow(loginKey(identifier), LOGIN_WINDOW_SECONDS)) > MAX_LOGIN_ATTEMPTS_PER_WINDOW;
 }

@@ -7,7 +7,7 @@ describe('formatOnboardingNudgeMessage', () => {
   });
 
   it('retorna uma mensagem não vazia pro estágio 24h', () => {
-    expect(formatOnboardingNudgeMessage('24h').length).toBeGreaterThan(0);
+    expect(formatOnboardingNudgeMessage('20h').length).toBeGreaterThan(0);
   });
 
   it('varia a mensagem em chamadas repetidas (não é sempre a mesma frase)', () => {

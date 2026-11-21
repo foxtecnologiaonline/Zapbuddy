@@ -59,7 +59,16 @@ export async function createAccountForUser(userId: string): Promise<UserAccount>
   const { error: memberError } = await client
     .from('account_members')
     .insert({ account_id: account.id, user_id: userId, role: 'owner' });
-  if (memberError) throw memberError;
+  if (memberError) {
+    // Corrida: duas mensagens simultâneas da pessoa nova criaram duas contas, e account_members.user_id é UNIQUE. A que
+    // perdeu apaga a conta que acabou de criar (ficaria órfã) e devolve a da vencedora, em vez de falhar o job.
+    if (memberError.code === '23505') {
+      await client.from('accounts').delete().eq('id', account.id);
+      const existing = await getAccountForUser(userId);
+      if (existing) return existing;
+    }
+    throw memberError;
+  }
 
   return { accountId: account.id, role: 'owner' };
 }
@@ -152,6 +161,8 @@ export async function listAccountMembers(accountId: string): Promise<AccountMemb
 export interface AccountOwnerForSweep {
   accountId: string;
   ownerUserId: string;
+  /** false = nunca completou o onboarding (não deu o nome): o sweep não manda resumo, insight nem rotinas. */
+  ownerOnboarded: boolean;
   ownerWhatsappNumber: string;
   ownerTimezone: string;
   quietHoursStart: number;
@@ -185,7 +196,7 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
   const { data, error } = await getSupabaseClient()
     .from('account_members')
     .select(
-      'account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end, name, preferred_name, city_uf, city_latitude, city_longitude, morning_digest_enabled, morning_digest_hour, morning_digest_agenda, morning_digest_finance, morning_digest_indicators, indicators_offered_at, created_at, routine_checkins, routine_weekly_tip, routine_day_close, routine_week_review)',
+      'account_id, users(id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end, name, preferred_name, city_uf, city_latitude, city_longitude, morning_digest_enabled, morning_digest_hour, morning_digest_agenda, morning_digest_finance, morning_digest_indicators, indicators_offered_at, onboarding_completed_at, created_at, routine_checkins, routine_weekly_tip, routine_day_close, routine_week_review)',
     )
     .eq('role', 'owner');
 
@@ -208,6 +219,7 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
       morning_digest_finance: boolean;
       morning_digest_indicators: string[] | null;
       indicators_offered_at: string | null;
+      onboarding_completed_at: string | null;
       created_at: string;
       routine_checkins: boolean;
       routine_weekly_tip: boolean;
@@ -217,6 +229,7 @@ export async function listAccountsForInsightsSweep(): Promise<AccountOwnerForSwe
     return {
       accountId: row.account_id as string,
       ownerUserId: user.id,
+      ownerOnboarded: user.onboarding_completed_at !== null,
       ownerWhatsappNumber: user.whatsapp_number,
       ownerTimezone: user.timezone,
       quietHoursStart: user.quiet_hours_start,

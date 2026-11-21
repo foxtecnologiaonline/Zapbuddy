@@ -9,7 +9,7 @@ const NUDGE_2H_TEMPLATES = [
   'Oi, sou eu de novo, o Tom 🙂 Falta só seu nome pra deixar tudo pronto por aqui.',
 ];
 
-const NUDGE_24H_TEMPLATES = [
+const NUDGE_20H_TEMPLATES = [
   'Deixo a porta aberta por aqui 🙂 Me manda seu nome e a primeira coisa que você quer organizar — tarefa, gasto, lembrete, o que vier.',
   'Fico por aqui se quiser continuar de onde paramos. Me diz seu nome e manda a primeira coisa (tipo "gastei 30 no almoço") que eu cuido do resto.',
   'Sem pressa, tá? Quando quiser, me manda seu nome e a gente começa — agenda, tarefas, notas ou gastos, o que for mais útil pra você.',
@@ -21,5 +21,5 @@ function pickTemplate(templates: string[]): string {
 
 /** Mensagem de reengajamento pra quem começou o onboarding e não respondeu (ADR 0005, sugestão 4). */
 export function formatOnboardingNudgeMessage(stage: OnboardingNudgeStage): string {
-  return pickTemplate(stage === '2h' ? NUDGE_2H_TEMPLATES : NUDGE_24H_TEMPLATES);
+  return pickTemplate(stage === '2h' ? NUDGE_2H_TEMPLATES : NUDGE_20H_TEMPLATES);
 }

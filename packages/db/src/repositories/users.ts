@@ -54,7 +54,16 @@ export async function createUser(whatsappNumber: string): Promise<User> {
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Corrida: duas mensagens simultâneas de um número novo fazem find -> nada e insert nas duas; whatsapp_number é UNIQUE e
+    // a 2ª estourava aqui, o webhook engolia o erro e respondia 200 (a Meta não reentrega): a mensagem sumia sem resposta.
+    // Agora a que perdeu devolve o usuário que a vencedora criou.
+    if (error.code === '23505') {
+      const existing = await findUserByWhatsappNumber(whatsappNumber);
+      if (existing) return existing;
+    }
+    throw error;
+  }
   return data as User;
 }
 
@@ -92,6 +101,10 @@ export async function completeOnboarding(userId: string, name: string, occupatio
 export interface UserPendingOnboardingNudge {
   id: string;
   whatsapp_number: string;
+  /** Pro nudge respeitar o horário de silêncio no fuso da pessoa (antes mandava de madrugada). */
+  timezone: string;
+  quiet_hours_start: number;
+  quiet_hours_end: number;
 }
 
 /**
@@ -117,7 +130,7 @@ export async function listUsersPendingOnboardingNudge(
 
   const { data, error } = await getSupabaseClient()
     .from('users')
-    .select('id, whatsapp_number')
+    .select('id, whatsapp_number, timezone, quiet_hours_start, quiet_hours_end')
     .is('onboarding_completed_at', null)
     .gte('created_at', sinceIso)
     .lt('created_at', untilIso);

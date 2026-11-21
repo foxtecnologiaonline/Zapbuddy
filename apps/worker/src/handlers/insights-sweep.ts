@@ -112,6 +112,11 @@ async function runWeeklyMaintenance(): Promise<void> {
  * gatilhos de dia/hora e fonte de dado diferentes.
  */
 export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<void> {
+  // A ÚNICA chamada que pode lançar antes dos efeitos colaterais vem PRIMEIRO: se o banco estiver fora, o BullMQ refaz o
+  // job (attempts: 3) sem que nada tenha rodado ainda. Antes ela vinha depois do nudge de onboarding e do backfill, e cada
+  // retry reenviava o nudge a quem estava na janela (auditoria 2026-11).
+  const accounts = await listAccountsForInsightsSweep();
+
   await runWeeklyMaintenance();
 
   // Reengajamento de onboarding (2026-10: sem fila própria — ver nota em
@@ -126,90 +131,110 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
   // Vetores de notas/documentos que ficaram pendentes (busca semântica) — manutenção leve, nunca lança.
   await handleEmbeddingsBackfill();
 
-  const accounts = await listAccountsForInsightsSweep();
-
   await Promise.all(
-    accounts.map(async (account) => {
-      const localHour = getLocalHour(account.ownerTimezone);
-      const quiet = isWithinQuietHours(localHour, account.quietHoursStart, account.quietHoursEnd);
-
-      if (account.morningDigestEnabled && localHour === account.morningDigestHour && !quiet) {
-        const today = getTodayRange(account.ownerTimezone);
-        await getMorningDigestGenerateQueue().add(
-          'generate',
-          {
-            accountId: account.accountId,
-            ownerWhatsappNumber: account.ownerWhatsappNumber,
-            ownerTimezone: account.ownerTimezone,
-            displayName: account.displayName,
-            city:
-              account.cityUf && account.cityLatitude !== null && account.cityLongitude !== null
-                ? { uf: account.cityUf, latitude: account.cityLatitude, longitude: account.cityLongitude }
-                : null,
-            digestHour: localHour,
-            includeAgenda: account.morningDigestAgenda,
-            includeFinance: account.morningDigestFinance,
-            ownerUserId: account.ownerUserId,
-            indicators: account.morningDigestIndicators,
-            indicatorsOffered: account.indicatorsOffered,
-          },
-          { jobId: `morning:${account.accountId}:${today.startIso.slice(0, 10)}` },
-        );
-      }
-
-      if (localHour === TARGET_LOCAL_HOUR && !quiet) {
-        const today = getTodayRange(account.ownerTimezone);
-        const alreadySent = await hasSentProactiveInsightToday(account.accountId, today.startIso, today.endIso);
-        if (!alreadySent) {
-          // jobId com a data embutida: segunda camada de idempotência (além
-          // do check acima) — se o sweep rodar 2x na mesma janela por algum
-          // motivo, BullMQ não duplica o job.
-          await getInsightsGenerateQueue().add(
-            'generate',
-            { accountId: account.accountId, ownerWhatsappNumber: account.ownerWhatsappNumber, ownerTimezone: account.ownerTimezone },
-            { jobId: `${account.accountId}:${today.startIso.slice(0, 10)}` },
-          );
-        }
-      }
-
-      if (localHour === IMPORTANT_DATE_LOCAL_HOUR && !quiet) {
-        const { month, day, year } = getLocalDateParts(account.ownerTimezone);
-        const matches = await listImportantDatesForAccountOnDate(account.accountId, month, day);
-
-        await Promise.all(
-          matches.map(async (importantDate) => {
-            const alreadySent = await hasSentImportantDateReminderThisYear(importantDate.id, year);
-            if (alreadySent) return;
-
-            await getImportantDateReminderQueue().add(
-              'send',
-              { importantDateId: importantDate.id, label: importantDate.label, ownerWhatsappNumber: account.ownerWhatsappNumber, year },
-              { jobId: `important-date:${importantDate.id}:${year}` },
-            );
-          }),
-        );
-      }
-
-      if (localHour === DIGEST_LOCAL_HOUR && !quiet && getLocalWeekday(account.ownerTimezone) === DIGEST_LOCAL_WEEKDAY) {
-        // "Essa semana" = últimos 8 dias — folga de 1 dia sobre o intervalo
-        // de 7 dias que o próprio resumo mostra, só pra idempotência (nunca
-        // usado pra calcular o conteúdo do resumo, só pra decidir se já
-        // mandou).
-        const sinceIso = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
-        const alreadySent = await hasSentWeeklyDigestSince(account.accountId, sinceIso);
-        if (!alreadySent) {
-          const today = getTodayRange(account.ownerTimezone);
-          await getWeeklyDigestGenerateQueue().add(
-            'generate',
-            { accountId: account.accountId, ownerWhatsappNumber: account.ownerWhatsappNumber, ownerTimezone: account.ownerTimezone },
-            { jobId: `digest:${account.accountId}:${today.startIso.slice(0, 10)}` },
-          );
-        }
-      }
-
-      // Check-in pós-compromisso, fechamento do dia, revisão da semana e dica
-      // semanal (sugestões #6, #11 e #15) — cada uma isolada e idempotente.
-      await runProactiveRoutines(account, { localHour, quiet });
-    }),
+    accounts.map((account) => processAccount(account)),
   );
+}
+
+type SweepAccount = Awaited<ReturnType<typeof listAccountsForInsightsSweep>>[number];
+
+/**
+ * Uma conta nunca derruba o sweep inteiro: antes, a exceção de UMA (ex.: um jobId inválido) subia pelo Promise.all, o job
+ * falhava, o BullMQ refazia tudo 3 vezes e as outras contas ficavam sem check-in e sem aviso (auditoria 2026-11).
+ */
+async function processAccount(account: SweepAccount): Promise<void> {
+  try {
+    await processAccountUnsafe(account);
+  } catch (error) {
+    logger.error('insights_sweep_account_failed', { accountId: account.accountId, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+async function processAccountUnsafe(account: SweepAccount): Promise<void> {
+  // Quem ainda não fez o cadastro (nunca disse o nome) só recebe o reengajamento do onboarding: nada de "bom dia" completo,
+  // oferta de indicadores nem insight pra quem mal conversou com o Tom.
+  if (!account.ownerOnboarded) return;
+
+  const localHour = getLocalHour(account.ownerTimezone);
+  const quiet = isWithinQuietHours(localHour, account.quietHoursStart, account.quietHoursEnd);
+
+  if (account.morningDigestEnabled && localHour === account.morningDigestHour && !quiet) {
+    const today = getTodayRange(account.ownerTimezone);
+    await getMorningDigestGenerateQueue().add(
+      'generate',
+      {
+        accountId: account.accountId,
+        ownerWhatsappNumber: account.ownerWhatsappNumber,
+        ownerTimezone: account.ownerTimezone,
+        displayName: account.displayName,
+        city:
+          account.cityUf && account.cityLatitude !== null && account.cityLongitude !== null
+            ? { uf: account.cityUf, latitude: account.cityLatitude, longitude: account.cityLongitude }
+            : null,
+        digestHour: localHour,
+        includeAgenda: account.morningDigestAgenda,
+        includeFinance: account.morningDigestFinance,
+        ownerUserId: account.ownerUserId,
+        indicators: account.morningDigestIndicators,
+        indicatorsOffered: account.indicatorsOffered,
+      },
+      { jobId: `morning:${account.accountId}:${today.startIso.slice(0, 10)}` },
+    );
+  }
+
+  if (localHour === TARGET_LOCAL_HOUR && !quiet) {
+    const today = getTodayRange(account.ownerTimezone);
+    const alreadySent = await hasSentProactiveInsightToday(account.accountId, today.startIso, today.endIso);
+    if (!alreadySent) {
+      // jobId com a data embutida: segunda camada de idempotência (além
+      // do check acima) — se o sweep rodar 2x na mesma janela por algum
+      // motivo, BullMQ não duplica o job.
+      await getInsightsGenerateQueue().add(
+        'generate',
+        { accountId: account.accountId, ownerWhatsappNumber: account.ownerWhatsappNumber, ownerTimezone: account.ownerTimezone },
+        // BullMQ: jobId com ":" precisa ter EXATAMENTE 3 partes, senão lança "Custom Id cannot contain :". O id antigo
+        // (`${conta}:${data}`) tinha 2 e o insight das 19h nunca foi enfileirado (auditoria 2026-11).
+        { jobId: `insight:${account.accountId}:${today.startIso.slice(0, 10)}` },
+      );
+    }
+  }
+
+  if (localHour === IMPORTANT_DATE_LOCAL_HOUR && !quiet) {
+    const { month, day, year } = getLocalDateParts(account.ownerTimezone);
+    const matches = await listImportantDatesForAccountOnDate(account.accountId, month, day);
+
+    await Promise.all(
+      matches.map(async (importantDate) => {
+        const alreadySent = await hasSentImportantDateReminderThisYear(importantDate.id, year);
+        if (alreadySent) return;
+
+        await getImportantDateReminderQueue().add(
+          'send',
+          { importantDateId: importantDate.id, label: importantDate.label, ownerWhatsappNumber: account.ownerWhatsappNumber, year },
+          { jobId: `important-date:${importantDate.id}:${year}` },
+        );
+      }),
+    );
+  }
+
+  if (localHour === DIGEST_LOCAL_HOUR && !quiet && getLocalWeekday(account.ownerTimezone) === DIGEST_LOCAL_WEEKDAY) {
+    // "Essa semana" = últimos 8 dias — folga de 1 dia sobre o intervalo
+    // de 7 dias que o próprio resumo mostra, só pra idempotência (nunca
+    // usado pra calcular o conteúdo do resumo, só pra decidir se já
+    // mandou).
+    const sinceIso = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    const alreadySent = await hasSentWeeklyDigestSince(account.accountId, sinceIso);
+    if (!alreadySent) {
+      const today = getTodayRange(account.ownerTimezone);
+      await getWeeklyDigestGenerateQueue().add(
+        'generate',
+        { accountId: account.accountId, ownerWhatsappNumber: account.ownerWhatsappNumber, ownerTimezone: account.ownerTimezone },
+        { jobId: `digest:${account.accountId}:${today.startIso.slice(0, 10)}` },
+      );
+    }
+  }
+
+  // Check-in pós-compromisso, fechamento do dia, revisão da semana e dica
+  // semanal (sugestões #6, #11 e #15) — cada uma isolada e idempotente.
+  await runProactiveRoutines(account, { localHour, quiet });
 }
