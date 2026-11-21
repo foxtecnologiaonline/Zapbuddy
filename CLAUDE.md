@@ -145,12 +145,12 @@ vigente hoje:
   (`morning_digest_indicators`) é a mais recente. Aplicar no Supabase **antes** do deploy do código que a usa
   (o worker faz deploy automático em push na `main`).
 
-- **Deploy do web (Vercel) — atenção**: a *Production Branch* do projeto `zapbuddy` na Vercel é `claude/trusting-meitner-eipvnk`,
-  **não** `main` (descoberto em 2026-11-21: todos os deploys `production` vinham dela; os da `main` saem como preview). Ou seja,
-  **push em `main` atualiza o worker (VPS) mas NÃO o web em produção.** Correção definitiva é no painel da Vercel (Settings →
-  Environments → Production → Branch Tracking → `main`); até lá, o web vai pra produção por deploy manual de um commit da `main`
-  com `target: production`. O `ignoreCommand` (`apps/web/vercel.json`) compara com o último deploy da MESMA branch e antes
-  descartava até deploy de produção do mesmo commit; agora nunca pula build quando `VERCEL_ENV=production`.
+- **Deploy do web (Vercel)**: a *Production Branch* do projeto `zapbuddy` era `claude/trusting-meitner-eipvnk` (descoberto em
+  2026-11-21: os deploys da `main` saíam como preview e o web em produção ficou atrás do worker) e foi trocada para **`main`**
+  pelo dono do produto no mesmo dia. Hoje **push em `main` atualiza worker (GitHub Actions → VPS) e web (Vercel, produção)**.
+  O `ignoreCommand` (`apps/web/vercel.json`) compara com o último deploy da MESMA branch e antes descartava até o deploy de
+  produção do mesmo commit; agora nunca pula build quando `VERCEL_ENV=production` (só pula preview sem mudança em
+  `apps/web`/`packages`). Um redeploy manual de produção do mesmo commit continua possível via `target: production`.
 
 **Segurança (2026-11, integrado da branch `ccr-3430b98a-uhjeh9`)**: webhooks de saída com guarda anti-SSRF
 (`packages/core/src/security/ssrf-guard.ts`: valida a URL no cadastro; na entrega o IP é validado **e fixado no
