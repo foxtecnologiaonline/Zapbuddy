@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inferTimezoneFromWhatsappNumber } from './timezone-from-ddd.js';
+import { inferTimezoneFromUf, inferTimezoneFromWhatsappNumber } from './timezone-from-ddd.js';
 
 describe('inferTimezoneFromWhatsappNumber', () => {
   it('reconhece DDD de São Paulo (padrão) com 9 dígitos de linha', () => {
@@ -38,5 +38,28 @@ describe('inferTimezoneFromWhatsappNumber', () => {
 
   it('cai no default pra número com tamanho fora do esperado pra um número brasileiro', () => {
     expect(inferTimezoneFromWhatsappNumber('5511')).toBe('America/Sao_Paulo');
+  });
+});
+
+describe('inferTimezoneFromUf', () => {
+  it('estados com fuso próprio', () => {
+    expect(inferTimezoneFromUf('AC')).toBe('America/Rio_Branco');
+    expect(inferTimezoneFromUf('AM')).toBe('America/Manaus');
+    expect(inferTimezoneFromUf('MT')).toBe('America/Cuiaba');
+    expect(inferTimezoneFromUf('MS')).toBe('America/Campo_Grande');
+    expect(inferTimezoneFromUf('RO')).toBe('America/Porto_Velho');
+    expect(inferTimezoneFromUf('RR')).toBe('America/Boa_Vista');
+  });
+
+  it('o resto do Brasil fica em Brasília, inclusive PA, TO, BA e DF', () => {
+    for (const uf of ['SP', 'RJ', 'MG', 'DF', 'BA', 'PA', 'TO', 'RS', 'PE']) {
+      expect(inferTimezoneFromUf(uf)).toBe('America/Sao_Paulo');
+    }
+  });
+
+  it('aceita minúscula e espaço; valor estranho cai no padrão (nunca lança)', () => {
+    expect(inferTimezoneFromUf(' am ')).toBe('America/Manaus');
+    expect(inferTimezoneFromUf('')).toBe('America/Sao_Paulo');
+    expect(inferTimezoneFromUf('XX')).toBe('America/Sao_Paulo');
   });
 });

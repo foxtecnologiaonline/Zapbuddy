@@ -35,6 +35,12 @@ export const MESSAGES = {
     'Esse código não é válido ou expirou. Confirma com quem te convidou e manda de novo (ex.: "entrar 482913"), ' +
     'ou me conta seu nome que eu sigo com seu cadastro normal.',
   documentReceived: (fileName: string) => `📎 Salvei "${fileName}". Pode pedir pra eu procurar depois.`,
+  // Primeiro contato que chegou como arquivo (foto/PDF): a resposta fixa de "salvei" não apresentava o Tom nem pedia o nome, e a
+  // pessoa ficava sem saber com quem falava. Anexada só a quem ainda não fez o onboarding; mesma abertura do roteiro (sem preço/teste).
+  firstContactIntro:
+    'Aproveitando: eu sou o Tom, seu parceiro aqui no WhatsApp 🙂\n' +
+    'Cuido da sua agenda, das tarefas, das notas e do seu dinheiro, por texto ou áudio.\n' +
+    'Como posso te chamar?',
   // Bloqueio real de trial encerrado (2026-10, pedido do dono do produto —
   // ver CLAUDE.md). Mensagem FIXA, nunca gerada pela IA: a pessoa bloqueada
   // nem chega a chamar o LLM (trial-gate.ts intercepta antes), então essas

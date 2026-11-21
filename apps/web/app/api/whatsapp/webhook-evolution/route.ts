@@ -176,7 +176,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('webhook_message_failed', { waMessageId: key.id, error: errorMessage });
-    await logError({ source: 'webhook', message: errorMessage, detail: { waMessageId: key.id, whatsappNumber } });
+    await logError({ source: 'webhook', message: errorMessage, detail: { waMessageId: key.id, whatsappNumber } }).catch(() => undefined);
+    // Falha de infra: 5xx pro gateway reentregar (o `jobId` = id da mensagem impede duplicar o que já entrou na fila).
+    return NextResponse.json({ received: false }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

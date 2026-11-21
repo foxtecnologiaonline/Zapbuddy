@@ -10,7 +10,7 @@ export const createTaskTool = defineTool({
     'Cria uma tarefa. due_at opcional: se ela deu só o DIA, use 23:59:59 daquele dia no fuso dela ("o dia todo", sem hora); hora específica só se ela disse.',
   schema: z.object({
     title: z.string().min(1),
-    due_at: z.string().datetime().optional(),
+    due_at: z.string().datetime({ offset: true }).optional(),
   }),
   execute: async (params, ctx) => {
     if (params.due_at) assertPlausibleTimestamp(params.due_at, 'due_at');
@@ -65,7 +65,7 @@ export const updateTaskTool = defineTool({
     .object({
       task_id: z.string().uuid(),
       title: z.string().min(1).optional(),
-      due_at: z.string().datetime().nullable().optional(),
+      due_at: z.string().datetime({ offset: true }).nullable().optional(),
     })
     .refine((value) => value.title !== undefined || value.due_at !== undefined, {
       message: 'Informe ao menos um campo pra alterar (title ou due_at).',

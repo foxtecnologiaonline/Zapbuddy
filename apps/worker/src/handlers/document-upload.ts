@@ -90,7 +90,9 @@ export async function handleDocumentUpload(job: Job<DocumentUploadJob>): Promise
     buffer,
   });
 
-  const reply = await readAndRespond({ user, document, buffer, mimeType, fileName, caption });
+  const readReply = await readAndRespond({ user, document, buffer, mimeType, fileName, caption });
+  // Quem ainda não fez o onboarding (primeira mensagem foi um arquivo) recebe a apresentação e a pergunta do nome junto.
+  const reply = user.onboarding_completed_at ? readReply : `${readReply}\n\n${MESSAGES.firstContactIntro}`;
   await setCachedReply(waMessageId, reply);
   await sendWhatsappTextMessage(user.whatsapp_number, reply);
 }

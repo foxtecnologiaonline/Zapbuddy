@@ -18,7 +18,7 @@ export const recordTransactionTool = defineTool({
     // com isso abaixo, caindo em 'outros' em vez de falhar a conversa.
     category: z.string().min(1),
     description: z.string().optional(),
-    occurred_at: z.string().datetime().optional(),
+    occurred_at: z.string().datetime({ offset: true }).optional(),
   }),
   execute: async (params, ctx) => {
     if (params.occurred_at) assertReasonableOccurredAt(params.occurred_at, 'occurred_at');

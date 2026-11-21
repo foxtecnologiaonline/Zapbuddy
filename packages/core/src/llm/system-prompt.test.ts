@@ -436,12 +436,22 @@ describe('buildSystemPromptBlocks (cache em camadas — sugestão #1 da revisão
     expect(flat).toBe(`${blocks.stable}${blocks.semiStable}${blocks.volatile}`);
   });
 
-  it('no fluxo de onboarding, semi-estável e volátil ficam vazios (nada a cachear em camada separada)', () => {
-    const blocks = buildSystemPromptBlocks(baseUser({ onboarding_completed_at: null }));
+  it('no onboarding só o semi-estável fica vazio; a volátil traz o relógio e o fuso (o pedido da 1ª mensagem precisa de "amanhã" resolvido)', () => {
+    const blocks = buildSystemPromptBlocks(baseUser({ onboarding_completed_at: null, timezone: 'America/Sao_Paulo' }));
 
     expect(blocks.semiStable).toBe('');
-    expect(blocks.volatile).toBe('');
     expect(blocks.stable).toContain('complete_onboarding');
+    expect(blocks.volatile).toContain('America/Sao_Paulo');
+    expect(blocks.volatile).toContain('Agora é');
+    expect(blocks.volatile).toContain('UTC-03:00');
+    expect(blocks.volatile).toContain('AAAA-MM-DDTHH:MM:SS-03:00'); // molde com o deslocamento da pessoa (sem data literal pra o modelo não copiar)
+  });
+
+  it('o relógio é o mesmo nos dois estados (cadastrada ou não) e o exemplo usa o fuso de cada pessoa', () => {
+    const manaus = buildSystemPromptBlocks(baseUser({ timezone: 'America/Manaus' })).volatile;
+    expect(manaus).toContain('UTC-04:00');
+    expect(manaus).toContain('AAAA-MM-DDTHH:MM:SS-04:00');
+    expect(buildSystemPromptBlocks(baseUser({ onboarding_completed_at: null, timezone: 'America/Manaus' })).volatile).toContain('UTC-04:00');
   });
 });
 

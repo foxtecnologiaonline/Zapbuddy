@@ -80,9 +80,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const messages = payload.entry?.flatMap((entry) => entry.changes ?? []).flatMap((change) => change.value?.messages ?? []) ?? [];
 
+  // Falha de INFRA (fila/banco fora do ar) numa mensagem: a resposta final é 5xx pra Meta reentregar o webhook (ela tenta por
+  // dias, com backoff). Antes respondia 200 e a mensagem se perdia em silêncio — a pessoa ficava sem resposta. A reentrega não
+  // duplica nada: `jobId` = id da mensagem (retido 24h pelo BullMQ), então o que já entrou na fila é ignorado.
+  let infraFailure = false;
+
   for (const message of messages) {
-    // Cada mensagem é tratada isoladamente: uma falha numa não deve impedir o
-    // processamento das demais nem a resposta 200 rápida que a Meta exige.
+    // Cada mensagem é tratada isoladamente: uma falha numa não deve impedir o processamento das demais.
     try {
       const user = await getOrCreateUser(message.from);
 
@@ -164,9 +168,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
       const message_ = error instanceof Error ? error.message : String(error);
       logger.error('webhook_message_failed', { waMessageId: message.id, error: message_ });
-      await logError({ source: 'webhook', message: message_, detail: { waMessageId: message.id, from: message.from } });
+      infraFailure = true;
+      // Se o banco é justamente o que caiu, registrar o erro também falha: não pode derrubar o resto do lote.
+      await logError({ source: 'webhook', message: message_, detail: { waMessageId: message.id, from: message.from } }).catch(() => undefined);
     }
   }
+
+  if (infraFailure) return NextResponse.json({ received: false }, { status: 500 });
 
   // Meta exige resposta 200 rápida; o processamento real acontece no worker via fila.
   return NextResponse.json({ received: true });

@@ -10,7 +10,7 @@ export const createReminderTool = defineTool({
     'Agenda um lembrete numa data/hora futura. recurrence (daily/weekly/monthly) pro que se repete: a próxima ocorrência é criada sozinha.',
   schema: z.object({
     message: z.string().min(1),
-    remind_at: z.string().datetime(),
+    remind_at: z.string().datetime({ offset: true }),
     task_id: z.string().uuid().optional(),
     recurrence: z.enum(['daily', 'weekly', 'monthly']).optional(),
   }),
@@ -86,7 +86,7 @@ export const updateReminderTool = defineTool({
     .object({
       reminder_id: z.string().uuid(),
       message: z.string().min(1).optional(),
-      remind_at: z.string().datetime().optional(),
+      remind_at: z.string().datetime({ offset: true }).optional(),
       recurrence: z.enum(['daily', 'weekly', 'monthly', 'none']).optional(),
     })
     .refine((value) => value.message !== undefined || value.remind_at !== undefined || value.recurrence !== undefined, {

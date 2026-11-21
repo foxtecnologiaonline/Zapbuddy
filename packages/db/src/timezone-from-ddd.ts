@@ -39,3 +39,22 @@ export function inferTimezoneFromWhatsappNumber(whatsappNumber: string): string 
   const ddd = whatsappNumber.slice(2, 4);
   return DDD_TIMEZONE_EXCEPTIONS[ddd] ?? DEFAULT_TIMEZONE;
 }
+
+/**
+ * UF → fuso, pra quando a pessoa diz onde mora (`set_city`). O DDD só aproxima: quem tem número de uma região e mora em outra
+ * (muita gente mantém o DDD de onde veio) ficava com o fuso errado, e o resumo da manhã, o horário de silêncio e o "hoje" do
+ * Tom passavam a valer na hora de lá. UF desconhecida ou fora da lista mantém o padrão — nunca chuta fuso fora do Brasil.
+ * Mesma aproximação do DDD nos estados com 2 fusos (AM: Eirunepe; PE: Fernando de Noronha), documentada acima.
+ */
+const UF_TIMEZONE_EXCEPTIONS: Record<string, string> = {
+  AC: 'America/Rio_Branco',
+  AM: 'America/Manaus',
+  MT: 'America/Cuiaba',
+  MS: 'America/Campo_Grande',
+  RO: 'America/Porto_Velho',
+  RR: 'America/Boa_Vista',
+};
+
+export function inferTimezoneFromUf(uf: string): string {
+  return UF_TIMEZONE_EXCEPTIONS[uf.trim().toUpperCase()] ?? DEFAULT_TIMEZONE;
+}

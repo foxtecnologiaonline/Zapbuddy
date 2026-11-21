@@ -24,7 +24,11 @@ const core = vi.hoisted(() => ({
   buildExtractedText: vi.fn(),
   buildDocumentEmbeddingText: vi.fn(),
   toStoredExtraction: vi.fn(),
-  MESSAGES: { documentReceived: (name: string) => `Salvei "${name}"`, trialBlocked: 'teste acabou' },
+  MESSAGES: {
+    documentReceived: (name: string) => `Salvei "${name}"`,
+    trialBlocked: 'teste acabou',
+    firstContactIntro: 'Aproveitando: eu sou o Tom.\nComo posso te chamar?',
+  },
   INVITE_CODE_MESSAGE_PATTERN: /^\s*entrar\s+(\d{4,8})\s*$/i,
 }));
 
@@ -135,7 +139,16 @@ describe('handleDocumentUpload', () => {
 
     expect(db.saveDocumentAnalysis).toHaveBeenCalled();
     expect(core.orchestrateTurn).not.toHaveBeenCalled();
-    expect(core.sendWhatsappTextMessage).toHaveBeenCalledWith('5511999999999', 'Salvei "cupom.jpg"');
+    // Primeiro contato como arquivo: além do "salvei", apresenta o Tom e pergunta o nome (antes ficava mudo sobre quem é e o que fazer).
+    const sent = core.sendWhatsappTextMessage.mock.calls[0]![1] as string;
+    expect(sent.startsWith('Salvei "cupom.jpg"')).toBe(true);
+    expect(sent).toContain('Como posso te chamar?');
+  });
+
+  it('quem já fez o onboarding NÃO recebe a apresentação de novo', async () => {
+    await handleDocumentUpload(job());
+    const sent = core.sendWhatsappTextMessage.mock.calls[0]![1] as string;
+    expect(sent).not.toContain('Como posso te chamar?');
   });
 
   it('falha do orquestrador depois da leitura também cai na confirmação fixa', async () => {

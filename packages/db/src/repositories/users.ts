@@ -1,6 +1,6 @@
 import { getSupabaseClient } from '../client.js';
 import type { OnboardingVariant, PlanIntent, PlanStatus, PreferredPaymentMethod, User } from '../types.js';
-import { inferTimezoneFromWhatsappNumber } from '../timezone-from-ddd.js';
+import { inferTimezoneFromUf, inferTimezoneFromWhatsappNumber } from '../timezone-from-ddd.js';
 import { assignOnboardingVariant } from '../onboarding-variant.js';
 
 // Números reais (com DDI+DDD) ficam nessa faixa de dígitos; um payload
@@ -335,11 +335,21 @@ export interface UserCityInput {
   longitude: number;
 }
 
-/** Cidade já geocodificada (ver geocodeBrazilianCity) — guardar coordenada junto evita geocodificar de novo todo dia. */
+/**
+ * Cidade já geocodificada (ver geocodeBrazilianCity) — guardar coordenada junto evita geocodificar de novo todo dia.
+ * O fuso acompanha a UF: dizer onde mora é a informação mais confiável que temos (o DDD do número só aproxima). Lembretes e
+ * tarefas já gravados são instantes absolutos e não se movem; muda o "hoje", o horário do resumo e o do silêncio.
+ */
 export async function saveUserCity(userId: string, input: UserCityInput): Promise<User> {
   const { data, error } = await getSupabaseClient()
     .from('users')
-    .update({ city: input.city, city_uf: input.uf, city_latitude: input.latitude, city_longitude: input.longitude })
+    .update({
+      city: input.city,
+      city_uf: input.uf,
+      city_latitude: input.latitude,
+      city_longitude: input.longitude,
+      timezone: inferTimezoneFromUf(input.uf),
+    })
     .eq('id', userId)
     .select('*')
     .single();

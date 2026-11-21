@@ -18,8 +18,8 @@ export const createCalendarEventTool = defineTool({
     'Cria evento na agenda conectada (Google/Outlook). connected:false = agenda não conectada: siga as instruções do sistema, sem tentar de novo na mesma resposta.',
   schema: z.object({
     summary: z.string().min(1),
-    start_at: z.string().datetime(),
-    end_at: z.string().datetime(),
+    start_at: z.string().datetime({ offset: true }),
+    end_at: z.string().datetime({ offset: true }),
     description: z.string().optional(),
   }),
   execute: async (params, ctx) => {
@@ -100,8 +100,8 @@ export const updateCalendarEventTool = defineTool({
       event_id: z.string().min(1),
       summary: z.string().min(1).optional(),
       description: z.string().optional(),
-      start_at: z.string().datetime().optional(),
-      end_at: z.string().datetime().optional(),
+      start_at: z.string().datetime({ offset: true }).optional(),
+      end_at: z.string().datetime({ offset: true }).optional(),
     })
     .refine((value) => (value.start_at === undefined) === (value.end_at === undefined), {
       message: 'Pra mudar o horário, informe start_at e end_at juntos.',
