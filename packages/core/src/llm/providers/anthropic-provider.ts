@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { MESSAGES } from '../../messages.js';
+import type { SystemPromptBlocks } from '../system-prompt.js';
 import { toAnthropicToolSpecs } from '../tool-registry.js';
 import { runToolCall, type ToolCallRequest } from '../tool-runner.js';
 import type { LlmProvider, LlmProviderRunInput, LlmProviderRunResult } from './types.js';
@@ -30,6 +31,39 @@ function getClient(): Anthropic {
   return client;
 }
 
+export const ANTHROPIC_MAX_TOKENS = 1024;
+
+export function resolveAnthropicModel(): string {
+  return process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+}
+
+/** Effort enviado em toda chamada (ver nota acima) — exportado pro eval (`golden-eval`) mandar exatamente o mesmo. */
+export const ANTHROPIC_RESPONSE_EFFORT = RESPONSE_EFFORT;
+
+/**
+ * Monta as tools e o system prompt com os breakpoints de cache da requisição real. Extraído do `run()` pra o
+ * eval do golden set (scripts/golden-eval.ts) enviar a MESMA requisição da produção, em vez de uma cópia que
+ * divergiria na primeira mudança aqui.
+ *
+ * cache_control no último tool spec cacheia a lista inteira de tools (idêntica em toda chamada de todo usuário).
+ * 2 breakpoints no system (+ 1 nas tools = 3 de 4 permitidos por request): `stable` é igual pra essa pessoa em
+ * qualquer mensagem e `semiStable` muda no máximo algumas vezes por dia — cacheando os dois, a conversa inteira do
+ * dia reusa o mesmo cache em vez de invalidar tudo a cada mensagem só porque a hora atual (`volatile`, sem
+ * cache_control, sempre no fim) mudou (sugestão #1 da revisão de performance 2026-10).
+ */
+export function buildAnthropicRequestParts(system: SystemPromptBlocks): { tools: Anthropic.Tool[]; system: Anthropic.TextBlockParam[] } {
+  const tools = toAnthropicToolSpecs();
+  const cachedTools: Anthropic.Tool[] = tools.map((tool, index) =>
+    index === tools.length - 1 ? { ...tool, cache_control: { type: 'ephemeral' } } : tool,
+  );
+  const cachedSystem: Anthropic.TextBlockParam[] = [
+    { type: 'text', text: system.stable, cache_control: { type: 'ephemeral' } },
+    ...(system.semiStable ? [{ type: 'text' as const, text: system.semiStable, cache_control: { type: 'ephemeral' as const } }] : []),
+    ...(system.volatile ? [{ type: 'text' as const, text: system.volatile }] : []),
+  ];
+  return { tools: cachedTools, system: cachedSystem };
+}
+
 /** Provider primário — Claude via tool use (ver CLAUDE.md: decisão de stack). */
 export const anthropicProvider: LlmProvider = {
   name: 'anthropic',
@@ -48,29 +82,7 @@ export const anthropicProvider: LlmProvider = {
     messages.push({ role: 'user', content: userMessage });
 
     const anthropic = getClient();
-    const tools = toAnthropicToolSpecs();
-    // cache_control no último tool spec cacheia a lista inteira de tools
-    // (idêntica em toda chamada de todo usuário).
-    const cachedTools: Anthropic.Tool[] = tools.map((tool, index) =>
-      index === tools.length - 1 ? { ...tool, cache_control: { type: 'ephemeral' } } : tool,
-    );
-    // 2 breakpoints (+ 1 nas tools acima = 3 de 4 permitidos por request):
-    // `system.stable` é igual pra essa pessoa em qualquer mensagem (só muda
-    // se nome/ocupação mudar) e `system.semiStable` muda no máximo algumas
-    // vezes por dia — cacheando os dois, a conversa inteira do dia reusa o
-    // mesmo cache em vez de invalidar tudo a cada mensagem só porque a hora
-    // atual (`system.volatile`, sem cache_control, sempre no fim) mudou.
-    // Antes desta rodada (sugestão #1 da revisão de performance 2026-10), o
-    // prompt era uma string só com a hora interpolada no meio — cache nunca
-    // reaproveitava entre mensagens da mesma conversa, só dentro do mesmo
-    // turno (as até 6 iterações do loop + wrap-up).
-    const cachedSystem: Anthropic.TextBlockParam[] = [
-      { type: 'text', text: system.stable, cache_control: { type: 'ephemeral' } },
-      ...(system.semiStable
-        ? [{ type: 'text' as const, text: system.semiStable, cache_control: { type: 'ephemeral' as const } }]
-        : []),
-      ...(system.volatile ? [{ type: 'text' as const, text: system.volatile }] : []),
-    ];
+    const { tools: cachedTools, system: cachedSystem } = buildAnthropicRequestParts(system);
 
     let finalText = '';
     // true sempre que a última coisa adicionada a `messages` foi um
@@ -85,9 +97,9 @@ export const anthropicProvider: LlmProvider = {
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
       const response = await anthropic.messages.create({
-        model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,
-        max_tokens: 1024,
-        output_config: RESPONSE_EFFORT,
+        model: resolveAnthropicModel(),
+        max_tokens: ANTHROPIC_MAX_TOKENS,
+        output_config: ANTHROPIC_RESPONSE_EFFORT,
         system: cachedSystem,
         messages,
         tools: cachedTools,
@@ -136,9 +148,9 @@ export const anthropicProvider: LlmProvider = {
       // resumir em texto em vez de dizer ao usuário que falhou. Sem
       // `tools` aqui: queremos uma resposta final, não outra tool call.
       const wrapUp = await anthropic.messages.create({
-        model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,
-        max_tokens: 1024,
-        output_config: RESPONSE_EFFORT,
+        model: resolveAnthropicModel(),
+        max_tokens: ANTHROPIC_MAX_TOKENS,
+        output_config: ANTHROPIC_RESPONSE_EFFORT,
         system: cachedSystem,
         messages,
       });

@@ -1,0 +1,34 @@
+name: Eval do golden set
+
+# Manual de propósito: cada execução chama a API real da Anthropic (custa dinheiro) e o resultado depende
+# do modelo, então não roda a cada push. Use ANTES de mudar prompt, modelo ou effort, e depois, pra comparar.
+# Requer o secret ANTHROPIC_API_KEY (Settings > Secrets and variables > Actions). Ver docs/adr/0011.
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: 'Execuções por caso (3 separa regressão de oscilação do modelo)'
+        default: '1'
+      min_pass:
+        description: 'Taxa mínima de aprovação (0 a 1)'
+        default: '0.85'
+      only:
+        description: 'Só estes casos: ids ou áreas separados por vírgula (vazio = todos)'
+        default: ''
+
+jobs:
+  golden-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run eval:golden
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOLDEN_RUNS: ${{ inputs.runs }}
+          GOLDEN_MIN_PASS: ${{ inputs.min_pass }}
+          GOLDEN_ONLY: ${{ inputs.only }}

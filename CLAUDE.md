@@ -792,8 +792,11 @@ WhatsApp pessoal via Evolution/ZapScript) em `docs/adr/0007-recados-a-terceiros.
 fila de revisão sobre sinais implícitos já gravados em `tool_call_logs` (pessoa desfez, falha de tool, correção até 10 min depois de
 criar, categoria em fallback), com veredito (`acertou`/`ruido`/`errou` + destino prompt/categoria/bug/exemplo) em `curation_reviews`
 (migration `0030`, sem FK porque os logs somem em 90 dias; trecho guardado já mascarado) e métrica "sinais por 100 chamadas". Não
-guarda nenhum texto novo de conversa. **Camada 2 (feedback por reação, captura de texto com consentimento, golden set) é proposta
-aguardando decisão** — texto de conversa continua só no Redis (24h); não implementar captura sem decisão explícita e parecer jurídico.
+guarda nenhum texto novo de conversa. **Golden set implementado** (`packages/core/src/eval/`, 57 casos sintéticos; `npm run eval:golden`
+ou workflow manual "Eval do golden set" com o secret `ANTHROPIC_API_KEY`; validação estática roda na CI): mede qual tool o Tom escolhe e com
+quais argumentos, com a mesma requisição da produção (`buildAnthropicRequestParts`, extraída do provider). Rodar antes de mudar prompt, modelo
+ou `effort`. **Feedback por reação (2A) e captura de texto (2B) estão adiados**, com motivo no ADR 0011 — texto de conversa continua só no
+Redis (24h); não implementar captura sem consentimento, opt-out e parecer jurídico.
 
 ## Métricas por fase
 

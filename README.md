@@ -340,7 +340,9 @@ obrigatório:
 dependências externas (categorias, timezone, sessão, Whisper, insights, resumo matinal,
 comandos, regras de copy da landing, SSRF, orçamento de tokens das tools).
 O CI (`.github/workflows/ci.yml`) roda typecheck, testes, build do web e
-`npm audit` de produção (bloqueia só em nível crítico). Não cobre integração real com Claude/Supabase/WhatsApp
+`npm audit` de produção (bloqueia só em nível crítico).
+**Eval do prompt** (golden set, 57 casos sintéticos): a validação estática roda no `npm test`; a execução contra o modelo real
+é manual — `npm run eval:golden` (precisa de `ANTHROPIC_API_KEY`) ou o workflow "Eval do golden set" no GitHub. Ver `docs/adr/0011-*.md`. Não cobre integração real com Claude/Supabase/WhatsApp
 nem a detecção de sinal em si (depende de `summarizeTransactions` no
 banco) — isso é validado manualmente, ponta a ponta, mandando mensagem
 pro número conectado.

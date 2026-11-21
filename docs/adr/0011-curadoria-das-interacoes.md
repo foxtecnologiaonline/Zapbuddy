@@ -1,6 +1,6 @@
 # ADR 0011 — Curadoria das interações (2026-11)
 
-**Status:** camada 1 implementada; camadas 2 (A, B, C) são **proposta, aguardando decisão do dono do produto**.
+**Status:** camada 1 e o **golden set (2C, primeira versão)** implementados; 2A (reação como feedback) e 2B (captura de texto) **decididos como adiados**, com os motivos abaixo.
 
 ## Contexto — o que existia e o que faltava
 
@@ -48,9 +48,21 @@ O que **não** existia, e limita a curadoria:
 - **Limite honesto:** isto cura as **interpretações** (o que o Tom entendeu e executou), não as frases das pessoas
   nem as respostas do Tom. Conversa que não passa por tool (pergunta geral, "o que você faz?") é invisível aqui.
 
-### Camada 2 — o que falta para curar perguntas, respostas e feedback (proposta, **não implementada**)
+### Camada 2 — o que falta para curar perguntas, respostas e feedback
 
-Cada item muda o que o produto guarda sobre as pessoas. Por isso é decisão do dono do produto, não de uma sessão.
+Os itens A e B mudam o que o produto guarda sobre as pessoas. Foi pedido que a decisão fosse tomada pela sessão; o critério
+usado foi **valor × risco**, e o resultado é: **C agora, A e B adiados**. O item C não toca em dado de nenhuma pessoa e fecha o
+maior buraco (não existir eval), por isso foi o escolhido.
+
+**Decisões (2026-11-21):**
+- **B (captura de texto) — adiado, e não por falta de tempo.** Guardar conversa financeira e pessoal é uma obrigação perante as
+  pessoas (LGPD: base legal, aviso, opt-out, retenção), não só uma escolha de produto. Não se resolve por delegação a uma sessão
+  de código. Desbloqueia com: parecer jurídico + texto de consentimento no onboarding + opt-out. Até lá, a camada 1 e o golden
+  set cobrem o que dá sem guardar texto.
+- **A (reação 👍/👎 como feedback) — adiado por retorno baixo hoje.** Exige guardar o id de cada mensagem enviada (uma escrita
+  nova em toda resposta) e ligar a reação à tool call do turno. Com poucos usuários, o volume de reações seria pequeno demais
+  para sustentar uma decisão. Reabrir quando `/admin/mvp` mostrar uma coorte de dezenas de pessoas ativas.
+- **C (golden set) — implementado.** Ver abaixo.
 
 **A. Feedback explícito leve.** Usar a **reação do usuário** (👍/👎) à mensagem do Tom como sinal passivo, sem pedir
 nada. Exige guardar o id (`wamid`) de cada mensagem enviada e ligá-lo à tool call/resposta. Alternativa mais invasiva,
@@ -65,13 +77,25 @@ chamadas), com:
 - **parecer jurídico antes** (LGPD): conversa pessoal pode trazer dado sensível (saúde, por exemplo), e a base legal
   precisa estar definida. Sem B, curar "perguntas e respostas" não é possível.
 
-**C. Biblioteca curada (a saída da curadoria).** É para onde os vereditos `exemplo` e `prompt` escoam:
-1. **Golden set** de 100–200 casos *sintéticos* (mensagem → tool e argumentos esperados), rodado como eval antes de
-   qualquer mudança de prompt. Isto fecha o buraco de "o projeto não tem eval": hoje toda mudança de prompt é
-   validada só por teste de texto.
-2. **Respostas-modelo** para as perguntas mais frequentes (o que você faz, como desfaz, o que acontece com meus dados).
-3. **Taxonomia viva** de categorias e aliases (`categories.ts` + `docs/categorias-financeiras.md`).
-4. **Few-shot** a partir dos casos aprovados.
+**C. Biblioteca curada (a saída da curadoria).** É para onde os vereditos `exemplo` e `prompt` escoam.
+**Golden set implementado** (`packages/core/src/eval/`, 57 casos sintéticos em 13 áreas):
+- *O que mede:* a **escolha** do Tom — qual tool ele chama primeiro e com quais argumentos (valor em centavos, categoria da
+  taxonomia, dia e hora **no fuso da pessoa**, "daqui a 20 minutos", listar antes de apagar/concluir, nenhuma tool em conversa,
+  recusa a injeção de prompt). Não avalia o texto da resposta (isso é o `persona-eval`, qualitativo).
+- *Validação estática na CI* (`golden-set.test.ts`): toda tool e todo argumento do conjunto existem nas tools reais, os valores
+  esperados passam no schema, e nenhuma mensagem contém dado pessoal. Mudar uma tool sem atualizar o conjunto quebra a CI.
+- *Execução real* (`npm run eval:golden` ou o workflow manual **"Eval do golden set"**, que precisa do secret
+  `ANTHROPIC_API_KEY`): manda a MESMA requisição da produção (a montagem foi extraída do provider para não divergir), com
+  `GOLDEN_RUNS=3` para separar regressão de oscilação do modelo, e sai com 1 se ficar abaixo de `GOLDEN_MIN_PASS` (85%) ou 2 se
+  a API falhar (inconclusivo).
+- *Calibragem:* os casos foram escritos a partir do código e do prompt, **não de execuções reais**. Na primeira rodada com o
+  modelo, uma falha pode ser do modelo ou do caso: revise cada uma antes de mexer no prompt.
+- *Uso:* rodar antes de mudar prompt, modelo ou `effort` (hoje `low`, nunca validado) e depois, comparando. Todo veredito
+  `errou → exemplo` da curadoria vira um caso novo, reescrito de forma sintética.
+Ainda **não implementados** nesta biblioteca:
+1. **Respostas-modelo** para as perguntas mais frequentes (o que você faz, como desfaz, o que acontece com meus dados).
+2. **Taxonomia viva** de categorias e aliases (`categories.ts` + `docs/categorias-financeiras.md`).
+3. **Few-shot** a partir dos casos aprovados.
 
 ## Como exercer a curadoria
 
@@ -116,5 +140,5 @@ duas pessoas, revisão cruzada de ~10% dos vereditos para medir concordância.
   Com poucos usuários, a fila é pequena e os percentuais oscilam muito: ler junto com o tamanho da amostra.
 - Sem a camada 2B, **perguntas e respostas** continuam fora do alcance. É a próxima decisão a tomar, e depende de
   consentimento e parecer jurídico, não de código.
-- Ordem sugerida: aplicar a `0030` e rodar a camada 1 por 2–3 semanas → decidir A e B com o que a fila mostrar →
-  montar o golden set (C) a partir dos casos `exemplo`.
+- Ordem sugerida: rodar o golden set uma vez com `GOLDEN_RUNS=3` e calibrar os casos → rodar a camada 1 por 2–3 semanas →
+  alimentar o golden set com os casos `exemplo` → reabrir A (volume) e B (parecer jurídico) com o que a fila mostrar.
