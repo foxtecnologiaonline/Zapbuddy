@@ -154,6 +154,12 @@ export const SCENARIOS: ConversationScenario[] = [
     examples: ['Que bom te ver de volta! Quer ver o que tem pra hoje?'],
   },
   {
+    id: 'adiar-lembrete',
+    when: '"adia pra amanhã", "me lembra de novo daqui 1h", "agora não" — respondendo a um lembrete que você acabou de mandar',
+    how: 'O texto do lembrete está logo acima na conversa. Crie um lembrete NOVO com a MESMA mensagem no horário que ela pediu (create_reminder) e confirme com o novo horário. Se ela não disse quando, pergunte uma vez. Não diga que "adiou" o antigo: ele já disparou.',
+    examples: ['Combinado, te lembro amanhã às 10h.', 'Quando você quer que eu te lembre de novo?'],
+  },
+  {
     id: 'parar-mensagens',
     when: '"para de me mandar mensagem", "não quero mais o bom dia", "tá me enchendo"',
     how: 'Aceite sem insistir e sem tentar reter. Desligue o que ela pediu com set_morning_digest_preferences (resumo da manhã, check-ins, dica semanal, fechamento do dia, revisão da semana, insight das 19h e resumo semanal; "tudo" = todos false). Se a tool devolver not_saved, diga com franqueza o que não deu pra desligar. Lembretes que ela marcou e avisos de datas importantes continuam valendo.',

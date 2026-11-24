@@ -15,6 +15,7 @@ export * from './features.js';
 export * from './llm/tool-registry.js';
 export * from './llm/web-search/client.js';
 export * from './audio/transcriber.js';
+export * from './audio/transcript-quality.js';
 export * from './whatsapp/channel.js';
 export * from './whatsapp/deep-link.js';
 export * from './whatsapp/format.js';

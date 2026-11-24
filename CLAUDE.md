@@ -833,6 +833,15 @@ Cada achado foi confirmado lendo o código antes de corrigir; testes 891 → 1.0
   ali matava a série em silêncio). Desvio do mensal em dia 31 segue como decisão deliberada (`recurrence.ts`).
 - **Deploy do worker**: `stop_grace_period: 120s` no compose. O padrão do Docker (SIGKILL em 10s) matava turno de LLM em andamento a
   cada push em `main` e, com o `stalledInterval` de 1h, a pessoa ficava até 1h sem resposta.
+- **Janela de 24h da Meta** (`whatsapp/template.ts`, `sendWhatsappReminder`): a Cloud API recusa texto livre fora das 24h (erro 131047) e só aceita
+  template aprovado. O canal agora levanta `WhatsappWindowClosedError` nesse caso e o despacho do lembrete cai num template configurado por
+  `WHATSAPP_REMINDER_TEMPLATE_NAME` (1 variável no corpo; texto exato pra criar na Meta em `deploy/worker/README.md`). Sem a env, comportamento
+  de antes (falha e o log `reminder_window_closed_no_template` diz o que configurar). **Só lembrete usa template**: bom dia, insight e resumos
+  não foram pedidos pra uma hora marcada, então fora da janela não saem. Não validado contra a Meta real (precisa do template aprovado).
+- **Texto longo** (`whatsapp/split.ts`): resposta acima de 4.000 caracteres é dividida em parágrafo, linha, frase ou palavra (limite da Meta: 4.096); falha na
+  1ª parte propaga (retry seguro), falha em parte posterior só registra (propagar reenviaria a 1ª). **Áudio** (`audio/transcript-quality.ts`):
+  transcrição vazia ou alucinação típica do Whisper em silêncio ("Legendas pela comunidade Amara.org") pede pra repetir em vez de chegar ao Tom.
+  **Adiar lembrete** que já disparou: cria um lembrete NOVO com a mesma mensagem (a mensagem proativa agora está no histórico).
 - **Segurança/robustez**: CSV do export neutraliza fórmulas; rate-limit com `INCR`+`EXPIRE` atômico (Lua); corridas na criação de usuário/conta.
 - **Clima**: a chave é aparada (espaço/quebra de linha no `.env` virava 401) e o aviso de "chave ausente" vale também pro geocoding; erros
   HTTP logam a mensagem da API. `get_weather` ganhou **como está agora** (`now`, endpoint de observação atual) pra "tá frio/chovendo

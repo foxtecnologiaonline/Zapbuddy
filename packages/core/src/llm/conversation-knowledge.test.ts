@@ -88,20 +88,27 @@ describe('buildConversationSection — o que entra no prompt', () => {
   });
 
   // Entra em TODA chamada (bloco stable). O teto existe pra o conteúdo crescer de propósito, não por inércia.
-  // Teto subiu de 8.000 pra 11.000 (2026-11) de propósito: +9 situações novas (ansiedade antes de evento, opinião, privacidade,
-  // "consegue?", voltar depois de sumir, parar mensagens, sonho/plano, curiosidade de gasto e "esqueci"). Cache de prompt estável:
+  // Teto subiu de 8.000 pra 11.500 (2026-11) de propósito: +10 situações novas (ansiedade antes de evento, opinião, privacidade,
+  // "consegue?", voltar depois de sumir, parar mensagens, sonho/plano, curiosidade de gasto, "esqueci" e adiar lembrete). Cache de prompt estável:
   // o custo extra é só na escrita do cache; a leitura segue a ~10% do preço.
-  it('cabe no orçamento: até ~2.750 tokens estimados (chars/4), em toda chamada', () => {
-    expect(section.length).toBeLessThanOrEqual(11_000);
+  it('cabe no orçamento: até ~2.875 tokens estimados (chars/4), em toda chamada', () => {
+    expect(section.length).toBeLessThanOrEqual(11_500);
   });
 
   it('as situações novas existem e cada uma aponta pra uma ação real (tool ou atalho), nunca promessa solta', () => {
     const ids = SCENARIOS.map((scenario) => scenario.id);
-    for (const required of ['ansiedade-evento', 'pedir-opiniao', 'sonho-ou-plano', 'curiosidade-gasto', 'esqueci', 'consegue-fazer', 'privacidade', 'voltou', 'parar-mensagens']) {
+    for (const required of ['ansiedade-evento', 'pedir-opiniao', 'sonho-ou-plano', 'curiosidade-gasto', 'esqueci', 'consegue-fazer', 'privacidade', 'voltou', 'parar-mensagens', 'adiar-lembrete']) {
       expect(ids, required).toContain(required);
     }
     expect(SCENARIOS.find((scenario) => scenario.id === 'parar-mensagens')!.how).toContain('set_morning_digest_preferences');
     expect(SCENARIOS.find((scenario) => scenario.id === 'curiosidade-gasto')!.how).toContain('get_financial_summary');
+  });
+
+  it('"adiar lembrete" cria um lembrete NOVO com a mesma mensagem (o que disparou não se edita) usando a tool que existe', () => {
+    const postpone = SCENARIOS.find((scenario) => scenario.id === 'adiar-lembrete')!;
+    expect(postpone.how).toContain('create_reminder');
+    expect(postpone.how).toMatch(/lembrete NOVO/);
+    expect(postpone.how).toMatch(/MESMA mensagem/);
   });
 
   it('privacidade: não afirma criptografia, certificação nem prazo de retenção (não dá pra garantir) e remete a conta à equipe', () => {

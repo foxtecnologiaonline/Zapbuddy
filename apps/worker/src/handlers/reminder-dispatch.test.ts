@@ -8,7 +8,7 @@ const db = vi.hoisted(() => ({
   listPendingReminders: vi.fn(),
 }));
 const core = vi.hoisted(() => ({
-  sendWhatsappTextMessage: vi.fn(),
+  sendWhatsappReminder: vi.fn(),
   hasReminderBeenDispatched: vi.fn(),
   markReminderDispatched: vi.fn(),
   recordProactiveMessage: vi.fn(),
@@ -18,7 +18,7 @@ const core = vi.hoisted(() => ({
 vi.mock('@zapbuddy/db', () => db);
 vi.mock('@zapbuddy/core', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@zapbuddy/core')>()),
-  sendWhatsappTextMessage: core.sendWhatsappTextMessage,
+  sendWhatsappReminder: core.sendWhatsappReminder,
   hasReminderBeenDispatched: core.hasReminderBeenDispatched,
   markReminderDispatched: core.markReminderDispatched,
   recordProactiveMessage: core.recordProactiveMessage,
@@ -48,7 +48,7 @@ beforeEach(() => {
   db.markReminderSent.mockResolvedValue(undefined);
   db.listPendingReminders.mockResolvedValue([]);
   db.createReminder.mockResolvedValue({ id: 'r2' });
-  core.sendWhatsappTextMessage.mockResolvedValue(undefined);
+  core.sendWhatsappReminder.mockResolvedValue('text');
   core.hasReminderBeenDispatched.mockResolvedValue(false);
   core.markReminderDispatched.mockResolvedValue(undefined);
   core.recordProactiveMessage.mockResolvedValue(undefined);
@@ -58,14 +58,34 @@ beforeEach(() => {
 describe('handleReminderDispatch', () => {
   it('lembrete comum: envia, marca como enviado e não cria próxima ocorrência', async () => {
     await handleReminderDispatch(job());
-    expect(core.sendWhatsappTextMessage).toHaveBeenCalledTimes(1);
+    expect(core.sendWhatsappReminder).toHaveBeenCalledTimes(1);
     expect(db.markReminderSent).toHaveBeenCalledWith('r1');
     expect(db.createReminder).not.toHaveBeenCalled();
   });
 
+  it('passa a mensagem do lembrete (não só o texto formatado) pro envio: é ela que vai no template quando a janela de 24h fechou', async () => {
+    await handleReminderDispatch(job());
+    expect(core.sendWhatsappReminder).toHaveBeenCalledWith('5511999990000', expect.stringContaining('tomar remédio'), 'tomar remédio');
+  });
+
+  it('o envio falhou (ex.: janela fechada e sem template): o job falha pro retry e NADA é marcado como disparado ou enviado', async () => {
+    core.sendWhatsappReminder.mockRejectedValue(new Error('janela de 24h fechada'));
+    await expect(handleReminderDispatch(job())).rejects.toThrow('janela de 24h fechada');
+    expect(core.markReminderDispatched).not.toHaveBeenCalled();
+    expect(db.markReminderSent).not.toHaveBeenCalled();
+    expect(core.recordProactiveMessage).not.toHaveBeenCalled();
+  });
+
+  it('entregue por template também vale como entregue (marca, registra no histórico e conclui)', async () => {
+    core.sendWhatsappReminder.mockResolvedValue('template');
+    await handleReminderDispatch(job());
+    expect(core.markReminderDispatched).toHaveBeenCalledWith('r1');
+    expect(db.markReminderSent).toHaveBeenCalledWith('r1');
+  });
+
   it('registra o lembrete na conversa DEPOIS de entregue: "adia pra amanhã" respondendo a ele precisa de contexto', async () => {
     const order: string[] = [];
-    core.sendWhatsappTextMessage.mockImplementation(async () => void order.push('send'));
+    core.sendWhatsappReminder.mockImplementation(async () => void order.push('send'));
     core.markReminderDispatched.mockImplementation(async () => void order.push('dispatched'));
     core.recordProactiveMessage.mockImplementation(async () => void order.push('history'));
 
@@ -84,19 +104,19 @@ describe('handleReminderDispatch', () => {
   it('já enviado ou cancelado (não está mais pending): não faz nada', async () => {
     db.findPendingReminderById.mockResolvedValue(null);
     await handleReminderDispatch(job());
-    expect(core.sendWhatsappTextMessage).not.toHaveBeenCalled();
+    expect(core.sendWhatsappReminder).not.toHaveBeenCalled();
   });
 
   it('job velho de um lembrete remarcado (horário novo no futuro): não envia', async () => {
     db.findPendingReminderById.mockResolvedValue(reminder({ remind_at: new Date(Date.now() + 3_600_000).toISOString() }));
     await handleReminderDispatch(job());
-    expect(core.sendWhatsappTextMessage).not.toHaveBeenCalled();
+    expect(core.sendWhatsappReminder).not.toHaveBeenCalled();
   });
 
   it('retry depois de o envio ter dado certo: não manda a notificação de novo', async () => {
     core.hasReminderBeenDispatched.mockResolvedValue(true);
     await handleReminderDispatch(job());
-    expect(core.sendWhatsappTextMessage).not.toHaveBeenCalled();
+    expect(core.sendWhatsappReminder).not.toHaveBeenCalled();
     expect(db.markReminderSent).toHaveBeenCalledWith('r1');
   });
 });
@@ -134,7 +154,7 @@ describe('lembrete recorrente', () => {
     // retry: o aviso já foi entregue (flag) e a próxima agora é criada
     core.hasReminderBeenDispatched.mockResolvedValue(true);
     await handleReminderDispatch(job());
-    expect(core.sendWhatsappTextMessage).toHaveBeenCalledTimes(1); // não reenviou
+    expect(core.sendWhatsappReminder).toHaveBeenCalledTimes(1); // não reenviou
     expect(db.createReminder).toHaveBeenCalledTimes(2);
     expect(db.markReminderSent).toHaveBeenCalledWith('r1');
   });

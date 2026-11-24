@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import { findUserById, findPendingReminderById, markReminderSent, createReminder, listPendingReminders, type Reminder } from '@zapbuddy/db';
 import {
-  sendWhatsappTextMessage,
+  sendWhatsappReminder,
   hasReminderBeenDispatched,
   markReminderDispatched,
   recordProactiveMessage,
@@ -14,15 +14,12 @@ import {
 const STALE_JOB_TOLERANCE_MS = 60_000;
 
 /**
- * Limitação conhecida da WhatsApp Cloud API (não corrigível em código): fora
- * da janela de 24h desde a última mensagem do usuário, a Meta só aceita
- * mensagens de *template* pré-aprovado — texto livre como este é rejeitado.
- * Se o lembrete for agendado pra mais de 24h depois da última interação, o
- * envio pode falhar por esse motivo. Isso propaga como erro normal; o
- * retry (DEFAULT_JOB_OPTIONS) tenta de novo, e se esgotar, worker.ts marca
- * o lembrete como 'failed' em vez de deixá-lo preso em 'pending'. Resolver
- * de verdade exige criar e submeter um template de lembrete pra aprovação
- * da Meta — fora do escopo de código.
+ * Janela de 24h da WhatsApp Cloud API: fora dela (desde a última mensagem da pessoa) a Meta recusa texto livre (erro 131047) e só aceita
+ * *template* pré-aprovado. `sendWhatsappReminder` tenta o texto e, se a Meta recusar por janela fechada, manda o template configurado em
+ * WHATSAPP_REMINDER_TEMPLATE_NAME com a mensagem do lembrete como parâmetro (texto exato pra criar na Meta: deploy/worker/README.md).
+ * SEM template configurado o comportamento é o de antes: propaga como erro normal; o retry (DEFAULT_JOB_OPTIONS) tenta de novo e, se
+ * esgotar, worker.ts marca o lembrete como 'failed' em vez de deixá-lo preso em 'pending'. O log `reminder_window_closed_no_template`
+ * diz o que configurar.
  */
 export async function handleReminderDispatch(job: Job<ReminderDispatchJob>): Promise<void> {
   const { reminderId } = job.data;
@@ -42,7 +39,8 @@ export async function handleReminderDispatch(job: Job<ReminderDispatchJob>): Pro
   // só tenta marcar como enviado de novo (idempotente, seguro de repetir).
   if (!(await hasReminderBeenDispatched(reminder.id))) {
     const text = MESSAGES.reminder(reminder.message);
-    await sendWhatsappTextMessage(user.whatsapp_number, text);
+    // Texto livre dentro da janela de 24h; fora dela, o template configurado (se houver) leva a mensagem do lembrete.
+    await sendWhatsappReminder(user.whatsapp_number, text, reminder.message);
     await markReminderDispatched(reminder.id);
     // Depois da marca de "já disparado": um retry não registra em dobro. Sem isso, "adia pra amanhã" respondendo ao lembrete
     // chegava ao LLM sem saber de qual lembrete a pessoa falava.

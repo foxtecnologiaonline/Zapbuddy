@@ -32,6 +32,7 @@ export const MESSAGES = {
   // e a pessoa repetiria o pedido (duplicando). Neutra de propósito: não repete valor nem detalhe que o modelo não confirmou.
   actionDoneNoText: 'Pronto, já cuidei disso por aqui. Se algo não ficou como você queria, é só me dizer.',
   stillProcessing: 'Só um instante, ainda tô vendo isso pra você...',
+  audioUnclear: 'Não consegui ouvir esse áudio direito. Pode mandar de novo, ou escrever em texto?',
   audioTooLong: 'Esse áudio é muito longo pra eu processar. Pode mandar um mais curto ou escrever em texto?',
   reminder: (text: string) => pickTemplate(REMINDER_TEMPLATES)(text),
   inviteCodeInvalid:

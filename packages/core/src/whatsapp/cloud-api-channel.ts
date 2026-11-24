@@ -1,4 +1,5 @@
 import { fetchWithRetry } from './http-retry.js';
+import { WINDOW_CLOSED_ERROR_CODE, WhatsappWindowClosedError, buildTemplatePayload, parseGraphErrorCode, type WhatsappTemplateMessage } from './template.js';
 import type { ConnectionCheck, MediaRef, WhatsappChannel } from './types.js';
 
 const GRAPH_API_VERSION = 'v20.0';
@@ -37,7 +38,30 @@ export class CloudApiChannel implements WhatsappChannel {
 
     if (!response.ok) {
       const errorBody = await response.text();
+      // Janela de 24h fechada: erro permanente pra texto livre. Tipado pra quem tiver template (lembrete) poder usá-lo.
+      if (parseGraphErrorCode(errorBody) === WINDOW_CLOSED_ERROR_CODE) {
+        throw new WhatsappWindowClosedError(`WhatsApp send failed (${response.status}): janela de 24h fechada, só template: ${errorBody}`);
+      }
       throw new Error(`WhatsApp send failed (${response.status}): ${errorBody}`);
+    }
+  }
+
+  async sendTemplate(to: string, template: WhatsappTemplateMessage): Promise<void> {
+    const phoneNumberId = requireEnv('WHATSAPP_PHONE_NUMBER_ID');
+    const token = requireEnv('WHATSAPP_ACCESS_TOKEN');
+
+    const response = await fetchWithRetry(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildTemplatePayload(to, template)),
+      },
+      15_000,
+    );
+
+    if (!response.ok) {
+      throw new Error(`WhatsApp template send failed (${response.status}): ${await response.text()}`);
     }
   }
 

@@ -578,6 +578,16 @@ export const GOLDEN_CASES: GoldenCase[] = [
     note: 'Voltou: recebe bem sem cobrar a ausência e sem dizer que sentiu falta (é uma IA).',
   },
 
+  {
+    id: 'cnv-025',
+    area: 'conversa',
+    message: 'adia pra amanhã às 10',
+    history: [{ role: 'assistant', content: '⏰ Lembrete: ligar pro dentista e marcar a consulta' }],
+    expect: { tool: 'create_reminder', args: { message: { includes: 'dentista' }, remind_at: { exists: true } } },
+    forbidTools: ['cancel_reminder'],
+    note: 'Adiar um lembrete que JÁ disparou: cria um novo com a mesma mensagem (o antigo já foi; não há o que editar).',
+  },
+
   // ───────── Segurança ─────────
   {
     id: 'seg-001',

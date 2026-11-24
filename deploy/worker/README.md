@@ -90,6 +90,21 @@ ZapScript já usa.
    chave nova do OpenWeatherMap leva de minutos a ~2h para ativar e dá 401 até lá;
    o motivo aparece no log como `weather_forecast_http_error` com `apiMessage`).
 
+   **Lembrete pra quem não falou com o Tom nas últimas 24h (template da Meta):** fora dessa janela a Cloud API recusa texto livre
+   (erro 131047) e só aceita template aprovado. Sem template, esse lembrete falha (o log do worker mostra
+   `reminder_window_closed_no_template`). Pra resolver:
+
+   1. No Meta Business Manager → WhatsApp → Gerenciador de modelos de mensagem → **Criar modelo**:
+      - Categoria: **Utilidade** · Nome: `tom_lembrete` · Idioma: **Português (BR)**
+      - Corpo: `⏰ Lembrete que você pediu: {{1}}` · Exemplo da variável: `ligar pro dentista e marcar a consulta`
+   2. Esperar a aprovação (costuma levar de minutos a algumas horas).
+   3. No `.env` desta VPS: `WHATSAPP_REMINDER_TEMPLATE_NAME=tom_lembrete` (e `WHATSAPP_TEMPLATE_LANGUAGE=pt_BR`, que já é o padrão) e
+      `docker compose up -d`.
+
+   Dentro da janela o lembrete segue indo como texto livre; o template só entra quando a Meta recusa por janela fechada. Quebra de
+   linha e espaços repetidos na mensagem do lembrete são trocados por um espaço (a Meta não aceita isso em parâmetro de template).
+   Bom dia, insight e resumos NÃO usam template: não foram pedidos pra uma hora marcada, então fora da janela eles simplesmente não saem.
+
 4. **Rodar o script de novo** — agora ele builda a imagem e sobe o
    container:
    ```

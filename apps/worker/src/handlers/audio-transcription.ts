@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import { findUserById, logger } from '@zapbuddy/db';
 import {
   orchestrateTurn,
+  isUnusableTranscript,
   sendWhatsappTextMessage,
   sendWhatsappTyping,
   deliverReply,
@@ -53,6 +54,14 @@ export async function handleAudioTranscription(job: Job<AudioTranscriptionJob>):
     try {
       const { buffer, mimeType } = await downloadWhatsappMedia(audioRef);
       const transcript = await getAudioTranscriber().transcribe(buffer, mimeType);
+
+      // Silêncio, ruído ou áudio curtíssimo: o Whisper devolve vazio ou "Legendas pela comunidade Amara.org". Não é uma fala da pessoa:
+      // pede pra repetir em vez de mandar isso pro Tom (que responderia a uma frase que ninguém disse). Não é erro: sem retry.
+      if (isUnusableTranscript(transcript)) {
+        logger.info('audio_transcript_unusable', { userId, waMessageId, chars: transcript.length });
+        await sendWhatsappTextMessage(user.whatsapp_number, MESSAGES.audioUnclear);
+        return;
+      }
 
       void sendWhatsappTyping(user.whatsapp_number, waMessageId);
       const result = await orchestrateTurn({ user, messageText: transcript, messageSource: 'audio', turnKey: waMessageId });

@@ -4,6 +4,8 @@
  * mesmo provider que a emitiu via WhatsappChannel.downloadMedia. Nunca
  * interpretar o campo `raw`/`mediaId` fora do provider correspondente.
  */
+import type { WhatsappTemplateMessage } from './template.js';
+
 export type MediaRef =
   | { provider: 'cloud-api'; mediaId: string }
   | { provider: 'evolution'; raw: unknown };
@@ -18,6 +20,8 @@ export interface ConnectionCheck {
 export interface WhatsappChannel {
   readonly provider: MediaRef['provider'];
   sendText(to: string, body: string): Promise<void>;
+  /** Mensagem de template pré-aprovado (única que passa fora da janela de 24h). Só a Cloud API tem; o canal sem suporte deixa de implementar. */
+  sendTemplate?(to: string, template: WhatsappTemplateMessage): Promise<void>;
   downloadMedia(ref: MediaRef): Promise<{ buffer: Buffer; mimeType: string }>;
   /**
    * Mostra "digitando…" pra pessoa enquanto o Tom prepara o próximo balão. Só enfeite:
