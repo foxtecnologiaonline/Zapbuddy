@@ -59,6 +59,46 @@ describe('parseCommand', () => {
   });
 });
 
+describe('parseCommand — atalhos novos', () => {
+  it('reconhece lembretes, notas, contas, metas, hábitos, datas, revisão do mês e sugestão', () => {
+    expect(parseCommand('lembretes')).toEqual({ kind: 'reminders' });
+    expect(parseCommand('Meus lembretes!')).toEqual({ kind: 'reminders' });
+    expect(parseCommand('notas')).toEqual({ kind: 'notes' });
+    expect(parseCommand('minhas anotações')).toEqual({ kind: 'notes' });
+    expect(parseCommand('contas')).toEqual({ kind: 'bills' });
+    expect(parseCommand('contas a pagar')).toEqual({ kind: 'bills' });
+    expect(parseCommand('metas')).toEqual({ kind: 'goals' });
+    expect(parseCommand('hábitos')).toEqual({ kind: 'habits' });
+    expect(parseCommand('datas importantes')).toEqual({ kind: 'dates' });
+    expect(parseCommand('aniversários')).toEqual({ kind: 'dates' });
+    expect(parseCommand('revisão do mês')).toEqual({ kind: 'month_review' });
+    expect(parseCommand('fechar o mês')).toEqual({ kind: 'month_review' });
+    expect(parseCommand('sugestão')).toEqual({ kind: 'suggest' });
+    expect(parseCommand('o que faço agora?')).toEqual({ kind: 'suggest' });
+  });
+
+  it('só MENSAGEM INTEIRA: frase com contexto vai pro LLM (nada de atalho por palavra solta no meio)', () => {
+    expect(parseCommand('anota: lembretes do mês pra revisar')).toBeNull();
+    expect(parseCommand('me lembra de pagar as contas amanhã')).toBeNull();
+    expect(parseCommand('minhas metas pra esse ano são três')).toBeNull();
+    expect(parseCommand('notas do show de ontem')).toBeNull();
+    expect(parseCommand('contas do João')).toBeNull();
+    expect(parseCommand('datas de entrega do pedido')).toBeNull();
+    expect(parseCommand('revisão do mês passado do cartão')).toBeNull();
+  });
+
+  it('palavras ambíguas ficam de fora de propósito ("ideia" começa uma nota; "resumo do mês" é o financeiro)', () => {
+    expect(parseCommand('ideia')).toBeNull();
+    expect(parseCommand('ideias')).toBeNull();
+    expect(parseCommand('resumo do mês')).toBeNull();
+  });
+
+  it('o "ajuda" lista os atalhos novos', () => {
+    const help = formatHelpOverview();
+    for (const word of ['lembretes', 'notas', 'contas', 'metas', 'hábitos', 'datas', 'sugestão', 'revisão do mês']) expect(help).toContain(word);
+  });
+});
+
 describe('catálogo de habilidades', () => {
   it('todo nome de tool citado existe no registro', () => {
     const registered = new Set(ALL_TOOLS.map((tool) => tool.name));

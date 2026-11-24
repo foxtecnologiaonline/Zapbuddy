@@ -22,7 +22,15 @@ export type Command =
   | { kind: 'tips'; enabled: boolean }
   | { kind: 'routine'; routine: RoutineName; enabled: boolean }
   | { kind: 'run_routine'; routine: 'day_close' | 'week_review' }
-  | { kind: 'focus'; minutes: number };
+  | { kind: 'focus'; minutes: number }
+  | { kind: 'reminders' }
+  | { kind: 'notes' }
+  | { kind: 'bills' }
+  | { kind: 'goals' }
+  | { kind: 'habits' }
+  | { kind: 'dates' }
+  | { kind: 'month_review' }
+  | { kind: 'suggest' };
 
 /** minúsculas, sem acento, sem pontuação, espaços colapsados; tira "tom," do começo e "/" de comando. */
 export function normalizeCommandText(raw: string): string {
@@ -60,6 +68,17 @@ const SPENDING_MONTH = new Set(['gastos', 'meus gastos', 'gastos do mes', 'quant
 const LISTS_ALIASES = new Set(['listas', 'minhas listas', 'ver listas', 'quais listas']);
 const UNDO_ALIASES = new Set(['desfazer', 'desfaz', 'desfazer isso', 'desfaz isso', 'desfazer ultima', 'desfazer ultima acao']);
 const TIP_ALIASES = new Set(['dica', 'uma dica', 'dica do tom', 'me da uma dica', 'me de uma dica', 'dica do dia']);
+
+const REMINDERS_ALIASES = new Set(['lembretes', 'meus lembretes', 'ver lembretes', 'proximos lembretes', 'lembretes pendentes', 'quais lembretes']);
+const NOTES_ALIASES = new Set(['notas', 'minhas notas', 'ver notas', 'ultimas notas', 'anotacoes', 'minhas anotacoes']);
+const BILLS_ALIASES = new Set(['contas', 'minhas contas', 'contas fixas', 'contas a pagar', 'contas recorrentes', 'contas do mes']);
+const GOALS_ALIASES = new Set(['metas', 'minhas metas', 'ver metas', 'objetivos', 'meus objetivos']);
+const HABITS_ALIASES = new Set(['habitos', 'meus habitos', 'ver habitos', 'como estao meus habitos']);
+const DATES_ALIASES = new Set(['datas', 'datas importantes', 'minhas datas', 'aniversarios', 'proximos aniversarios']);
+// "resumo do mês" fica de fora de propósito: é ambíguo com o resumo financeiro ("gastos do mês") e iria pro comando errado.
+const MONTH_REVIEW_ALIASES = new Set(['revisao do mes', 'revisar o mes', 'revisar meu mes', 'fechamento do mes', 'fechar o mes', 'fechar meu mes', 'balanco do mes']);
+// "ideia"/"ideias" sozinhas também ficam de fora: a pessoa pode estar começando a contar uma ideia pra anotar.
+const SUGGEST_ALIASES = new Set(['sugestao', 'sugestoes', 'me da uma sugestao', 'me de uma sugestao', 'uma sugestao', 'me da uma ideia', 'o que faco agora', 'o que eu faco agora', 'por onde comeco']);
 
 const DIGEST_OFF = new Set(['pausar bom dia', 'desligar bom dia', 'desligar resumo', 'desativar resumo', 'parar resumo', 'parar resumo da manha', 'desligar resumo da manha', 'parar bom dia']);
 const DIGEST_ON = new Set(['ligar bom dia', 'ativar bom dia', 'ligar resumo', 'ativar resumo', 'voltar resumo', 'ligar resumo da manha', 'ativar resumo da manha']);
@@ -125,6 +144,14 @@ export function parseCommand(rawText: string): Command | null {
   if (LISTS_ALIASES.has(text)) return { kind: 'lists' };
   if (UNDO_ALIASES.has(text)) return { kind: 'undo' };
   if (TIP_ALIASES.has(text)) return { kind: 'tip' };
+  if (REMINDERS_ALIASES.has(text)) return { kind: 'reminders' };
+  if (NOTES_ALIASES.has(text)) return { kind: 'notes' };
+  if (BILLS_ALIASES.has(text)) return { kind: 'bills' };
+  if (GOALS_ALIASES.has(text)) return { kind: 'goals' };
+  if (HABITS_ALIASES.has(text)) return { kind: 'habits' };
+  if (DATES_ALIASES.has(text)) return { kind: 'dates' };
+  if (MONTH_REVIEW_ALIASES.has(text)) return { kind: 'month_review' };
+  if (SUGGEST_ALIASES.has(text)) return { kind: 'suggest' };
 
   if (DIGEST_OFF.has(text)) return { kind: 'digest', enabled: false };
   if (DIGEST_ON.has(text)) return { kind: 'digest', enabled: true };

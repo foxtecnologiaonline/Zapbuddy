@@ -37,7 +37,8 @@ export function formatHelpOverview(): string {
     '*Mais coisas*',
     ...extras,
     '',
-    'Atalhos que respondem na hora: hoje, amanhã, semana, tarefas, gastos, listas, dica.',
+    'Atalhos que respondem na hora: hoje, amanhã, semana, tarefas, lembretes, notas, contas, metas, hábitos, datas, gastos, listas, dica.',
+    'E dois pra quando quiser pensar à frente: "sugestão" (o próximo passo, pelo que você já registrou) e "revisão do mês".',
     'Pra saber mais de um assunto, manda "ajuda" e o nome, tipo "ajuda listas".',
   ].join('\n');
 

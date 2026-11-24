@@ -2,8 +2,16 @@ import {
   claimProactiveMessage,
   findListByName,
   listAccountLists,
+  listActiveHabits,
+  listActiveRecurringBills,
+  listGoals,
+  listHabitCheckinDates,
+  listImportantDates,
   listItemsOfList,
+  listNotes,
   listPendingItemCounts,
+  listPendingReminders,
+  listPersonalGoals,
   listTasks,
   saveMorningDigestPreferences,
   saveRoutinePrefs,
@@ -19,7 +27,24 @@ import { formatListText, formatListsOverview } from '../lists/format.js';
 import { formatSpendingSummary } from '../finance/spending-format.js';
 import { getCurrentMonthRange, getLast7DaysRange, getTodayRange } from '../time/zoned-ranges.js';
 import { scheduleFocusEnd } from '../focus/schedule.js';
-import { SKILL_TIP_KIND, buildDayCloseMessage, buildWeekReviewMessage, selectSkillTip, type RoutineSubject } from '../routines/build.js';
+import { computeHabitStats, localDateKey } from '../habits/streak.js';
+import {
+  SKILL_TIP_KIND,
+  buildDayCloseMessage,
+  buildMonthReviewMessage,
+  buildSuggestionMessage,
+  buildWeekReviewMessage,
+  selectSkillTip,
+  type RoutineSubject,
+} from '../routines/build.js';
+import {
+  formatGoalsOverview,
+  formatHabitsOverview,
+  formatImportantDates,
+  formatPendingReminders,
+  formatRecentNotes,
+  formatRecurringBills,
+} from './collections-format.js';
 import { formatHelpOverview, formatHelpTopic, formatHelpTopicNotFound, formatNoMoreTips, formatSkillTip } from './help.js';
 import type { Command, RoutineName } from './parse.js';
 
@@ -162,6 +187,57 @@ export async function executeCommand(command: Command, ctx: CommandExecContext):
     case 'focus': {
       await scheduleFocusEnd(accountId, user.id, command.minutes);
       return `⏱️ Foco de ${command.minutes} minutos começou!\nTe aviso quando acabar. Bom trabalho.`;
+    }
+
+    case 'reminders': {
+      const reminders = await listPendingReminders(accountId, 15);
+      return formatPendingReminders(
+        reminders.map((reminder) => ({ message: reminder.message, remindAt: reminder.remind_at, recurrence: reminder.recurrence })),
+        user.timezone,
+      );
+    }
+
+    case 'notes': {
+      const notes = await listNotes(accountId, 10);
+      return formatRecentNotes(
+        notes.map((note) => ({ content: note.content, createdAt: note.created_at })),
+        user.timezone,
+      );
+    }
+
+    case 'bills': {
+      const bills = await listActiveRecurringBills(accountId);
+      return formatRecurringBills(bills.map((bill) => ({ name: bill.name, amountCents: bill.amount_cents, dueDay: bill.due_day })));
+    }
+
+    case 'goals': {
+      const [savings, personal] = await Promise.all([listGoals(accountId, 'active'), listPersonalGoals(accountId, 'pending', 15)]);
+      return formatGoalsOverview({
+        savings: savings.map((goal) => ({ title: goal.title, targetCents: goal.target_cents, savedCents: goal.saved_cents, deadline: goal.deadline })),
+        personal: personal.map((goal) => goal.description),
+      });
+    }
+
+    case 'habits': {
+      const todayKey = localDateKey(user.timezone);
+      const [habits, datesByHabit] = await Promise.all([listActiveHabits(accountId), listHabitCheckinDates(accountId, todayKey)]);
+      return formatHabitsOverview(habits.map((habit) => ({ name: habit.name, ...computeHabitStats(datesByHabit[habit.id] ?? [], todayKey) })));
+    }
+
+    case 'dates': {
+      const dates = await listImportantDates(accountId, 100);
+      return formatImportantDates(
+        dates.map((date) => ({ label: date.label, month: date.month, day: date.day })),
+        user.timezone,
+      );
+    }
+
+    case 'month_review': {
+      return (await buildMonthReviewMessage(routineSubject(ctx))) ?? 'Não consegui montar isso agora. Tenta de novo daqui a pouco.';
+    }
+
+    case 'suggest': {
+      return buildSuggestionMessage(routineSubject(ctx));
     }
   }
 }
