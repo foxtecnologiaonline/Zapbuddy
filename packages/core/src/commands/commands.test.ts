@@ -99,6 +99,38 @@ describe('parseCommand — atalhos novos', () => {
   });
 });
 
+describe('parseCommand — parar e religar mensagens automáticas', () => {
+  it('"parar mensagens" desliga tudo e "ligar mensagens" religa (mensagem inteira)', () => {
+    for (const text of ['parar mensagens', 'Parar todas as mensagens!', 'desligar tudo', 'sem mensagens automáticas', 'desligar mensagens automáticas']) {
+      expect(parseCommand(text), text).toEqual({ kind: 'mute_all', enabled: false });
+    }
+    for (const text of ['ligar mensagens', 'ativar mensagens', 'voltar com as mensagens']) {
+      expect(parseCommand(text), text).toEqual({ kind: 'mute_all', enabled: true });
+    }
+  });
+
+  it('insight das 19h e resumo semanal têm liga/desliga próprio', () => {
+    expect(parseCommand('desligar insights')).toEqual({ kind: 'proactive', which: 'insights', enabled: false });
+    expect(parseCommand('ligar insights')).toEqual({ kind: 'proactive', which: 'insights', enabled: true });
+    expect(parseCommand('parar resumo semanal')).toEqual({ kind: 'proactive', which: 'weekly_digest', enabled: false });
+    expect(parseCommand('ligar resumo semanal')).toEqual({ kind: 'proactive', which: 'weekly_digest', enabled: true });
+  });
+
+  it('não rouba os atalhos que já existiam: "desligar resumo" continua sendo o bom dia', () => {
+    expect(parseCommand('desligar resumo')).toEqual({ kind: 'digest', enabled: false });
+    expect(parseCommand('desligar dicas')).toEqual({ kind: 'tips', enabled: false });
+    expect(parseCommand('desligar fechamento do dia')).toEqual({ kind: 'routine', routine: 'day_close', enabled: false });
+  });
+
+  it('frase com contexto vai pro LLM: só a mensagem inteira vira atalho', () => {
+    expect(parseCommand('parar mensagens do grupo da família')).toBeNull();
+    expect(parseCommand('desligar tudo isso é muita coisa')).toBeNull();
+    expect(parseCommand('desligar')).toBeNull();
+    expect(parseCommand('parar')).toBeNull();
+    expect(parseCommand('me lembra de ligar mensagens pro João')).toBeNull();
+  });
+});
+
 describe('catálogo de habilidades', () => {
   it('todo nome de tool citado existe no registro', () => {
     const registered = new Set(ALL_TOOLS.map((tool) => tool.name));

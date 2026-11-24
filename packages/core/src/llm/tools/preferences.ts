@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
   findUserById,
+  logger,
   saveMorningDigestPreferences,
+  saveProactiveOptOut,
   saveRoutinePrefs,
   saveUserCity,
   saveUserEmail,
@@ -74,11 +76,11 @@ export const setMorningDigestPreferencesTool = defineTool({
   name: 'set_morning_digest_preferences',
   description:
     'Ajusta o que o Tom manda sozinho. Resumo da manhã: enabled, hour (0-23), include_agenda, include_finance, ' +
-    'indicators (indicadores econômicos após o bom dia, a partir do dia seguinte: usd, eur, gbp, selic, cdi, ipca, ' +
-    'ipca_12m; "todos" = os 7; [] remove). ' +
-    'Rotinas: checkins ("como foi?" depois de compromisso/tarefa; ligadas por padrão), weekly_tip (dica semanal; ' +
-    'ligada), day_close (fechamento do dia à noite; DESLIGADO — só liga se ela pedir) e week_review (revisão no ' +
-    'domingo; desligada). Só passe o que a pessoa pediu pra mudar.',
+    'indicators (indicadores após o bom dia, a partir do dia seguinte: usd, eur, gbp, selic, cdi, ipca, ipca_12m; ' +
+    '"todos" = os 7; [] remove). Rotinas: checkins ("como foi?"; ligado), weekly_tip (dica semanal; ligada), ' +
+    'day_close (fechamento do dia; DESLIGADO), week_review (revisão no domingo; desligada), insights (insight das 19h; ' +
+    'ligado), weekly_digest (resumo de sexta; ligado). Só passe o que ela pediu; pra parar tudo, todos false. ' +
+    'not_saved:[...] = não deu pra gravar esses: diga isso.',
   schema: z.object({
     enabled: z.boolean().optional(),
     hour: z.number().int().min(0).max(23).optional(),
@@ -89,6 +91,8 @@ export const setMorningDigestPreferencesTool = defineTool({
     weekly_tip: z.boolean().optional(),
     day_close: z.boolean().optional(),
     week_review: z.boolean().optional(),
+    insights: z.boolean().optional(),
+    weekly_digest: z.boolean().optional(),
   }),
   execute: async (params, ctx) => {
     const routinePatch = {
@@ -97,14 +101,35 @@ export const setMorningDigestPreferencesTool = defineTool({
       ...(params.day_close !== undefined ? { routine_day_close: params.day_close } : {}),
       ...(params.week_review !== undefined ? { routine_week_review: params.week_review } : {}),
     };
+    const optOutPatch = {
+      ...(params.insights !== undefined ? { routine_insights: params.insights } : {}),
+      ...(params.weekly_digest !== undefined ? { routine_weekly_digest: params.weekly_digest } : {}),
+    };
     const digestUntouched =
       params.enabled === undefined && params.hour === undefined && params.include_agenda === undefined && params.include_finance === undefined && params.indicators === undefined;
-    if (digestUntouched && Object.keys(routinePatch).length === 0) {
+    if (digestUntouched && Object.keys(routinePatch).length === 0 && Object.keys(optOutPatch).length === 0) {
       return { saved: false, reason: 'nothing_to_change' };
     }
+
+    // Insight das 19h e resumo semanal vivem em colunas da migration 0031: se ainda não foi aplicada, a gravação falha e o Tom precisa
+    // dizer isso (não_saved), em vez de confirmar um "desliguei" que não aconteceu. As demais preferências seguem normalmente.
+    const notSaved: string[] = [];
+    if (Object.keys(optOutPatch).length > 0) {
+      try {
+        await saveProactiveOptOut(ctx.userId, optOutPatch);
+      } catch (error) {
+        logger.warn('proactive_opt_out_save_failed', { userId: ctx.userId, error: error instanceof Error ? error.message : String(error) });
+        if (params.insights !== undefined) notSaved.push('insights');
+        if (params.weekly_digest !== undefined) notSaved.push('weekly_digest');
+      }
+    }
+    const extra = {
+      ...(Object.keys(optOutPatch).length > 0 && notSaved.length === 0 ? { insights_weekly_saved: true } : {}),
+      ...(notSaved.length > 0 ? { not_saved: notSaved } : {}),
+    };
     if (digestUntouched) {
-      const routines = await saveRoutinePrefs(ctx.userId, routinePatch);
-      return { saved: true, routines };
+      const routines = Object.keys(routinePatch).length > 0 ? await saveRoutinePrefs(ctx.userId, routinePatch) : undefined;
+      return { saved: notSaved.length === 0, ...(routines ? { routines } : {}), ...extra };
     }
 
     if (params.hour !== undefined) {
@@ -129,8 +154,9 @@ export const setMorningDigestPreferencesTool = defineTool({
     });
     const routines = Object.keys(routinePatch).length > 0 ? await saveRoutinePrefs(ctx.userId, routinePatch) : undefined;
     return {
-      saved: true,
+      saved: notSaved.length === 0,
       ...(routines ? { routines } : {}),
+      ...extra,
       enabled: user.morning_digest_enabled,
       hour: user.morning_digest_hour,
       include_agenda: user.morning_digest_agenda,

@@ -13,6 +13,8 @@ import {
   listPendingReminders,
   listPersonalGoals,
   listTasks,
+  logger,
+  saveProactiveOptOut,
   saveMorningDigestPreferences,
   saveRoutinePrefs,
   summarizeTransactions,
@@ -82,6 +84,22 @@ const ROUTINE_FIELD: Record<RoutineName, 'routine_day_close' | 'routine_week_rev
   week_review: 'routine_week_review',
   checkins: 'routine_checkins',
 };
+
+const MUTE_OFF_TEXT = [
+  'Pronto, parei tudo que eu mandava sozinho: bom dia, check-ins, dicas, fechamento, revisão, insight das 19h e resumo semanal.',
+  'Os lembretes que você marcou e os avisos de datas importantes continuam valendo.',
+  'Pra voltar, manda "ligar mensagens".',
+].join('\n');
+const MUTE_OFF_PARTIAL_TEXT = [
+  'Parei o bom dia, os check-ins, as dicas, o fechamento e a revisão da semana.',
+  'O insight das 19h e o resumo semanal eu não consegui desligar agora (eles já não saem no seu horário de silêncio).',
+  'Os lembretes que você marcou e os avisos de datas importantes continuam valendo.',
+].join('\n');
+const MUTE_ON_TEXT = [
+  'Ligado de novo: bom dia, check-ins, dica semanal, insight das 19h e resumo semanal.',
+  'O fechamento do dia e a revisão da semana ficam desligados até você pedir ("ligar fechamento do dia").',
+].join('\n');
+const MUTE_ON_PARTIAL_TEXT = 'Liguei o bom dia, os check-ins e a dica semanal. O insight das 19h e o resumo semanal eu não consegui religar agora, tenta de novo daqui a pouco.';
 
 const ROUTINE_ON_TEXT: Record<RoutineName, string> = {
   day_close: 'Ligado! Toda noite, por volta das 20h, eu fecho seu dia: o que você fez, o que ficou e o que vem amanhã.',
@@ -238,6 +256,41 @@ export async function executeCommand(command: Command, ctx: CommandExecContext):
 
     case 'suggest': {
       return buildSuggestionMessage(routineSubject(ctx));
+    }
+
+    case 'mute_all': {
+      const enabled = command.enabled;
+      await saveMorningDigestPreferences(user.id, { enabled });
+      // Desligar: tudo que é opt-in/automático vai a false. Ligar: só o que já vem ligado de fábrica (o fechamento do dia e a revisão
+      // da semana são opt-in: voltam só quando a pessoa pedir).
+      await saveRoutinePrefs(
+        user.id,
+        enabled
+          ? { routine_checkins: true, routine_weekly_tip: true }
+          : { routine_checkins: false, routine_weekly_tip: false, routine_day_close: false, routine_week_review: false },
+      );
+      // Insight e resumo semanal dependem da migration 0031: sem ela, o resto já foi feito e a resposta diz a verdade sobre o que faltou.
+      let proactiveSaved = true;
+      try {
+        await saveProactiveOptOut(user.id, { routine_insights: enabled, routine_weekly_digest: enabled });
+      } catch (error) {
+        proactiveSaved = false;
+        logger.warn('proactive_opt_out_save_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) });
+      }
+      if (enabled) return proactiveSaved ? MUTE_ON_TEXT : MUTE_ON_PARTIAL_TEXT;
+      return proactiveSaved ? MUTE_OFF_TEXT : MUTE_OFF_PARTIAL_TEXT;
+    }
+
+    case 'proactive': {
+      const patch = command.which === 'insights' ? { routine_insights: command.enabled } : { routine_weekly_digest: command.enabled };
+      try {
+        await saveProactiveOptOut(user.id, patch);
+      } catch (error) {
+        logger.warn('proactive_opt_out_save_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) });
+        return 'Não consegui mudar isso agora. Tenta de novo daqui a pouco.';
+      }
+      const label = command.which === 'insights' ? 'o insight das 19h' : 'o resumo semanal de sexta';
+      return command.enabled ? `Ligado! Voltei a mandar ${label}.` : `Desliguei ${label}. Pra voltar, manda "ligar ${command.which === 'insights' ? 'insights' : 'resumo semanal'}".`;
     }
   }
 }

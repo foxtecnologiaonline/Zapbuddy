@@ -39,6 +39,7 @@ export function formatHelpOverview(): string {
     '',
     'Atalhos que respondem na hora: hoje, amanhã, semana, tarefas, lembretes, notas, contas, metas, hábitos, datas, gastos, listas, dica.',
     'E dois pra quando quiser pensar à frente: "sugestão" (o próximo passo, pelo que você já registrou) e "revisão do mês".',
+    'Se as mensagens que eu mando sozinho incomodarem, manda "parar mensagens" que eu desligo tudo (os lembretes que você marcou continuam).',
     'Pra saber mais de um assunto, manda "ajuda" e o nome, tipo "ajuda listas".',
   ].join('\n');
 

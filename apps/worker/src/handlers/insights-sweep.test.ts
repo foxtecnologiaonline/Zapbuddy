@@ -6,6 +6,7 @@ const db = vi.hoisted(() => ({
   hasSentWeeklyDigestSince: vi.fn(),
   listImportantDatesForAccountOnDate: vi.fn(),
   hasSentImportantDateReminderThisYear: vi.fn(),
+  listProactiveOptOuts: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 const queues = vi.hoisted(() => ({
@@ -88,6 +89,7 @@ beforeEach(() => {
   db.hasSentProactiveInsightToday.mockResolvedValue(false);
   db.hasSentWeeklyDigestSince.mockResolvedValue(false);
   db.hasSentImportantDateReminderThisYear.mockResolvedValue(false);
+  db.listProactiveOptOuts.mockResolvedValue({ insightsOff: new Set<string>(), weeklyDigestOff: new Set<string>() });
   db.listImportantDatesForAccountOnDate.mockResolvedValue([{ id: 'imp-1', label: 'Aniversário da mãe' }]);
   handlers.nudge.mockResolvedValue(undefined);
   handlers.backfill.mockResolvedValue(undefined);
@@ -178,5 +180,48 @@ describe('insights-sweep — robustez', () => {
     await handleInsightsSweep({} as never);
     expect(allJobIds()).toEqual([]);
     expect(handlers.routines).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-1' }), { localHour: 23, quiet: true });
+  });
+});
+
+describe('insights-sweep — opt-out do insight das 19h e do resumo semanal', () => {
+  const optOut = (insights: string[], weekly: string[]) => ({ insightsOff: new Set(insights), weeklyDigestOff: new Set(weekly) });
+
+  it('quem desligou o insight não recebe o das 19h; quem não desligou continua recebendo', async () => {
+    clock.hour = 19;
+    db.listAccountsForInsightsSweep.mockResolvedValue([account({ accountId: 'acc-off', ownerUserId: 'user-off' }), account({ accountId: 'acc-on', ownerUserId: 'user-on' })]);
+    db.listProactiveOptOuts.mockResolvedValue(optOut(['user-off'], []));
+
+    await handleInsightsSweep({} as never);
+
+    expect(queues.insights.add).toHaveBeenCalledTimes(1);
+    expect((queues.insights.add.mock.calls[0]![2] as { jobId: string }).jobId).toContain('acc-on');
+  });
+
+  it('quem desligou o resumo semanal não recebe o de sexta 18h (e o insight dessa pessoa segue, se ela não o desligou)', async () => {
+    clock.hour = 18;
+    clock.weekday = 5;
+    db.listAccountsForInsightsSweep.mockResolvedValue([account({ accountId: 'acc-off', ownerUserId: 'user-off' })]);
+    db.listProactiveOptOuts.mockResolvedValue(optOut([], ['user-off']));
+
+    await handleInsightsSweep({} as never);
+
+    expect(queues.weekly.add).not.toHaveBeenCalled();
+  });
+
+  it('o opt-out do insight NÃO afeta o bom dia nem o aviso de data importante (esses ela pediu)', async () => {
+    clock.hour = 9;
+    db.listAccountsForInsightsSweep.mockResolvedValue([account({ ownerUserId: 'user-off', morningDigestHour: 9 })]);
+    db.listProactiveOptOuts.mockResolvedValue(optOut(['user-off'], ['user-off']));
+
+    await handleInsightsSweep({} as never);
+
+    expect(queues.morning.add).toHaveBeenCalledTimes(1);
+    expect(queues.importantDate.add).toHaveBeenCalledTimes(1);
+  });
+
+  it('sem ninguém desligado (ou migration 0031 por aplicar): comportamento de antes — todo mundo recebe', async () => {
+    clock.hour = 19;
+    await handleInsightsSweep({} as never);
+    expect(queues.insights.add).toHaveBeenCalledTimes(1);
   });
 });

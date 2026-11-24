@@ -5,6 +5,8 @@ import {
   hasSentWeeklyDigestSince,
   listImportantDatesForAccountOnDate,
   hasSentImportantDateReminderThisYear,
+  listProactiveOptOuts,
+  type ProactiveOptOuts,
   logger,
 } from '@zapbuddy/db';
 import {
@@ -135,8 +137,11 @@ export async function handleInsightsSweep(_job: Job<InsightsSweepJob>): Promise<
   // Vetores de notas/documentos que ficaram pendentes (busca semântica) — manutenção leve, nunca lança.
   await handleEmbeddingsBackfill();
 
+  // Quem desligou o insight diário ou o resumo semanal (nunca lança: sem a migration 0031, ninguém desligou — como antes).
+  const optOuts = await listProactiveOptOuts();
+
   await Promise.all(
-    accounts.map((account) => processAccount(account)),
+    accounts.map((account) => processAccount(account, optOuts)),
   );
 }
 
@@ -146,15 +151,15 @@ type SweepAccount = Awaited<ReturnType<typeof listAccountsForInsightsSweep>>[num
  * Uma conta nunca derruba o sweep inteiro: antes, a exceção de UMA (ex.: um jobId inválido) subia pelo Promise.all, o job
  * falhava, o BullMQ refazia tudo 3 vezes e as outras contas ficavam sem check-in e sem aviso (auditoria 2026-11).
  */
-async function processAccount(account: SweepAccount): Promise<void> {
+async function processAccount(account: SweepAccount, optOuts: ProactiveOptOuts): Promise<void> {
   try {
-    await processAccountUnsafe(account);
+    await processAccountUnsafe(account, optOuts);
   } catch (error) {
     logger.error('insights_sweep_account_failed', { accountId: account.accountId, error: error instanceof Error ? error.message : String(error) });
   }
 }
 
-async function processAccountUnsafe(account: SweepAccount): Promise<void> {
+async function processAccountUnsafe(account: SweepAccount, optOuts: ProactiveOptOuts): Promise<void> {
   // Quem ainda não fez o cadastro (nunca disse o nome) só recebe o reengajamento do onboarding: nada de "bom dia" completo,
   // oferta de indicadores nem insight pra quem mal conversou com o Tom.
   if (!account.ownerOnboarded) return;
@@ -186,7 +191,7 @@ async function processAccountUnsafe(account: SweepAccount): Promise<void> {
     );
   }
 
-  if (localHour === TARGET_LOCAL_HOUR && !quiet) {
+  if (localHour === TARGET_LOCAL_HOUR && !quiet && !optOuts.insightsOff.has(account.ownerUserId)) {
     const today = getTodayRange(account.ownerTimezone);
     const alreadySent = await hasSentProactiveInsightToday(account.accountId, today.startIso, today.endIso);
     if (!alreadySent) {
@@ -221,7 +226,7 @@ async function processAccountUnsafe(account: SweepAccount): Promise<void> {
     );
   }
 
-  if (localHour === DIGEST_LOCAL_HOUR && !quiet && getLocalWeekday(account.ownerTimezone) === DIGEST_LOCAL_WEEKDAY) {
+  if (localHour === DIGEST_LOCAL_HOUR && !quiet && getLocalWeekday(account.ownerTimezone) === DIGEST_LOCAL_WEEKDAY && !optOuts.weeklyDigestOff.has(account.ownerUserId)) {
     // "Essa semana" = últimos 8 dias — folga de 1 dia sobre o intervalo
     // de 7 dias que o próprio resumo mostra, só pra idempotência (nunca
     // usado pra calcular o conteúdo do resumo, só pra decidir se já

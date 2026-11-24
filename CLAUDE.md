@@ -141,8 +141,8 @@ vigente hoje:
 - **Entrada pública**: `/` é a landing (`docs/adr/0010-landing-page.md`), com texto em função das flags.
 - **Branch/fluxo**: o fluxo "commit direto em `main`" abaixo vale para sessões sem branch designada; uma sessão
   com branch própria designada pelo ambiente (`claude/*`) trabalha nela e só integra em `main` por pedido.
-- **Migrations**: ordem completa no README. Duas têm prefixo `0022` (independentes). A `0029`
-  (`morning_digest_indicators`) é a mais recente. Aplicar no Supabase **antes** do deploy do código que a usa
+- **Migrations**: ordem completa no README. Duas têm prefixo `0022` (independentes). A `0031`
+  (`proactive_opt_out`) é a mais recente e a ÚNICA que o código tolera não aplicada (veja a seção "Novas interações" abaixo). Aplicar no Supabase **antes** do deploy do código que a usa
   (o worker faz deploy automático em push na `main`).
 
 - **Deploy do web (Vercel)**: a *Production Branch* do projeto `zapbuddy` era `claude/trusting-meitner-eipvnk` (descoberto em
@@ -868,6 +868,15 @@ Guia de onde acrescentar cada coisa: `docs/conteudo-conversacional.md`. O que en
   compra por impulso, assinaturas esquecidas, meta com valor e prazo, dinheiro dividido, comprovantes (regra atual por `web_search`),
   lembrete que descreve a ação, véspera, deslocamento, fuso. Teste barra `%` e `R$` (número que muda com o tempo vem de busca) e nome de
   banco/ativo. Corrigido: o repertório dizia "você não rastreia hábito", o que deixou de ser verdade.
+- **Parar mensagens automáticas** (achado da auditoria: o insight das 19h e o resumo semanal de sexta não tinham como ser desligados, só
+  silenciados pelo horário; mensagem automática sem saída gera bloqueio do número, e bloqueio derruba a qualidade dele): atalhos
+  `parar mensagens` / `ligar mensagens` (bom dia, check-ins, dica, fechamento, revisão, insight e resumo semanal) e
+  `desligar/ligar insights` e `resumo semanal`; a tool `set_morning_digest_preferences` ganhou `insights` e `weekly_digest`.
+  **Lembretes que a pessoa marcou e avisos de data importante continuam valendo** (foram pedidos por ela). "Ligar mensagens" não religa o
+  fechamento do dia nem a revisão da semana (são opt-in). Migration `0031_proactive_opt_out.sql` (2 colunas boolean, default ligado):
+  **o código tolera não estar aplicada** — o sweep lê as colunas numa consulta SEPARADA com fallback para "ninguém desligou"
+  (`listProactiveOptOuts`, nunca lança), então o deploy antes do SQL não derruba o bom dia de ninguém; sem ela só não dá pra DESLIGAR, e o
+  Tom diz "não consegui" (`not_saved`) em vez de confirmar um "desliguei" que não aconteceu. **Falta o dono do produto aplicar a 0031.**
 - **Custo**: +cerca de 1.900 tokens no bloco estável (cacheado); tetos nos testes (conversa 11.000, proposições 6.000, conhecimento 8.000
   caracteres). Golden set 66 → 75 casos (conversa). **Não validado contra o modelo real**: rodar `npm run eval:golden` antes de
   confiar, e observar nas conversas se as proposições novas deixaram o Tom insistente (a regra de uma por resposta é o freio).

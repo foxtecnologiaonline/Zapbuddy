@@ -30,7 +30,9 @@ export type Command =
   | { kind: 'habits' }
   | { kind: 'dates' }
   | { kind: 'month_review' }
-  | { kind: 'suggest' };
+  | { kind: 'suggest' }
+  | { kind: 'mute_all'; enabled: boolean }
+  | { kind: 'proactive'; which: 'insights' | 'weekly_digest'; enabled: boolean };
 
 /** minúsculas, sem acento, sem pontuação, espaços colapsados; tira "tom," do começo e "/" de comando. */
 export function normalizeCommandText(raw: string): string {
@@ -79,6 +81,14 @@ const DATES_ALIASES = new Set(['datas', 'datas importantes', 'minhas datas', 'an
 const MONTH_REVIEW_ALIASES = new Set(['revisao do mes', 'revisar o mes', 'revisar meu mes', 'fechamento do mes', 'fechar o mes', 'fechar meu mes', 'balanco do mes']);
 // "ideia"/"ideias" sozinhas também ficam de fora: a pessoa pode estar começando a contar uma ideia pra anotar.
 const SUGGEST_ALIASES = new Set(['sugestao', 'sugestoes', 'me da uma sugestao', 'me de uma sugestao', 'uma sugestao', 'me da uma ideia', 'o que faco agora', 'o que eu faco agora', 'por onde comeco']);
+
+// "Parar tudo que o Tom manda sozinho" — a saída que faltava pra quem se incomoda com mensagem automática. Mensagem inteira, como os demais.
+const MUTE_ALL = new Set(['parar mensagens', 'parar todas as mensagens', 'desligar mensagens', 'desligar tudo', 'sem mensagens automaticas', 'desligar mensagens automaticas', 'parar mensagens automaticas', 'desativar mensagens']);
+const UNMUTE_ALL = new Set(['ligar mensagens', 'ligar mensagens automaticas', 'ativar mensagens', 'voltar mensagens', 'voltar com as mensagens']);
+const INSIGHTS_OFF = new Set(['desligar insights', 'desligar insight', 'parar insights', 'desativar insights', 'sem insights']);
+const INSIGHTS_ON = new Set(['ligar insights', 'ligar insight', 'ativar insights']);
+const WEEKLY_DIGEST_OFF = new Set(['desligar resumo semanal', 'parar resumo semanal', 'desativar resumo semanal', 'sem resumo semanal']);
+const WEEKLY_DIGEST_ON = new Set(['ligar resumo semanal', 'ativar resumo semanal', 'voltar resumo semanal']);
 
 const DIGEST_OFF = new Set(['pausar bom dia', 'desligar bom dia', 'desligar resumo', 'desativar resumo', 'parar resumo', 'parar resumo da manha', 'desligar resumo da manha', 'parar bom dia']);
 const DIGEST_ON = new Set(['ligar bom dia', 'ativar bom dia', 'ligar resumo', 'ativar resumo', 'voltar resumo', 'ligar resumo da manha', 'ativar resumo da manha']);
@@ -152,6 +162,13 @@ export function parseCommand(rawText: string): Command | null {
   if (DATES_ALIASES.has(text)) return { kind: 'dates' };
   if (MONTH_REVIEW_ALIASES.has(text)) return { kind: 'month_review' };
   if (SUGGEST_ALIASES.has(text)) return { kind: 'suggest' };
+
+  if (MUTE_ALL.has(text)) return { kind: 'mute_all', enabled: false };
+  if (UNMUTE_ALL.has(text)) return { kind: 'mute_all', enabled: true };
+  if (INSIGHTS_OFF.has(text)) return { kind: 'proactive', which: 'insights', enabled: false };
+  if (INSIGHTS_ON.has(text)) return { kind: 'proactive', which: 'insights', enabled: true };
+  if (WEEKLY_DIGEST_OFF.has(text)) return { kind: 'proactive', which: 'weekly_digest', enabled: false };
+  if (WEEKLY_DIGEST_ON.has(text)) return { kind: 'proactive', which: 'weekly_digest', enabled: true };
 
   if (DIGEST_OFF.has(text)) return { kind: 'digest', enabled: false };
   if (DIGEST_ON.has(text)) return { kind: 'digest', enabled: true };

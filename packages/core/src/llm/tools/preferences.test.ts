@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@zapbuddy/db', () => ({
   findUserById: vi.fn(),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  saveProactiveOptOut: vi.fn(),
+  saveRoutinePrefs: vi.fn(),
   saveMorningDigestPreferences: vi.fn(),
   saveUserCity: vi.fn(),
   saveUserEmail: vi.fn(),
@@ -10,7 +13,7 @@ vi.mock('@zapbuddy/db', () => ({
 }));
 vi.mock('../../weather/geocoding.js', () => ({ geocodeBrazilianCity: vi.fn() }));
 
-import { findUserById, saveMorningDigestPreferences, saveUserCity } from '@zapbuddy/db';
+import { findUserById, saveMorningDigestPreferences, saveProactiveOptOut, saveRoutinePrefs, saveUserCity } from '@zapbuddy/db';
 import { geocodeBrazilianCity } from '../../weather/geocoding.js';
 import { setCityTool, setMorningDigestPreferencesTool } from './preferences.js';
 
@@ -19,6 +22,8 @@ const ctx = { userId: 'u1', whatsappNumber: '5511999999999', messageSource: 'tex
 beforeEach(() => {
   vi.mocked(findUserById).mockReset().mockResolvedValue({ quiet_hours_start: 22, quiet_hours_end: 7 } as never);
   vi.mocked(saveMorningDigestPreferences).mockReset();
+  vi.mocked(saveProactiveOptOut).mockReset().mockResolvedValue(undefined);
+  vi.mocked(saveRoutinePrefs).mockReset();
   vi.mocked(saveUserCity).mockReset();
   vi.mocked(geocodeBrazilianCity).mockReset();
 });
@@ -73,6 +78,43 @@ describe('set_morning_digest_preferences', () => {
 
     expect(result).toEqual({ saved: false, reason: 'inside_quiet_hours', quiet_hours_start: 22, quiet_hours_end: 7 });
     expect(saveMorningDigestPreferences).not.toHaveBeenCalled();
+  });
+});
+
+describe('set_morning_digest_preferences — insight das 19h e resumo semanal (migration 0031)', () => {
+  it('desligar os dois grava as colunas certas e confirma', async () => {
+    const result = await setMorningDigestPreferencesTool.execute({ insights: false, weekly_digest: false }, ctx);
+    expect(saveProactiveOptOut).toHaveBeenCalledWith('u1', { routine_insights: false, routine_weekly_digest: false });
+    expect(result).toEqual({ saved: true, insights_weekly_saved: true });
+  });
+
+  it('"parar tudo": rotinas + insight + semanal no mesmo pedido', async () => {
+    vi.mocked(saveRoutinePrefs).mockResolvedValue({ routine_checkins: false } as never);
+    const result = (await setMorningDigestPreferencesTool.execute({ checkins: false, weekly_tip: false, insights: false, weekly_digest: false }, ctx)) as Record<string, unknown>;
+    expect(saveRoutinePrefs).toHaveBeenCalledWith('u1', { routine_checkins: false, routine_weekly_tip: false });
+    expect(saveProactiveOptOut).toHaveBeenCalled();
+    expect(result.saved).toBe(true);
+  });
+
+  it('migration 0031 não aplicada: devolve not_saved (o Tom diz que não conseguiu) em vez de confirmar um "desliguei" que não aconteceu', async () => {
+    vi.mocked(saveProactiveOptOut).mockRejectedValue(new Error('column "routine_insights" does not exist'));
+    const result = await setMorningDigestPreferencesTool.execute({ insights: false }, ctx);
+    expect(result).toEqual({ saved: false, not_saved: ['insights'] });
+  });
+
+  it('as outras preferências do mesmo pedido são gravadas mesmo quando o insight não dá', async () => {
+    vi.mocked(saveProactiveOptOut).mockRejectedValue(new Error('coluna ausente'));
+    vi.mocked(saveMorningDigestPreferences).mockResolvedValue({ morning_digest_enabled: false, morning_digest_hour: 8, morning_digest_agenda: true, morning_digest_finance: true } as never);
+    const result = (await setMorningDigestPreferencesTool.execute({ enabled: false, insights: false, weekly_digest: false }, ctx)) as Record<string, unknown>;
+    expect(saveMorningDigestPreferences).toHaveBeenCalled();
+    expect(result.not_saved).toEqual(['insights', 'weekly_digest']);
+    expect(result.saved).toBe(false);
+    expect(result.enabled).toBe(false);
+  });
+
+  it('nada pedido continua "nothing_to_change"', async () => {
+    expect(await setMorningDigestPreferencesTool.execute({}, ctx)).toEqual({ saved: false, reason: 'nothing_to_change' });
+    expect(saveProactiveOptOut).not.toHaveBeenCalled();
   });
 });
 

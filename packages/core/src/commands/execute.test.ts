@@ -19,6 +19,7 @@ const db = vi.hoisted(() => ({
   listActiveHabits: vi.fn(),
   listHabitCheckinDates: vi.fn(),
   listImportantDates: vi.fn(),
+  saveProactiveOptOut: vi.fn(),
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 vi.mock('@zapbuddy/db', () => db);
@@ -182,5 +183,63 @@ describe('atalhos de consulta (lembretes, notas, contas, metas, hábitos, datas)
     expect(await run('fechamento do mês')).toContain('Não consegui montar');
     routines.buildSuggestionMessage.mockResolvedValueOnce('sugestões prontas');
     expect(await run('sugestão')).toBe('sugestões prontas');
+  });
+});
+
+describe('parar e religar mensagens automáticas', () => {
+  beforeEach(() => {
+    db.saveProactiveOptOut.mockResolvedValue(undefined);
+  });
+
+  it('"parar mensagens" desliga o bom dia, as 4 rotinas e o insight/resumo semanal, e diz o que continua valendo', async () => {
+    const text = await run('parar mensagens');
+
+    expect(db.saveMorningDigestPreferences).toHaveBeenCalledWith('user-1', { enabled: false });
+    expect(db.saveRoutinePrefs).toHaveBeenCalledWith('user-1', { routine_checkins: false, routine_weekly_tip: false, routine_day_close: false, routine_week_review: false });
+    expect(db.saveProactiveOptOut).toHaveBeenCalledWith('user-1', { routine_insights: false, routine_weekly_digest: false });
+    expect(text).toContain('Pra voltar, manda "ligar mensagens"');
+    expect(text).toContain('lembretes que você marcou');
+    expect(text).toContain('datas importantes');
+  });
+
+  it('sem a migration 0031 (gravação do insight/semanal falha): o resto JÁ foi desligado e a resposta diz a verdade sobre o que faltou', async () => {
+    db.saveProactiveOptOut.mockRejectedValue(new Error('column "routine_insights" does not exist'));
+
+    const text = await run('desligar tudo');
+
+    expect(db.saveMorningDigestPreferences).toHaveBeenCalledWith('user-1', { enabled: false });
+    expect(db.saveRoutinePrefs).toHaveBeenCalled();
+    expect(text).toContain('não consegui desligar agora');
+    expect(text).toContain('horário de silêncio');
+    expect(text).not.toContain('Pra voltar, manda "ligar mensagens"'); // não finge que desligou tudo
+    expect(db.logger.warn).toHaveBeenCalledWith('proactive_opt_out_save_failed', expect.objectContaining({ userId: 'user-1' }));
+  });
+
+  it('"ligar mensagens" volta só o que vem ligado de fábrica: fechamento do dia e revisão da semana são opt-in e NÃO voltam sozinhos', async () => {
+    const text = await run('ligar mensagens');
+
+    expect(db.saveMorningDigestPreferences).toHaveBeenCalledWith('user-1', { enabled: true });
+    expect(db.saveRoutinePrefs).toHaveBeenCalledWith('user-1', { routine_checkins: true, routine_weekly_tip: true });
+    expect(db.saveProactiveOptOut).toHaveBeenCalledWith('user-1', { routine_insights: true, routine_weekly_digest: true });
+    expect(text).toContain('ficam desligados até você pedir');
+  });
+
+  it('religar sem a migration: diz que o insight e o resumo semanal não voltaram', async () => {
+    db.saveProactiveOptOut.mockRejectedValue(new Error('coluna ausente'));
+    expect(await run('ligar mensagens')).toContain('não consegui religar agora');
+  });
+
+  it('desligar/ligar só o insight ou só o resumo semanal grava a coluna certa', async () => {
+    expect(await run('desligar insights')).toContain('Desliguei o insight das 19h');
+    expect(db.saveProactiveOptOut).toHaveBeenLastCalledWith('user-1', { routine_insights: false });
+    expect(await run('ligar resumo semanal')).toContain('Voltei a mandar o resumo semanal');
+    expect(db.saveProactiveOptOut).toHaveBeenLastCalledWith('user-1', { routine_weekly_digest: true });
+  });
+
+  it('desligar o insight sem a migration: "não consegui", nunca "desliguei"', async () => {
+    db.saveProactiveOptOut.mockRejectedValue(new Error('coluna ausente'));
+    const text = await run('desligar insights');
+    expect(text).toContain('Não consegui mudar isso agora');
+    expect(text).not.toContain('Desliguei');
   });
 });

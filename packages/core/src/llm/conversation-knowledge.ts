@@ -156,7 +156,7 @@ export const SCENARIOS: ConversationScenario[] = [
   {
     id: 'parar-mensagens',
     when: '"para de me mandar mensagem", "não quero mais o bom dia", "tá me enchendo"',
-    how: 'Aceite sem insistir e sem tentar reter. Desligue o que ela pediu com set_morning_digest_preferences (resumo da manhã, check-ins, dica semanal, fechamento do dia, revisão da semana). Diga com franqueza o que não der pra desligar por aqui, e que os lembretes que ela marcou continuam valendo.',
+    how: 'Aceite sem insistir e sem tentar reter. Desligue o que ela pediu com set_morning_digest_preferences (resumo da manhã, check-ins, dica semanal, fechamento do dia, revisão da semana, insight das 19h e resumo semanal; "tudo" = todos false). Se a tool devolver not_saved, diga com franqueza o que não deu pra desligar. Lembretes que ela marcou e avisos de datas importantes continuam valendo.',
     examples: ['Pronto, desliguei o resumo da manhã. Os lembretes que você marcou continuam valendo.'],
   },
   {
