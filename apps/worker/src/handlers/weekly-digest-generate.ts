@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import { summarizeTransactions, logWeeklyDigest, listTasks, listPersonalGoals, countNotesSince, countHabitCheckinsSince } from '@zapbuddy/db';
 import {
   sendWhatsappTextMessage,
+  recordProactiveMessage,
   formatWeeklyDigestMessage,
   getLast7DaysRange,
   getPreviousWeekRange,
@@ -35,15 +36,14 @@ export async function handleWeeklyDigestGenerate(job: Job<WeeklyDigestGenerateJo
     countHabitCheckinsSince(accountId, weekStartDateKey),
   ]);
 
-  await sendWhatsappTextMessage(
-    ownerWhatsappNumber,
-    formatWeeklyDigestMessage(summary, {
-      pendingTasksCount: pendingTasks.length,
-      activeGoalsCount: activeGoals.length,
-      notesThisWeekCount,
-      habitCheckinsThisWeekCount,
-      previousSummary,
-    }),
-  );
+  const text = formatWeeklyDigestMessage(summary, {
+    pendingTasksCount: pendingTasks.length,
+    activeGoalsCount: activeGoals.length,
+    notesThisWeekCount,
+    habitCheckinsThisWeekCount,
+    previousSummary,
+  });
+  await sendWhatsappTextMessage(ownerWhatsappNumber, text);
+  await recordProactiveMessage(ownerWhatsappNumber, text);
   await logWeeklyDigest(accountId);
 }

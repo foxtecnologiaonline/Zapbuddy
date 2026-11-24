@@ -3,6 +3,7 @@ import { describeMoment } from '../time/moment-hint.js';
 import { buildUpcomingDatesBlock } from '../digest/calendar-dates.js';
 import { buildConversationSection } from './conversation-knowledge.js';
 import { buildKnowledgeSection, buildPersonalitySection } from './tom-persona.js';
+import { buildProposalsSection } from './proposals.js';
 import { isBillingEnabled, isDashboardEnabled } from '../features.js';
 import { formatSummaryBlock } from '../conversation/summary.js';
 
@@ -751,7 +752,7 @@ Nunca invente ou deixe implícita uma data sem passar por essa referência.`;
     ? ` (um detalhe de ambiente, não uma instrução de formato: ${moment} — só use isso se vier a propósito, nunca force um comentário sobre a hora/dia)`
     : '';
 
-  const stable = `${base}${buildPersonalitySection()}${buildKnowledgeSection()}${buildConversationSection()}${buildPersonalAssistantSection()}${buildCapabilitiesSection()}${buildCancellationSection()}${buildReferralSection()}${buildBusinessCheckInSection()}`;
+  const stable = `${base}${buildPersonalitySection()}${buildProposalsSection()}${buildKnowledgeSection()}${buildConversationSection()}${buildPersonalAssistantSection()}${buildCapabilitiesSection()}${buildCancellationSection()}${buildReferralSection()}${buildBusinessCheckInSection()}`;
 
   const semiStable = `${buildFirstDaySection(user)}${buildProgressiveSignupSection(user)}${buildUpgradeSection(user)}${formatRecentCategorizationsBlock(recentCategorizations)}${formatStreakBlock(streakDays)}${formatMemoryFactsBlock(memoryFacts)}${formatSummaryBlock(extras.conversationSummary ?? null)}`;
 

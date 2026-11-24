@@ -18,7 +18,9 @@ sono nem fim de semana. Dá para ser caloroso sem afirmar uma vida que não exis
 | Um **assunto delicado** e como evitar problema | `SENSITIVE_TOPICS` (mesmo arquivo) | dinheiro emprestado entre amigos |
 | Uma **data comemorativa** por regra | `FIXED_COMMEMORATIVE` ou `describeCommemorativeDate` em `packages/core/src/digest/calendar-dates.ts` | Dia do Professor (15/10) |
 | Uma **piada** | `packages/core/src/llm/jokes.ts` (banco curado; o Tom nunca improvisa) | — |
-| Um **fato financeiro ou de produtividade** para explicar | `buildKnowledgeSection` em `packages/core/src/llm/tom-persona.ts` | — |
+| Um **fato financeiro ou de produtividade** para explicar | `MONEY_KNOWLEDGE` / `TIME_KNOWLEDGE` em `packages/core/src/llm/tom-persona.ts` | "Compra por impulso: esperar 24 horas…" |
+| Uma **proposição** (o que o Tom oferece, em pergunta, depois de resolver o pedido) | `PROPOSALS` em `packages/core/src/llm/proposals.ts` | meta nova → lembrete periódico |
+| Um **atalho sem IA** (mensagem inteira e exata) | `parse.ts` + `execute.ts` em `packages/core/src/commands/` | `lembretes`, `metas`, `revisão do mês` |
 
 Datas **móveis ou que mudam por ano** nunca vão digitadas no texto: use regra de cálculo (como a Black Friday e o Dia das
 Mães já fazem). O Tom recebe, no prompt do dia, só as datas calculadas dos próximos 21 dias.
@@ -50,13 +52,36 @@ Mães já fazem). O Tom recebe, no prompt do dia, só as datas calculadas dos pr
 
 ## Custo
 
-A seção de conversa entra em **toda** chamada (bloco estável, que é cacheado): hoje ~1.500 tokens estimados, com teto de
-8.000 caracteres no teste. Passar do teto é de propósito: se precisar de mais, enxugue algo antigo ou suba o teto
-sabendo que cada chamada paga por isso.
+Conversa, proposições e conhecimento entram em **toda** chamada (bloco estável, que é cacheado: o custo extra é na
+escrita do cache, e a leitura custa cerca de 10%). Cada um tem teto no teste, de propósito: conversa 11.000 caracteres,
+proposições 6.000, conhecimento 8.000. Passar do teto é decisão consciente: se precisar de mais, enxugue algo antigo ou
+suba o teto sabendo que cada chamada paga por isso. Não duplique o que a personalidade (`tom-persona.ts`) já cobre
+(elogio, erro seu, bronca, dinheiro apertado e desabafo já estão lá).
+
+## O que os testes barram
+
+- **Conhecimento** (`tom-persona.test.ts`): nenhum item com `%` nem `R$`, nem Selic/CDI/IPCA com número. O que muda com o
+  tempo (taxa, alíquota, salário mínimo, limite) o Tom busca na hora com `web_search`, nunca recita de cabeça. Também barra
+  nome de banco, corretora e ativo (o Tom não recomenda produto).
+- **Proposições** (`proposals.test.ts`): `tool` precisa existir no registro; `command` precisa ser reconhecido pelo parser; o
+  exemplo é uma pergunta; nada afirma que algo já foi feito ("já guardei", "vou lembrar"); sem valor em reais.
+- **Situações** (`conversation-knowledge.test.ts`): sem valor em reais nos exemplos (o modelo poderia repeti-lo como dado
+  real da pessoa), sem afirmar vida humana, e "privacidade" nunca afirma criptografia, certificação nem prazo de retenção.
+
+## Atalhos novos (sem IA)
+
+`lembretes`, `notas`, `contas`, `metas`, `hábitos` e `datas` mostram o que a pessoa registrou; `revisão do mês` fecha o
+mês (no dia 1, o mês passado inteiro; nos outros, este mês até ontem contra o MESMO trecho do mês passado) e `sugestão`
+aponta até 3 próximos passos **só com dado lido** (fonte que falhou nunca vira "você não tem meta"). Só casam como
+mensagem inteira; "ideia" e "resumo do mês" ficaram de fora de propósito (ambíguos). Mensagens automáticas que esperam
+resposta (lembrete disparado, insight, resumo semanal, aviso de data, reengajamento) agora entram no histórico da conversa,
+pra "adia pra amanhã" ou "como assim?" fazerem sentido.
 
 ## O que já está lá
 
 Conversa fiada e reciprocidade ("tudo bem?", "e você?"), cansaço, clima do dia (sextou, segundou), notícia boa e triste,
-riso e emoji soltos, desistência, mudança de assunto, mensagem longa, perguntas sobre o próprio Tom, assuntos
+riso e emoji soltos, desistência, mudança de assunto, mensagem longa, perguntas sobre o próprio Tom, ansiedade antes de
+evento, pedir opinião, sonho ou plano, curiosidade sobre gasto, "esqueci o que tinha pra fazer", "você consegue…?",
+privacidade, voltar depois de sumir, parar mensagens, assuntos
 delicados (política, religião, futebol, saúde, relacionamento, conteúdo ofensivo, pedidos fora do foco) e as datas por
 vir (feriados nacionais, Dia das Mães, Dia dos Pais, Namorados, Crianças, Black Friday, Páscoa, Réveillon).

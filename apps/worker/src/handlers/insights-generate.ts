@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import { logProactiveInsight } from '@zapbuddy/db';
-import { detectProactiveSignal, formatProactiveInsightMessage, summarizeSignalForLog, sendWhatsappTextMessage, type InsightsGenerateJob } from '@zapbuddy/core';
+import { detectProactiveSignal, formatProactiveInsightMessage, summarizeSignalForLog, sendWhatsappTextMessage, recordProactiveMessage, type InsightsGenerateJob } from '@zapbuddy/core';
 
 /**
  * Detecta (números reais, agregação SQL — nunca o LLM) e manda no máximo 1
@@ -14,6 +14,8 @@ export async function handleInsightsGenerate(job: Job<InsightsGenerateJob>): Pro
   const signal = await detectProactiveSignal(accountId, ownerTimezone);
   if (!signal) return;
 
-  await sendWhatsappTextMessage(ownerWhatsappNumber, formatProactiveInsightMessage(signal));
+  const text = formatProactiveInsightMessage(signal);
+  await sendWhatsappTextMessage(ownerWhatsappNumber, text);
+  await recordProactiveMessage(ownerWhatsappNumber, text);
   await logProactiveInsight(accountId, signal.type, summarizeSignalForLog(signal));
 }

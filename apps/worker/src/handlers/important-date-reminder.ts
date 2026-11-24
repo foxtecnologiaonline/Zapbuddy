@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import { logImportantDateReminder } from '@zapbuddy/db';
-import { sendWhatsappTextMessage, formatImportantDateReminderMessage, type ImportantDateReminderJob } from '@zapbuddy/core';
+import { sendWhatsappTextMessage, recordProactiveMessage, formatImportantDateReminderMessage, type ImportantDateReminderJob } from '@zapbuddy/core';
 
 /**
  * Manda o lembrete anual pro dono da conta e loga (idempotência — ver
@@ -10,6 +10,8 @@ import { sendWhatsappTextMessage, formatImportantDateReminderMessage, type Impor
 export async function handleImportantDateReminder(job: Job<ImportantDateReminderJob>): Promise<void> {
   const { importantDateId, label, ownerWhatsappNumber, year } = job.data;
 
-  await sendWhatsappTextMessage(ownerWhatsappNumber, formatImportantDateReminderMessage(label));
+  const text = formatImportantDateReminderMessage(label);
+  await sendWhatsappTextMessage(ownerWhatsappNumber, text);
+  await recordProactiveMessage(ownerWhatsappNumber, text);
   await logImportantDateReminder(importantDateId, year);
 }

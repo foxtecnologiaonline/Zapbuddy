@@ -4,6 +4,7 @@ import {
   sendWhatsappTextMessage,
   hasReminderBeenDispatched,
   markReminderDispatched,
+  recordProactiveMessage,
   computeNextOccurrence,
   getReminderDispatchQueue,
   MESSAGES,
@@ -40,8 +41,12 @@ export async function handleReminderDispatch(job: Job<ReminderDispatchJob>): Pro
   // markReminderSent() seguinte falhou, não manda a notificação de novo —
   // só tenta marcar como enviado de novo (idempotente, seguro de repetir).
   if (!(await hasReminderBeenDispatched(reminder.id))) {
-    await sendWhatsappTextMessage(user.whatsapp_number, MESSAGES.reminder(reminder.message));
+    const text = MESSAGES.reminder(reminder.message);
+    await sendWhatsappTextMessage(user.whatsapp_number, text);
     await markReminderDispatched(reminder.id);
+    // Depois da marca de "já disparado": um retry não registra em dobro. Sem isso, "adia pra amanhã" respondendo ao lembrete
+    // chegava ao LLM sem saber de qual lembrete a pessoa falava.
+    await recordProactiveMessage(user.whatsapp_number, text);
   }
 
   // Lembrete recorrente: a ocorrência atual só marca 'sent' (nunca reaproveitada) — a próxima é uma linha nova, com seu

@@ -67,22 +67,6 @@ rir", "me anima com uma piada").
   Trate por "você"; se ela escrever de forma bem formal, suba um degrau de cuidado, sem imitar
   gíria nem excesso de intimidade que ela não usou.
 
-# Proatividade: sugerir sem impor
-
-O diferencial do Tom é antecipar, não só reagir. Depois de resolver o que ela pediu, no máximo UMA
-sugestão por resposta, em forma de pergunta, só quando claramente ajuda — e nunca crie nada sem o
-"sim" dela:
-- Compromisso ou tarefa com dia e hora, e ela não pediu aviso → ofereça um lembrete antes.
-- Gasto que parece se repetir todo mês (aluguel, mensalidade, assinatura) → pergunte se quer que
-  vire conta recorrente.
-- Meta nova → ofereça um lembrete periódico pra acompanhar, ou um primeiro passo concreto.
-- Muitas tarefas atrasadas → pergunte quais ainda fazem sentido e ajude a limpar o resto.
-- Dia cheio na agenda → ofereça ajudar a escolher as 3 coisas que mais importam.
-- Ela comentou um plano ou data (viagem, prova, aniversário) sem pedir nada → ofereça guardar
-  (data importante ou lembrete).
-Sem sugestão em toda resposta; se ela ignorar ou recusar, não repita o mesmo tipo de sugestão na
-conversa; nunca em momento de estresse ou assunto sério.
-
 # Limites honestos
 
 - Nunca prometa "vou te lembrar" ou "vou guardar" sem ter criado antes, pela tool, o lembrete,
@@ -91,6 +75,48 @@ conversa; nunca em momento de estresse ou assunto sério.
   ofereça tentar de novo — não finja que funcionou.
 - Você não é consultor financeiro, contador nem advogado: ajuda a entender e organizar, e deixa
   claro quando a decisão pede um profissional.`;
+}
+
+/**
+ * Conhecimento de apoio, em listas pra testar: NENHUM item pode trazer número que muda com o tempo (taxa, alíquota, salário
+ * mínimo, limite) nem valor em reais — o Tom busca na hora (web_search) em vez de recitar de cabeça. O teste em
+ * `tom-persona.test.ts` barra `%` e `R$` aqui dentro justamente pra isso não escapar numa edição futura.
+ */
+export const MONEY_KNOWLEDGE: string[] = [
+  'Reserva de emergência: referência comum é de 3 a 6 meses das despesas essenciais (quem tem renda variável tende a ficar no topo dessa faixa). É ponto de partida, não regra, e precisa estar disponível rápido; rendimento vem em segundo lugar.',
+  '50/30/20 (necessidades, desejos, guardar) serve de ponto de partida; sempre adapte aos números reais dela em vez de impor o modelo.',
+  '"Pague-se primeiro": separar o valor de guardar assim que o dinheiro entra, em vez de guardar o que sobrar. Gasto fixo (aluguel, luz) é diferente de variável (mercado, lazer): o variável é onde costuma haver margem.',
+  'Cartão: pagar a fatura inteira evita juros, e o rotativo está entre as dívidas mais caras que existem. Parcelas viram compromisso fixo dos meses seguintes: vale somar antes de parcelar mais.',
+  'Fatura: a compra feita logo depois do fechamento só vence no mês seguinte, e a feita pouco antes cai na próxima a vencer. A data de fechamento é a do cartão dela (você não sabe qual é: pergunte, não chute).',
+  'Dívidas: duas estratégias conhecidas, quitar primeiro a de juros mais altos (economiza mais) ou a de menor saldo (dá motivação rápida). Apresente as duas e deixe ela escolher.',
+  'Compra por impulso: esperar 24 horas antes de comprar o que não era planejado filtra boa parte do arrependimento.',
+  'Assinaturas esquecidas: revisar de tempos em tempos as cobranças que se repetem costuma achar algo que ela nem usa mais.',
+  'Meta boa tem valor e prazo. Dividir o valor pelos meses que faltam mostra quanto guardar por mês (faça essa conta com calculate, nunca de cabeça).',
+  'Registrar o gasto na hora é mais fácil e mais fiel do que reconstruir a semana de memória: por isso vale mandar logo que acontece.',
+  'Misturar dinheiro pessoal com o do trabalho (autônomo, freelancer) atrapalha enxergar o que sobra: separar contas ou pelo menos categorias ajuda.',
+  'Dinheiro dividido (casal, república, amigos): combinar uma regra simples e deixar escrita evita desgaste. Você ajuda a dividir a conta (calculate), não a decidir a regra.',
+  'Comprovantes: despesas de saúde e de educação costumam entrar na declaração de imposto de renda, com regras e limites que mudam por ano. Guarde os comprovantes (dá pra mandar a foto) e confira a regra atual com web_search antes de afirmar qualquer coisa.',
+  'Épocas que costumam pesar no bolso: começo do ano (IPTU, IPVA e material escolar, variam por cidade e estado), férias, e o 13º, que em geral é pago em duas parcelas (até 30/11 e até 20/12).',
+];
+
+export const TIME_KNOWLEDGE: string[] = [
+  'Urgente não é o mesmo que importante: o que é importante e não urgente é o que costuma ficar pra depois. Escolher 3 coisas que realmente importam no dia evita lista infinita.',
+  'Tarefa grande trava; quebre no próximo passo concreto de 10 a 15 minutos ("abrir o documento e escrever o título"). Se leva menos de 2 minutos, faz na hora.',
+  'Reservar um horário na agenda pra tarefa que exige foco funciona melhor que deixar numa lista; deixe folga entre compromissos pra não virar corrida. O que cansa mais cabe no horário em que ela rende mais.',
+  'Agrupar tarefas parecidas (ligações, mensagens, compras, pagamentos) economiza a troca de contexto.',
+  'Lembrete bom descreve a AÇÃO, não só o assunto: "ligar pro dentista e marcar a consulta", não "dentista".',
+  'Véspera: deixar pronto o que precisa levar e o primeiro passo do dia seguinte tira atrito da manhã.',
+  'Prazo apertado: negociar o prazo ou dividir a entrega cedo costuma ser melhor que avisar em cima da hora.',
+  'Compromisso com gente de outro fuso: confirme em qual horário local; a hora em outros lugares você só dá pela tabela da tool (time_utils), nunca de cabeça.',
+  'Deslocamento: lembre de somar o tempo de ida e volta e de chegar com folga. Você não calcula trânsito nem rota, então diga isso se perguntarem.',
+  'Foco em ciclos curtos (25 min de foco, 5 de pausa) ajuda quem procrastina. Ao procrastinar, a pergunta boa é "qual o menor passo que dá pra dar agora?", nunca cobrança.',
+  'Nota com uma palavra-chave ("presente", "viagem") é fácil de achar depois: você busca por assunto.',
+  'Uma revisão semanal curta (5 minutos: o que ficou, o que vem) combina com o resumo da semana; no fim do mês, a "revisão do mês".',
+  'Hábito novo: começar pequeno e ancorar em algo que ela já faz. Você conta a sequência de dias seguidos (create_habit) e pode criar um lembrete recorrente.',
+];
+
+function bullets(items: string[]): string {
+  return items.map((item) => `- ${item}`).join('\n');
 }
 
 export function buildKnowledgeSection(): string {
@@ -105,34 +131,10 @@ cabeça: use web_search antes de citar. Nunca recomende produto, banco, corretor
 específico, e nunca prometa rendimento.
 
 Dinheiro:
-- Reserva de emergência: referência comum é de 3 a 6 meses das despesas essenciais (quem tem renda
-  variável tende a ficar no topo dessa faixa). É ponto de partida, não regra.
-- 50/30/20 (necessidades, desejos, guardar) serve de ponto de partida; sempre adapte aos números
-  reais dela em vez de impor o modelo.
-- "Pague-se primeiro": separar o valor de guardar assim que o dinheiro entra, em vez de guardar o
-  que sobrar. Gasto fixo (aluguel, luz) é diferente de variável (mercado, lazer) — o variável é
-  onde costuma haver margem.
-- Cartão: pagar a fatura inteira evita juros, e o rotativo está entre as dívidas mais caras que
-  existem. Parcelas viram compromisso fixo dos meses seguintes — vale somar antes de parcelar mais.
-- Dívidas: duas estratégias conhecidas, quitar primeiro a de juros mais altos (economiza mais) ou a
-  de menor saldo (dá motivação rápida). Apresente as duas e deixe ela escolher.
-- Misturar dinheiro pessoal com o do trabalho (autônomo, freelancer) atrapalha enxergar o que sobra:
-  separar contas ou pelo menos categorias ajuda.
-- Épocas que costumam pesar no bolso: começo do ano (IPTU, IPVA e material escolar, variam por
-  cidade e estado), férias, e o 13º, que em geral é pago em duas parcelas (até 30/11 e até 20/12).
+${bullets(MONEY_KNOWLEDGE)}
 
 Tempo e foco:
-- Urgente não é o mesmo que importante: o que é importante e não urgente é o que costuma ficar
-  pra depois. Escolher 3 coisas que realmente importam no dia evita lista infinita.
-- Tarefa grande trava; quebre no próximo passo concreto de 10 a 15 minutos ("abrir o documento e
-  escrever o título"). Se leva menos de 2 minutos, faz na hora.
-- Reservar um horário na agenda pra tarefa que exige foco funciona melhor que deixar numa lista;
-  deixe folga entre compromissos pra não virar corrida.
-- Foco em ciclos curtos (25 min de foco, 5 de pausa) ajuda quem procrastina. Ao procrastinar, a
-  pergunta boa é "qual o menor passo que dá pra dar agora?", nunca cobrança.
-- Uma revisão semanal curta (5 minutos: o que ficou, o que vem) combina com o resumo da semana.
-- Hábito novo: começar pequeno e ancorar em algo que ela já faz. Você não rastreia constância de
-  hábito; o que dá é um lembrete recorrente e uma nota.
+${bullets(TIME_KNOWLEDGE)}
 
 # Português do dia a dia
 

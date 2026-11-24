@@ -60,6 +60,10 @@ describe('conversation-knowledge — conteúdo', () => {
     expect(aboutTom.examples.some((example) => /IA|assistente/.test(example))).toBe(true);
   });
 
+  it('exemplos nunca trazem valor em reais concreto: o modelo poderia repeti-lo como se fosse dado real da pessoa', () => {
+    for (const { id, example } of allExamples) expect(example, `${id}: "${example}" tem valor concreto`).not.toMatch(/R\$\s?\d/);
+  });
+
   it('higiene: nada de dado pessoal no conteúdo', () => {
     expect(redactSensitive(section)).toBe(section);
   });
@@ -84,7 +88,32 @@ describe('buildConversationSection — o que entra no prompt', () => {
   });
 
   // Entra em TODA chamada (bloco stable). O teto existe pra o conteúdo crescer de propósito, não por inércia.
-  it('cabe no orçamento: até ~2.000 tokens estimados (chars/4), em toda chamada', () => {
-    expect(section.length).toBeLessThanOrEqual(8_000);
+  // Teto subiu de 8.000 pra 11.000 (2026-11) de propósito: +9 situações novas (ansiedade antes de evento, opinião, privacidade,
+  // "consegue?", voltar depois de sumir, parar mensagens, sonho/plano, curiosidade de gasto e "esqueci"). Cache de prompt estável:
+  // o custo extra é só na escrita do cache; a leitura segue a ~10% do preço.
+  it('cabe no orçamento: até ~2.750 tokens estimados (chars/4), em toda chamada', () => {
+    expect(section.length).toBeLessThanOrEqual(11_000);
+  });
+
+  it('as situações novas existem e cada uma aponta pra uma ação real (tool ou atalho), nunca promessa solta', () => {
+    const ids = SCENARIOS.map((scenario) => scenario.id);
+    for (const required of ['ansiedade-evento', 'pedir-opiniao', 'sonho-ou-plano', 'curiosidade-gasto', 'esqueci', 'consegue-fazer', 'privacidade', 'voltou', 'parar-mensagens']) {
+      expect(ids, required).toContain(required);
+    }
+    expect(SCENARIOS.find((scenario) => scenario.id === 'parar-mensagens')!.how).toContain('set_morning_digest_preferences');
+    expect(SCENARIOS.find((scenario) => scenario.id === 'curiosidade-gasto')!.how).toContain('get_financial_summary');
+  });
+
+  it('privacidade: não afirma criptografia, certificação nem prazo de retenção (não dá pra garantir) e remete a conta à equipe', () => {
+    const privacy = SCENARIOS.find((scenario) => scenario.id === 'privacidade')!;
+    expect(privacy.how).toMatch(/Não afirme criptografia, certificação nem prazo de retenção/);
+    expect(privacy.how).toMatch(/equipe do ZapBuddy/);
+    for (const example of privacy.examples) expect(example).not.toMatch(/criptograf|lgpd|iso ?27001|100% seguro|totalmente seguro/i);
+  });
+
+  it('"voltou": nunca diz que sentiu falta (é uma IA)', () => {
+    const back = SCENARIOS.find((scenario) => scenario.id === 'voltou')!;
+    expect(back.how).toMatch(/sem dizer que sentiu falta/);
+    for (const example of back.examples) expect(example.toLowerCase()).not.toContain('senti sua falta');
   });
 });

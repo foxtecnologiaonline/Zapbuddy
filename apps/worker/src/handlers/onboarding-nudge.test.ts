@@ -4,12 +4,13 @@ const db = vi.hoisted(() => ({
   listUsersPendingOnboardingNudge: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-const core = vi.hoisted(() => ({ sendWhatsappTextMessage: vi.fn(), hour: 14 }));
+const core = vi.hoisted(() => ({ sendWhatsappTextMessage: vi.fn(), recordProactiveMessage: vi.fn(), hour: 14 }));
 
 vi.mock('@zapbuddy/db', () => db);
 vi.mock('@zapbuddy/core', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@zapbuddy/core')>()),
   sendWhatsappTextMessage: core.sendWhatsappTextMessage,
+  recordProactiveMessage: core.recordProactiveMessage,
   getLocalHour: () => core.hour,
 }));
 
@@ -28,6 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   core.hour = 14;
   core.sendWhatsappTextMessage.mockResolvedValue(undefined);
+  core.recordProactiveMessage.mockResolvedValue(undefined);
   db.listUsersPendingOnboardingNudge.mockResolvedValue([]);
 });
 
@@ -73,5 +75,13 @@ describe('handleOnboardingNudge', () => {
     await handleOnboardingNudge();
     expect(core.sendWhatsappTextMessage).toHaveBeenCalledTimes(2);
     expect(db.logger.error).toHaveBeenCalledWith('onboarding_nudge_send_failed', expect.objectContaining({ userId: '1' }));
+  });
+
+  it('registra o reengajamento no histórico (a resposta da pessoa precisa de contexto) só quando o envio deu certo', async () => {
+    db.listUsersPendingOnboardingNudge.mockResolvedValueOnce([user('1'), user('2')]);
+    core.sendWhatsappTextMessage.mockRejectedValueOnce(new Error('janela fechada')).mockResolvedValue(undefined);
+    await handleOnboardingNudge();
+    expect(core.recordProactiveMessage).toHaveBeenCalledTimes(1);
+    expect(core.recordProactiveMessage.mock.calls[0]![0]).toBe('551192');
   });
 });

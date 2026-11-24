@@ -842,6 +842,36 @@ Cada achado foi confirmado lendo o código antes de corrigir; testes 891 → 1.0
   da narrativa é a do que RESTA do dia (o endpoint de 3h não traz os blocos já passados), então de manhã ela pode ficar acima da madrugada
   real; só o caso mínima = máxima foi ajustado no texto ("20°C", não "20°C a 20°C").
 
+## Novas interações, conversas, proposições e conhecimento (2026-11, pedido do dono do produto)
+
+Guia de onde acrescentar cada coisa: `docs/conteudo-conversacional.md`. O que entrou:
+
+- **Atalhos sem LLM** (mensagem inteira e exata, como os anteriores): `lembretes`, `notas`, `contas`, `metas`, `hábitos`, `datas`
+  (`commands/collections-format.ts`, formatadores puros, só registro da própria pessoa; vazio ensina em uma frase como criar),
+  `revisão do mês` e `sugestão`. A revisão compara o mês até ontem com o MESMO trecho do mês passado (no dia 1, fecha o mês passado
+  inteiro); receitas saem como "registradas" (um saldo seria falso pra quem não registra o que entra); variação só com as duas bases
+  > 0; fonte que falhou some em vez de virar zero. `sugestão` dá até 3 próximos passos por prioridade (atrasadas, data próxima, hábito
+  pendente, gasto +20% sobre o mesmo trecho, tarefas sem data, sem meta/conta/lembrete) **só com dado lido**: fonte que não deu pra
+  ler vira `null` e a sugestão NÃO sai. "ideia" e "resumo do mês" ficaram de fora de propósito (ambíguos). Sem migration e sem tool
+  nova (o orçamento de tools não mudou).
+- **Histórico das mensagens proativas** (`context/proactive-history.ts`): lembrete disparado, insight, resumo semanal, aviso de data e
+  reengajamento passam a entrar na conversa (melhor esforço, nunca derrubam o envio; depois da marca de "já disparado", então um retry
+  não registra em dobro). Antes, "adia pra amanhã" respondendo a um lembrete chegava ao LLM sem saber de qual.
+- **Situações de conversa** (+9, só as que a personalidade ainda não cobria): ansiedade antes de evento, pedir opinião, sonho ou plano,
+  curiosidade sobre gasto (busca o número, não opina), "esqueci o que tinha pra fazer" (consulta antes de responder), "você
+  consegue…?", privacidade (honesto: não afirma criptografia, certificação nem retenção; apagar a conta é com a equipe), voltar depois
+  de sumir (sem "senti sua falta": é uma IA) e parar mensagens (aceita sem reter; desliga o que existe e diz o que não dá).
+- **Proposições como dados** (`llm/proposals.ts`, 15, as 6 antigas + 9): cada uma aponta pra uma tool que existe ou um atalho que
+  existe (teste valida contra o registro e o parser), o exemplo é uma pergunta, e nenhuma afirma que algo já foi feito. Regra mantida:
+  uma por resposta, nada criado sem o "sim", e não propor com a pessoa estressada, triste ou depois de uma recusa.
+- **Conhecimento** em listas testáveis (`MONEY_KNOWLEDGE`/`TIME_KNOWLEDGE`): fatura (fechamento × vencimento, pergunta a data do cartão),
+  compra por impulso, assinaturas esquecidas, meta com valor e prazo, dinheiro dividido, comprovantes (regra atual por `web_search`),
+  lembrete que descreve a ação, véspera, deslocamento, fuso. Teste barra `%` e `R$` (número que muda com o tempo vem de busca) e nome de
+  banco/ativo. Corrigido: o repertório dizia "você não rastreia hábito", o que deixou de ser verdade.
+- **Custo**: +cerca de 1.900 tokens no bloco estável (cacheado); tetos nos testes (conversa 11.000, proposições 6.000, conhecimento 8.000
+  caracteres). Golden set 66 → 75 casos (conversa). **Não validado contra o modelo real**: rodar `npm run eval:golden` antes de
+  confiar, e observar nas conversas se as proposições novas deixaram o Tom insistente (a regra de uma por resposta é o freio).
+
 ## Curadoria das interações (2026-11, pedido do dono do produto)
 
 `/admin/curadoria` + `docs/adr/0011-curadoria-das-interacoes.md` (proposta completa de como criar e exercer). **Camada 1 implementada:**

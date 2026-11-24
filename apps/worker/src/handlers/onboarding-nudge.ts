@@ -1,5 +1,5 @@
 import { listUsersPendingOnboardingNudge, logger } from '@zapbuddy/db';
-import { getLocalHour, isWithinQuietHours, sendWhatsappTextMessage, formatOnboardingNudgeMessage, type OnboardingNudgeStage } from '@zapbuddy/core';
+import { getLocalHour, isWithinQuietHours, sendWhatsappTextMessage, recordProactiveMessage, formatOnboardingNudgeMessage, type OnboardingNudgeStage } from '@zapbuddy/core';
 
 // Janelas meia-abertas [from, to) em horas desde users.created_at — cada
 // usuário cai numa delas uma vez só, já que o sweep horário que chama isto
@@ -34,6 +34,7 @@ export async function handleOnboardingNudge(): Promise<void> {
         }
         try {
           await sendWhatsappTextMessage(user.whatsapp_number, message);
+          await recordProactiveMessage(user.whatsapp_number, message);
         } catch (error) {
           logger.error('onboarding_nudge_send_failed', {
             userId: user.id,

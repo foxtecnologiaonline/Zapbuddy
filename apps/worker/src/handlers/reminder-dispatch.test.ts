@@ -11,6 +11,7 @@ const core = vi.hoisted(() => ({
   sendWhatsappTextMessage: vi.fn(),
   hasReminderBeenDispatched: vi.fn(),
   markReminderDispatched: vi.fn(),
+  recordProactiveMessage: vi.fn(),
   queueAdd: vi.fn(),
 }));
 
@@ -20,6 +21,7 @@ vi.mock('@zapbuddy/core', async (importOriginal) => ({
   sendWhatsappTextMessage: core.sendWhatsappTextMessage,
   hasReminderBeenDispatched: core.hasReminderBeenDispatched,
   markReminderDispatched: core.markReminderDispatched,
+  recordProactiveMessage: core.recordProactiveMessage,
   getReminderDispatchQueue: () => ({ add: core.queueAdd }),
 }));
 
@@ -49,6 +51,7 @@ beforeEach(() => {
   core.sendWhatsappTextMessage.mockResolvedValue(undefined);
   core.hasReminderBeenDispatched.mockResolvedValue(false);
   core.markReminderDispatched.mockResolvedValue(undefined);
+  core.recordProactiveMessage.mockResolvedValue(undefined);
   core.queueAdd.mockResolvedValue(undefined);
 });
 
@@ -58,6 +61,24 @@ describe('handleReminderDispatch', () => {
     expect(core.sendWhatsappTextMessage).toHaveBeenCalledTimes(1);
     expect(db.markReminderSent).toHaveBeenCalledWith('r1');
     expect(db.createReminder).not.toHaveBeenCalled();
+  });
+
+  it('registra o lembrete na conversa DEPOIS de entregue: "adia pra amanhã" respondendo a ele precisa de contexto', async () => {
+    const order: string[] = [];
+    core.sendWhatsappTextMessage.mockImplementation(async () => void order.push('send'));
+    core.markReminderDispatched.mockImplementation(async () => void order.push('dispatched'));
+    core.recordProactiveMessage.mockImplementation(async () => void order.push('history'));
+
+    await handleReminderDispatch(job());
+
+    expect(order).toEqual(['send', 'dispatched', 'history']);
+    expect(core.recordProactiveMessage).toHaveBeenCalledWith('5511999990000', expect.stringContaining('tomar remédio'));
+  });
+
+  it('retry depois de entregue não registra em dobro no histórico', async () => {
+    core.hasReminderBeenDispatched.mockResolvedValue(true);
+    await handleReminderDispatch(job());
+    expect(core.recordProactiveMessage).not.toHaveBeenCalled();
   });
 
   it('já enviado ou cancelado (não está mais pending): não faz nada', async () => {
